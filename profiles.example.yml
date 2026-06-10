@@ -1,0 +1,40 @@
+# Copy this file to profiles.yml in the repo root (git-ignored) and run with:
+#   $env:DBT_PROFILES_DIR = "."          (PowerShell)
+#   export DBT_PROFILES_DIR=.            (bash)
+# or copy to ~/.dbt/profiles.yml.
+#
+# No credentials are needed for the DuckDB dev target — it reads local sample
+# files from data/ (see data/README.md). The .duckdb database file it creates
+# is git-ignored.
+
+ust_digital_platform:
+  target: dev
+  outputs:
+    # ── Local development: DuckDB over sample exports in data/ ──
+    dev:
+      type: duckdb
+      path: dev.duckdb
+      threads: 4
+
+    # ── Production engine TBD — pick ONE later, see followup.md ──
+    #
+    # databricks:
+    #   type: databricks
+    #   catalog: "{{ env_var('DATABRICKS_CATALOG', 'ust_prod') }}"
+    #   schema: analytics
+    #   host: "{{ env_var('DATABRICKS_HOST') }}"
+    #   http_path: "{{ env_var('DATABRICKS_HTTP_PATH') }}"
+    #   token: "{{ env_var('DATABRICKS_TOKEN') }}"
+    #   threads: 8
+    #
+    # fabric:
+    #   type: fabric
+    #   driver: "ODBC Driver 18 for SQL Server"
+    #   server: "{{ env_var('FABRIC_SERVER') }}"
+    #   database: "{{ env_var('FABRIC_DATABASE') }}"
+    #   schema: analytics
+    #   authentication: ActiveDirectoryServicePrincipal
+    #   tenant_id: "{{ env_var('AZURE_TENANT_ID') }}"
+    #   client_id: "{{ env_var('AZURE_CLIENT_ID') }}"
+    #   client_secret: "{{ env_var('AZURE_CLIENT_SECRET') }}"
+    #   threads: 8

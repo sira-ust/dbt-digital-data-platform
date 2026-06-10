@@ -1,0 +1,10 @@
+source_code,app_name,app_full_name,user_type,platform
+PDA-A,PDA,PDA — Handheld Sales Device,Sales,Android
+CatalogFC-A,CatalogFC,Catalog For Customer (Android),Customer,Android
+CatalogFC-I,CatalogFC,Catalog For Customer (iOS),Customer,iOS
+CatalogFS-I,CatalogFS,Catalog For Sales (iOS),Sales,iOS
+CatalogFS-A,CatalogFS,Catalog For Sales (Android),Sales,Android
+Vegas-I,Vegas,Vegas — Customer App (iOS),Customer,iOS
+Vegas-A,Vegas,Vegas — Customer App (Android),Customer,Android
+CatalogSE,CatalogSE,K.M.Trading Special Edition,Customer,iOS
+Web,Web,Website (Latest Version),Customer,Web

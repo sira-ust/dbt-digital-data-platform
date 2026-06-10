@@ -1,0 +1,82 @@
+version: 2
+
+seeds:
+  - name: seed_event_codes
+    description: >
+      Complete event dictionary from API documentation Section 5
+      (SystemEventLog_API_Documentation_0327, v1.0 March 2026 — source
+      info-Event_Type_Definition.xlsx, last updated 2026-03-23).
+      Grain — one row per 8-digit description_code (digits 1-2 L1 Category,
+      3-4 L2 Sub-category, 5-6 L3 Action, 7-8 L4 Result: 01=Success,
+      02=Fail, 00=N/A). Covers all L1 categories 01-19.
+      payload_format encodes the documented Event Payload column:
+      none | kv (key:value CSV) | positional_order (order metadata CSV) |
+      positional (other multi-field CSV, e.g. sku,qty) | duration (Time:s) |
+      sku | title | bare_value | fail_marker.
+      Known doc-vs-reality drift: sample data shows 01020200 (Low Battery)
+      carrying response "1" despite the doc listing no payload — the
+      profiling script (§3) flags such mismatches rather than failing.
+      The doc notes the event table "will be further updated according to
+      requirements" — re-sync this seed when the doc revs.
+
+
+      {{ doc("event_code_glossary") }}
+    columns:
+      - name: description_code
+        description: 8-digit code (string — preserves leading zeros)
+        tests:
+          - unique
+          - not_null
+      - name: function_name
+        description: Human-readable event name from the doc
+        tests:
+          - not_null
+      - name: payload_format
+        tests:
+          - accepted_values:
+              values: [none, kv, positional_order, positional, duration, sku, title, bare_value, fail_marker]
+      - name: log_level
+        description: INFO (normal) / WARN (degraded or failed) / EVENT (user interaction); empty where doc is silent
+      - name: platforms
+        description: Comma-separated platform applicability from the doc
+
+  - name: seed_app_sources
+    description: >
+      App source registry from API documentation Section 2.3 — all 9 source
+      codes. Convention App Name - Platform (I=iOS, A=Android);
+      single-platform apps omit the suffix.
+
+
+      {{ doc("app_sources_glossary") }}
+    columns:
+      - name: source_code
+        tests:
+          - unique
+          - not_null
+      - name: user_type
+        tests:
+          - accepted_values:
+              values: [Sales, Customer]
+      - name: platform
+        tests:
+          - accepted_values:
+              values: [iOS, Android, Web]
+
+  - name: seed_categories
+    description: >
+      Complete catalog category id -> name map from API documentation §8.4
+      (18 categories, including virtual sections 1111=New, 7777=HOT,
+      8888=Promo, 9999=Recommend, 4444=Back Order, 5555=Purchase History).
+      Used to decode the category key in kv payloads (19010000 Catalog View).
+
+
+      {{ doc("categories_glossary") }}
+    columns:
+      - name: category_id
+        description: String — joins against parsed kv values
+        tests:
+          - unique
+          - not_null
+      - name: category_name
+        tests:
+          - not_null

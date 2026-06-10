@@ -1,0 +1,80 @@
+version: 2
+
+models:
+  - name: stg_mysql__system_events
+    description: >
+      Typed, deduped view over the System Event Log (one row per entity_id,
+      latest updated_at wins). description_code split into L1-L4; event_time
+      converted to UTC via the per-row device offset; created_at/updated_at
+      converted from fixed PST (UTC-8, no DST) via a constant +8h.
+      The raw `response` payload is preserved for per-family parsing in
+      intermediate models. Ordering note — event_at_utc vs created_at_utc is
+      deliberately NOT tested: device clock drift and offline queueing make
+      cross-clock ordering unreliable; entity_id is the only ordering/dedup key.
+    columns:
+      - name: entity_id
+        description: Auto-increment PK from MySQL — dedup and incremental key
+        tests:
+          - unique
+          - not_null
+
+      - name: description_code
+        description: 8-digit hierarchical event code (string, leading zeros preserved)
+        tests:
+          - not_null
+          - relationships:
+              to: ref('seed_event_codes')
+              field: description_code
+              # warn, not error: the seed is a scaffold and reality already
+              # disagrees with the doc in places (e.g. 01020200 payload) —
+              # unknown codes are a signal to extend the seed, not a failure
+              config:
+                severity: warn
+
+      - name: source_code
+        description: App source code
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - PDA-A
+                - CatalogFC-A
+                - CatalogFC-I
+                - CatalogFS-I
+                - CatalogFS-A
+                - Vegas-I
+                - Vegas-A
+                - CatalogSE
+                - Web
+
+      - name: created_at_utc
+        description: Server timestamp (fixed PST +8h -> UTC) — authoritative event time
+        tests:
+          - not_null
+
+      - name: event_at_utc
+        description: Device local time converted to UTC via GMT offset — advisory only (clock drift)
+
+      - name: event_id_at_utc
+        description: Device-side epoch-millis timestamp (nullable, advisory)
+
+      - name: is_success
+        description: l4_code = '01'
+
+      - name: is_failure
+        description: l4_code = '02'
+
+      - name: actor_type
+        description: sales (PDA-A, CatalogFS-*) vs customer (all other apps)
+        tests:
+          - accepted_values:
+              values: [sales, customer]
+
+      - name: customer_key
+        description: >
+          Unified customer — ust_customer_no when a salesperson acts for a
+          customer; username (customer account no.) on customer apps; null
+          when a sales user acts for no customer
+
+      - name: response
+        description: Raw payload string (NOT JSON) — parsed per event family downstream

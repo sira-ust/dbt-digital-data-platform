@@ -1,0 +1,35 @@
+# dbt
+target/
+dbt_packages/
+logs/
+*.log
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Local credentials & local-only config — never commit
+profiles.yml
+.env
+*.pem
+.user.yml
+
+# DuckDB local database files
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp
+
+# Sample data exports — keep only the README in data/
+data/*
+!data/README.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

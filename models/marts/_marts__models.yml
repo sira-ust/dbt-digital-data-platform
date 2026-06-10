@@ -1,0 +1,74 @@
+version: 2
+
+# All marts: incremental on entity_id (auto-increment PK; ~600k events/month).
+# Event grain so BI tools aggregate freely.
+
+models:
+  - name: mart_order_submission_health
+    description: Order submission volume + failure rate by source/entry point (04xx events)
+    columns:
+      - name: entity_id
+        tests: [not_null, unique]
+
+  - name: mart_download_reliability
+    description: Download failure rate by type/platform + success durations (03xx events)
+    columns:
+      - name: entity_id
+        tests: [not_null, unique]
+
+  - name: mart_catalog_engagement
+    description: Time spent per catalog category (19010000 kv payload)
+    columns:
+      - name: entity_id
+        tests: [not_null, unique]
+
+  - name: mart_login_activity
+    description: Placeholder — login volume and success/failure by app and user type
+    columns:
+      - name: entity_id
+        tests: [not_null, unique]
+
+  - name: mart_product_interactions
+    description: Placeholder — adds/removes/qty changes/detail views by sku and page
+    columns:
+      - name: entity_id
+        tests: [not_null, unique]
+
+  - name: mart_sales_agent_performance
+    description: >
+      Daily sales-agent scorecard combining order outcomes (Send Order
+      family, L1=04) with app-usage behaviour on the sales apps (PDA-A,
+      CatalogFS-I, CatalogFS-A).
+      Grain: activity_date (UTC, server clock) x username x source_code —
+      PDA and CatalogFS usage land on separate rows, roll up per agent as
+      needed. Identity rules per the API doc: on sales apps username is the
+      salesperson login; customer_key is the customer they act for.
+      Aggregate table rebuilt each run (daily-agent grain stays small).
+      Value metrics (order totals, durations) come from the positional
+      payload and are only populated on successful submissions.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - activity_date
+            - username
+            - source_code
+    columns:
+      - name: activity_date
+        description: UTC date derived from server-side created_at
+        tests: [not_null]
+      - name: username
+        description: Salesperson login on the sales app
+        tests: [not_null]
+      - name: source_code
+        description: Sales app the activity happened on
+        tests:
+          - accepted_values:
+              values: [PDA-A, CatalogFS-I, CatalogFS-A]
+      - name: order_success_rate
+        description: orders_succeeded / orders_submitted; null when no orders that day
+      - name: download_failure_rate
+        description: failed / (failed + succeeded) data syncs; null when no syncs
+      - name: distinct_customers_touched
+        description: Distinct customers the agent acted for across all events
+      - name: customers_ordered_for
+        description: Distinct customers with at least one successful order

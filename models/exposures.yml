@@ -1,0 +1,78 @@
+version: 2
+
+exposures:
+
+  - name: sales_agent_scorecard
+    label: Sales Agent Scorecard
+    type: dashboard
+    maturity: medium
+    url: https://app.powerbi.com/groups/ust-digital/reports/sales-agent-scorecard
+    description: >
+      Daily agent performance dashboard — order volume, success rate,
+      order value, customer coverage, and PDA/CatalogFS app usage
+      per salesperson per day.
+    depends_on:
+      - ref('mart_sales_agent_performance')
+    owner:
+      name: Sales Operations
+      email: sales-ops@ustrading.com
+
+  - name: order_operations_monitor
+    label: Order Operations Monitor
+    type: dashboard
+    maturity: medium
+    url: https://app.powerbi.com/groups/ust-digital/reports/order-operations-monitor
+    description: >
+      Real-time order submission health — volume, failure rate, and
+      entry-point breakdown (PDA vs CatalogFS vs Web).
+    depends_on:
+      - ref('mart_order_submission_health')
+      - ref('mart_sales_agent_performance')
+    owner:
+      name: Operations
+      email: ops@ustrading.com
+
+  - name: app_reliability_dashboard
+    label: App Reliability Dashboard
+    type: dashboard
+    maturity: low
+    url: https://app.powerbi.com/groups/ust-digital/reports/app-reliability
+    description: >
+      Download/sync failure rates by app version and platform.
+      Used by the mobile dev team to track release quality.
+    depends_on:
+      - ref('mart_download_reliability')
+    owner:
+      name: Mobile Dev
+      email: dev@ustrading.com
+
+  - name: catalog_engagement_report
+    label: Catalog Engagement Report
+    type: dashboard
+    maturity: low
+    url: https://app.powerbi.com/groups/ust-digital/reports/catalog-engagement
+    description: >
+      Time spent per product category by customer app users.
+      Feeds the merchandising team's category prioritisation.
+    depends_on:
+      - ref('mart_catalog_engagement')
+      - ref('mart_product_interactions')
+    owner:
+      name: Merchandising
+      email: merch@ustrading.com
+
+  - name: data_quality_monitor
+    label: Data Quality Monitor
+    type: dashboard
+    maturity: high
+    url: https://app.powerbi.com/groups/ust-digital/reports/data-quality-monitor
+    description: >
+      Internal audit dashboard tracking unknown event codes,
+      payload mismatches, and source anomalies. Used by the
+      data engineering team for triage.
+    depends_on:
+      - ref('mart_event_record_errors')
+      - ref('mart_error_summary')
+    owner:
+      name: Data Engineering
+      email: data@ustrading.com

@@ -1,0 +1,6 @@
+# Local development — DuckDB adapter (zero cloud cost, no engine commitment)
+dbt-duckdb>=1.8.0,<2.0.0
+
+# Production engine TBD (followup.md). Install the matching adapter when decided:
+# dbt-databricks>=1.8.0,<2.0.0
+# dbt-fabric>=1.8.0,<2.0.0

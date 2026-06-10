@@ -1,0 +1,36 @@
+name: dbt CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+jobs:
+  dbt-check:
+    runs-on: ubuntu-latest
+    env:
+      DBT_PROFILES_DIR: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt (DuckDB)
+        run: pip install -r requirements.txt
+
+      - name: Use example profile (DuckDB needs no credentials)
+        run: cp profiles.example.yml profiles.yml
+
+      - name: Install packages
+        run: dbt deps
+
+      - name: Parse project
+        run: dbt parse
+
+      # Full `dbt build` requires sample data in data/ — enable once a
+      # CI-safe synthetic sample is committed or generated.
+      # - name: Build
+      #   run: dbt build
