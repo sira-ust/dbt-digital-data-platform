@@ -7,8 +7,8 @@ models:
       latest updated_at wins). description_code split into L1-L4; event_time
       converted to UTC via the per-row device offset; created_at/updated_at
       converted from fixed PST (UTC-8, no DST) via a constant +8h.
-      The raw `response` payload is preserved for per-family parsing in
-      intermediate models. Ordering note — event_at_utc vs created_at_utc is
+      The raw `response` payload is preserved for future parsing. Ordering
+      note — event_at_utc vs created_at_utc is
       deliberately NOT tested: device clock drift and offline queueing make
       cross-clock ordering unreliable; entity_id is the only ordering/dedup key.
     columns:
@@ -23,8 +23,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('seed_event_codes')
-              field: description_code
+              arguments:
+                to: ref('seed_event_codes')
+                field: description_code
               # warn, not error: the seed is a scaffold and reality already
               # disagrees with the doc in places (e.g. 01020200 payload) —
               # unknown codes are a signal to extend the seed, not a failure
@@ -36,16 +37,17 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values:
-                - PDA-A
-                - CatalogFC-A
-                - CatalogFC-I
-                - CatalogFS-I
-                - CatalogFS-A
-                - Vegas-I
-                - Vegas-A
-                - CatalogSE
-                - Web
+              arguments:
+                values:
+                  - PDA-A
+                  - CatalogFC-A
+                  - CatalogFC-I
+                  - CatalogFS-I
+                  - CatalogFS-A
+                  - Vegas-I
+                  - Vegas-A
+                  - CatalogSE
+                  - Web
 
       - name: created_at_utc
         description: Server timestamp (fixed PST +8h -> UTC) — authoritative event time
@@ -68,7 +70,8 @@ models:
         description: sales (PDA-A, CatalogFS-*) vs customer (all other apps)
         tests:
           - accepted_values:
-              values: [sales, customer]
+              arguments:
+                values: [sales, customer]
 
       - name: customer_key
         description: >

@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: mart_sales_agent_performance
+    description: >
+      Daily sales-rep scorecard from the system event log (Phase 1: log-only).
+      Combines send-order outcomes (L1=04) with app usage on sales apps
+      (PDA-A, CatalogFS-I, CatalogFS-A).
+      Grain: activity_date (UTC) x username x source_code.
+      Order value metrics come from successful send-order payloads; Phase 2
+      can replace or enrich with NAV/replication order facts.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - activity_date
+              - username
+              - source_code
+    columns:
+      - name: activity_date
+        description: UTC date from server-side created_at
+        tests: [not_null]
+      - name: username
+        description: Salesperson login on the sales app
+        tests: [not_null]
+      - name: source_code
+        description: Sales app the activity happened on
+        tests:
+          - accepted_values:
+              arguments:
+                values: [PDA-A, CatalogFS-I, CatalogFS-A]
+      - name: order_success_rate
+        description: orders_succeeded / orders_submitted; null when no orders that day
+      - name: download_failure_rate
+        description: failed / (failed + succeeded) data syncs; null when no syncs
+      - name: distinct_customers_touched
+        description: Distinct customers the agent acted for across all events
+      - name: customers_ordered_for
+        description: Distinct customers with at least one successful order submission

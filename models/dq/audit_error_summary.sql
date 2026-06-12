@@ -1,27 +1,13 @@
--- mart_error_summary — triage rollup of mart_event_record_errors.
---
--- One row per (error_type, description_code): how big is the problem, since
--- when, on which apps, and sample payloads to aid diagnosis. Contains NO
--- detection logic of its own — mart_event_record_errors is the single
--- source of truth for what counts as an error; this is just a readable lens
--- over it (at production volume the row-level table is too big to eyeball).
---
--- For unknown_event_code rows, suspected_l1_category infers the family from
--- documented sibling codes sharing the same 2-digit L1 prefix.
---
--- Triage: confirm unknowns with the API team; once a code/source/category
--- is added to the official seed (and the glossary regenerated via
--- scripts/generate_event_glossary.py), its rows clear on the next build.
+-- audit_error_summary — triage rollup of audit_event_record_errors.
 
 {{ config(materialized='view') }}
 
 with errors as (
 
-    select * from {{ ref('mart_event_record_errors') }}
+    select * from {{ ref('audit_event_record_errors') }}
 
 ),
 
--- L1 prefix -> category name, inferred from documented sibling codes
 l1_names as (
 
     select

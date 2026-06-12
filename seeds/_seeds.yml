@@ -34,7 +34,8 @@ seeds:
       - name: payload_format
         tests:
           - accepted_values:
-              values: [none, kv, positional_order, positional, duration, sku, title, bare_value, fail_marker]
+              arguments:
+                values: [none, kv, positional_order, positional, duration, sku, title, bare_value, fail_marker]
       - name: log_level
         description: INFO (normal) / WARN (degraded or failed) / EVENT (user interaction); empty where doc is silent
       - name: platforms
@@ -56,11 +57,13 @@ seeds:
       - name: user_type
         tests:
           - accepted_values:
-              values: [Sales, Customer]
+              arguments:
+                values: [Sales, Customer]
       - name: platform
         tests:
           - accepted_values:
-              values: [iOS, Android, Web]
+              arguments:
+                values: [iOS, Android, Web]
 
   - name: seed_categories
     description: >

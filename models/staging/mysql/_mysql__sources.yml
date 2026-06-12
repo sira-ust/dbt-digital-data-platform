@@ -10,6 +10,12 @@ sources:
       produced from raw API JSON by scripts/flatten_api_json.sql; production
       connection method depends on the engine decision (followup.md).
     tags: ["raw", "mysql"]
+    # TEMP: on Databricks the source is a sample upload (scripts/
+    # upload_sample_to_databricks.py) into temp_-prefixed schema/table —
+    # replace with the real MySQL ingestion target and drop temp_mysql
+    # once that lands (followup.md). Ignored on DuckDB (external_location
+    # wins there).
+    schema: temp_mysql
     meta:
       access: read_only
       source_system: mysql
@@ -21,6 +27,7 @@ sources:
       # TODO: confirm the real MySQL table name (doc is silent); local file
       # name stays system_events.parquet either way.
       - name: system_events
+        identifier: temp_system_events
         description: One row per event from any app, written via the unified logging API
         loaded_at_field: created_at
         freshness:

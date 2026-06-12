@@ -11,8 +11,8 @@
 --   * actor_type + unified customer key from the username/ust_customer_no rules
 --   * version -> major / minor / build
 --
--- NOT here: payload (`response`) parsing — formats vary per event family, so
--- that lives in the per-family intermediate models.
+-- NOT here: payload (`response`) parsing — deferred until analytics marts.
+-- DQ checks validate payload presence against the seed dictionary only.
 --
 -- NOTE: do NOT assume event_at_utc <= created_at_utc — device clock drift and
 -- offline queueing make ordering unreliable. Order/dedup on entity_id only.
@@ -51,16 +51,16 @@ transformed as (
         nullif(trim(username), '') as username,
         nullif(trim(ust_customer_no), '') as ust_customer_no,
         nullif(trim(device_name), '') as device_name,
-        cast(source as varchar) as source_code,
+        cast(source as {{ dbt.type_string() }}) as source_code,
 
         -- ── event code: 8-digit hierarchical split ─────────────────────
-        cast(description_code as varchar) as description_code,
-        substr(cast(description_code as varchar), 1, 2) as l1_code,
-        substr(cast(description_code as varchar), 3, 2) as l2_code,
-        substr(cast(description_code as varchar), 5, 2) as l3_code,
-        substr(cast(description_code as varchar), 7, 2) as l4_code,
-        substr(cast(description_code as varchar), 7, 2) = '01' as is_success,
-        substr(cast(description_code as varchar), 7, 2) = '02' as is_failure,
+        cast(description_code as {{ dbt.type_string() }}) as description_code,
+        substr(cast(description_code as {{ dbt.type_string() }}), 1, 2) as l1_code,
+        substr(cast(description_code as {{ dbt.type_string() }}), 3, 2) as l2_code,
+        substr(cast(description_code as {{ dbt.type_string() }}), 5, 2) as l3_code,
+        substr(cast(description_code as {{ dbt.type_string() }}), 7, 2) as l4_code,
+        substr(cast(description_code as {{ dbt.type_string() }}), 7, 2) = '01' as is_success,
+        substr(cast(description_code as {{ dbt.type_string() }}), 7, 2) = '02' as is_failure,
 
         -- ── timestamps ─────────────────────────────────────────────────
         -- device local -> UTC: subtract the device offset (GMT+8 -> -8h)
@@ -68,7 +68,7 @@ transformed as (
             'cast(event_time as timestamp)',
             '-coalesce(' ~ tz_offset_hours('timezone') ~ ', 0)'
         ) }} as event_at_utc,
-        cast(timezone as varchar) as device_timezone,
+        cast(timezone as {{ dbt.type_string() }}) as device_timezone,
 
         -- server fixed PST (UTC-8, no DST) -> UTC: constant +8h
         {{ add_hours('cast(created_at as timestamp)', 8) }} as created_at_utc,
@@ -96,13 +96,13 @@ transformed as (
 
         -- ── app version: major.minor.build ─────────────────────────────
         -- split_part shares the same signature on DuckDB and Databricks
-        cast(version as varchar) as app_version,
+        cast(version as {{ dbt.type_string() }}) as app_version,
         try_cast(nullif(split_part(version, '.', 1), '') as integer) as version_major,
         try_cast(nullif(split_part(version, '.', 2), '') as integer) as version_minor,
         try_cast(nullif(split_part(version, '.', 3), '') as integer) as version_build,
 
         -- ── payload: parsed downstream per event family ─────────────────
-        cast(response as varchar) as response
+        cast(response as {{ dbt.type_string() }}) as response
 
     from deduped
 

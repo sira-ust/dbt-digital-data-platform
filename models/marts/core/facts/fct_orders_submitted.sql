@@ -1,4 +1,7 @@
--- Order submission events (L1 = 04, Send Order family).
+-- fct_orders_submitted — one row per send-order event (L1 = 04).
+-- Parsed from int_events_enriched; consumed by reporting marts and BI drill-down.
+-- Phase 2: enrich or replace log rows with NAV/replication order facts.
+--
 -- Payload: positional CSV order metadata —
 --   increment_id, order_source, grand_total, duration, subtotal,
 --   total_item_count, ust_customer_no
@@ -27,7 +30,6 @@ select
     created_at_utc,
     event_at_utc,
 
-    -- positional payload
     {{ response_part('response', 1) }} as increment_id,
     {{ response_part('response', 2) }} as order_source,
     try_cast({{ response_part('response', 3) }} as decimal(18, 2)) as grand_total,

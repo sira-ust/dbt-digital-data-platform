@@ -1,73 +1,137 @@
 name: ust_digital_platform
+
 version: 1.0.0
+
 config-version: 2
+
+
 
 profile: ust_digital_platform
 
+
+
 model-paths: ["models"]
+
 analysis-paths: ["analyses"]
+
 test-paths: ["tests"]
+
 seed-paths: ["seeds"]
+
 macro-paths: ["macros"]
-snapshot-paths: ["snapshots"]
+
+
 
 clean-targets:
+
   - target
+
   - dbt_packages
 
+
+
 # Layering:
-#   staging/mysql/    view — dedup on entity_id, code split, two-timezone UTC
-#                     conversion; raw `response` preserved
-#   intermediate/     view — event-dictionary enrichment + per-family payload
-#                     parsing (kv / positional / duration / bare value)
-#   marts/            incremental on entity_id (~600k events/month)
-#
-# Portability: production engine TBD (DuckDB local; Databricks or Fabric
-# later). Models stay ANSI-friendly; engine-specific syntax lives in
-# dispatched macros (macros/parse_response.sql, macros/time_convert.sql).
+
+#   staging/mysql/  view — source mapping (dedup, types, code split, UTC)
+
+#   seeds/          reference data (event dictionary, apps, categories)
+
+#   intermediate/       view — enrichment + per-family payload parsing
+
+#   marts/core/facts/   fct_* event-grain facts for BI drill-down
+
+#   marts/reporting/    mart_* aggregated scorecards
+
+#   dq/                 audit tables + triage views
+
+#   tests/              singular pipeline gate tests
+
+
 
 models:
+
   ust_digital_platform:
+
     +persist_docs:
+
       relation: true
+
       columns: true
 
+
+
     staging:
+
       +materialized: view
+
       +schema: staging
+
       mysql:
+
         +tags: ["staging", "mysql"]
 
+
+
     intermediate:
+
       +materialized: view
+
       +schema: intermediate
+
       +tags: ["intermediate"]
 
+
+
+    dq:
+
+      +schema: dq
+
+      +tags: ["dq"]
+
     marts:
-      # incremental configured per-model (unique_key='entity_id')
-      +materialized: incremental
-      +schema: marts
-      +tags: ["marts"]
+      core:
+        facts:
+          +materialized: view
+          +schema: facts
+          +tags: ["facts"]
+      reporting:
+        +materialized: table
+        +schema: reporting
+        +tags: ["reporting"]
 
 seeds:
-  ust_digital_platform:
-    +schema: seeds
-    seed_event_codes:
-      +column_types:
-        description_code: varchar    # leading zeros — never int!
-        has_geo: boolean
-        is_system_event: boolean
-    seed_app_sources:
-      +column_types:
-        source_code: varchar
-    seed_categories:
-      +column_types:
-        category_id: varchar         # joins against parsed kv strings
 
-snapshots:
   ust_digital_platform:
-    +target_schema: snapshots
+
+    +schema: seeds
+
+    seed_event_codes:
+
+      +column_types:
+
+        description_code: string
+
+        has_geo: boolean
+
+        is_system_event: boolean
+
+    seed_app_sources:
+
+      +column_types:
+
+        source_code: string
+
+    seed_categories:
+
+      +column_types:
+
+        category_id: string
+
+
 
 tests:
+
   +store_failures: true
+
   +schema: test_failures
+

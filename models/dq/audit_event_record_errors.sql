@@ -1,23 +1,5 @@
--- mart_event_record_errors — row-level error/quarantine table.
---
--- One row per (event record, violation). A record can appear multiple times
--- if it breaks several rules. Rules are driven by the seed reference data,
--- so adding a code to seed_event_codes automatically clears the
--- corresponding unknown_event_code rows on the next build.
---
--- error_type values:
---   unknown_event_code     description_code missing from seed_event_codes
---   unknown_source_code    source missing from seed_app_sources
---   unexpected_payload     dictionary says payload_format = none, but the
---                          record carries a non-empty response
---   missing_payload        dictionary expects a payload, but response is empty
---   missing_event_time     device event_time absent / unparseable
---   unknown_category       Catalog View (19010000) kv category id missing
---                          from seed_categories
---
--- Companion views of the same problem space:
---   * mart_unknown_event_codes — code-grain triage queue
---   * test_failures schema    — dbt-managed stored test failures (per run)
+-- audit_event_record_errors — row-level DQ violations (one row per record × rule).
+-- Joins staging to seed reference data for dictionary-driven checks.
 
 {{ config(materialized='table') }}
 
@@ -45,7 +27,7 @@ unknown_event_code as (
         created_at_utc,
         response
     from events
-    where function_name is null  -- no match in seed_event_codes
+    where function_name is null
 
 ),
 
@@ -61,7 +43,7 @@ unknown_source_code as (
         created_at_utc,
         response
     from events
-    where app_name is null  -- no match in seed_app_sources
+    where app_name is null
 
 ),
 

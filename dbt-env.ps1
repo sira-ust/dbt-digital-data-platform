@@ -1,4 +1,4 @@
-# dbt-env.ps1 — load dbt venv into current PowerShell session
+# dbt-env.ps1 - load dbt venv into current PowerShell session
 # Usage: . .\dbt-env.ps1
 #
 # Dot-sourcing (the leading dot) is required so the env vars persist
@@ -10,4 +10,4 @@
 $env:PATH = "$PSScriptRoot\.venv\Scripts;$env:PATH"
 $env:DBT_PROFILES_DIR = $PSScriptRoot
 
-Write-Host "dbt env loaded — venv: $PSScriptRoot\.venv" -ForegroundColor Cyan
+Write-Host "dbt env loaded - venv: $PSScriptRoot\.venv" -ForegroundColor Cyan

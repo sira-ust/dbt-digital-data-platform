@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: fct_orders_submitted
+    description: >
+      Send-order fact at event grain (L1=04). One row per order submission
+      attempt from the system event log, with positional CSV payload parsed
+      into typed columns. Phase 2 may union or replace with NAV order facts.
+    columns:
+      - name: entity_id
+        tests: [not_null, unique]
+      - name: increment_id
+        description: Order increment id (e.g. M000072209)

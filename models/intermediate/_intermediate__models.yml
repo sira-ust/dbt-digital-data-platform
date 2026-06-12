@@ -7,14 +7,6 @@ models:
       - name: entity_id
         tests: [not_null, unique]
 
-  - name: int_orders_submitted
-    description: Send Order family (04xx) with positional CSV payload parsed into typed columns
-    columns:
-      - name: entity_id
-        tests: [not_null, unique]
-      - name: increment_id
-        description: Order increment id (e.g. M000072209)
-
   - name: int_logins
     description: Login events (0203xx)
     columns:
