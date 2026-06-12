@@ -23,7 +23,11 @@ select
     count(distinct device_name)                     as distinct_devices,
     count(distinct customer_key)                    as distinct_customers_touched,
 
-    -- engagement breakdown
+    -- engagement breakdown (these + system_environment_events should sum to total_events)
+    sum(case when l1_category_name = 'System Environment' then 1 else 0 end)
+                                                    as system_environment_events,
+    sum(case when l1_category_name = 'Login & Logout' then 1 else 0 end)
+                                                    as login_events,
     sum(case when l1_category_name = 'Search' then 1 else 0 end)
                                                     as search_events,
     sum(case when l1_category_name = 'Item Image Enlarge' then 1 else 0 end)
@@ -32,8 +36,12 @@ select
                                                     as order_operation_events,
     sum(case when l1_category_name = 'Activity (Customer Interactions)' then 1 else 0 end)
                                                     as customer_interaction_events,
+    sum(case when l1_category_name = 'Data Download & Sync' then 1 else 0 end)
+                                                    as download_events,
+    sum(case when l1_category_name is null then 1 else 0 end)
+                                                    as uncategorised_events,
 
-    -- system events (noise filter — useful for device health)
+    -- device health signals
     sum(case when description_code = '01020200' then 1 else 0 end)
                                                     as low_battery_events,
     sum(case when description_code = '01040200' then 1 else 0 end)
