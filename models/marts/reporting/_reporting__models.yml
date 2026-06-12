@@ -37,3 +37,74 @@ models:
         description: Distinct customers the agent acted for across all events
       - name: customers_ordered_for
         description: Distinct customers with at least one successful order submission
+
+  - name: mart_daily_activity
+    description: >
+      Daily activity summary across all apps and user types.
+      Grain: activity_date x source_code. Powers the Daily Activity dashboard page.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - activity_date
+              - source_code
+    columns:
+      - name: activity_date
+        tests: [not_null]
+      - name: source_code
+        tests: [not_null]
+      - name: total_events
+        description: All events on that date for that app
+      - name: active_users
+        description: Distinct usernames active on that date
+      - name: location_success
+        description: Count of GPS location-success events (01040100)
+      - name: location_fail
+        description: Count of GPS location-fail events (01040200)
+      - name: low_battery_events
+        description: Count of low-battery warnings (01020200)
+      - name: search_events
+        description: Count of search events
+      - name: order_operation_events
+        description: Count of add-to-cart / order operation events
+
+  - name: mart_team_performance
+    description: >
+      Cumulative per-rep activity summary across the full data window.
+      Grain: username x source_code. Powers the Team Performance dashboard page.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - username
+              - source_code
+    columns:
+      - name: username
+        tests: [not_null]
+      - name: source_code
+        tests: [not_null]
+      - name: sales_code
+        description: Team the rep belongs to
+      - name: active_days
+        description: Number of distinct days the rep had any activity
+      - name: last_active_date
+        description: Most recent day the rep was seen in the data
+      - name: distinct_customers_touched
+        description: Distinct customers the rep acted for
+
+  - name: mart_system_health
+    description: >
+      Device and system health signals by rep, device, and date.
+      Grain: activity_date x username x source_code x device_name.
+      Powers the System Health dashboard page and field ops triage.
+    columns:
+      - name: activity_date
+        tests: [not_null]
+      - name: username
+        tests: [not_null]
+      - name: location_success_pct
+        description: GPS success rate 0–100; null if no location events that day
+      - name: low_battery_events
+        description: Count of low-battery warnings — high values flag field device issues
+      - name: timeout_events
+        description: Count of login timeout events (02040100)
