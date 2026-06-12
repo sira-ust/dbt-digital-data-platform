@@ -64,7 +64,7 @@ models:
 
       +materialized: view
 
-      +schema: staging
+      +schema: ust_staging
 
       mysql:
 
@@ -76,7 +76,7 @@ models:
 
       +materialized: view
 
-      +schema: intermediate
+      +schema: ust_intermediate
 
       +tags: ["intermediate"]
 
@@ -84,7 +84,7 @@ models:
 
     dq:
 
-      +schema: dq
+      +schema: ust_dq
 
       +tags: ["dq"]
 
@@ -92,18 +92,22 @@ models:
       core:
         facts:
           +materialized: view
-          +schema: facts
+          +schema: ust_facts
           +tags: ["facts"]
+        dimensions:
+          +materialized: view
+          +schema: ust_dimensions
+          +tags: ["dimensions"]
       reporting:
         +materialized: table
-        +schema: reporting
+        +schema: ust_reporting
         +tags: ["reporting"]
 
 seeds:
 
   ust_digital_platform:
 
-    +schema: seeds
+    +schema: ust_seeds
 
     seed_event_codes:
 

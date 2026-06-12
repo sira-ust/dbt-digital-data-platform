@@ -16,9 +16,10 @@ sources:
     # once that lands (followup.md). Ignored on DuckDB (external_location
     # wins there).
     schema: temp_mysql
-    meta:
-      access: read_only
-      source_system: mysql
+    config:
+      meta:
+        access: read_only
+        source_system: mysql
       # dbt-duckdb: resolve the source table to the flattened local sample.
       # Engine-specific by design; the production source overrides this.
       external_location: "data/system_events.parquet"
@@ -29,10 +30,11 @@ sources:
       - name: system_events
         identifier: temp_system_events
         description: One row per event from any app, written via the unified logging API
-        loaded_at_field: created_at
-        freshness:
-          warn_after: {count: 24, period: hour}
-          error_after: {count: 72, period: hour}
+        config:
+          loaded_at_field: created_at
+          freshness:
+            warn_after: {count: 24, period: hour}
+            error_after: {count: 72, period: hour}
         columns:
           - name: entity_id
             description: Auto-increment PK — basis for dedup and incremental processing

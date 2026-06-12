@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: dim_app_sources
+    description: BI-friendly dimension over seed_app_sources — one row per app source code.
+    columns:
+      - name: source_code
+        description: App source code (PK) — e.g. PDA-A, CatalogFS-I
+        tests: [not_null, unique]
+      - name: app_name
+        description: Short app name
+      - name: app_full_name
+        description: Full descriptive app name
+      - name: user_type
+        description: Sales or Customer
+      - name: platform
+        description: iOS, Android, or Web
+
+  - name: dim_event_codes
+    description: BI-friendly dimension over seed_event_codes — one row per 8-digit event code.
+    columns:
+      - name: description_code
+        description: 8-digit hierarchical event code (PK)
+        tests: [not_null, unique]
+      - name: function_name
+        description: Human-readable event label
+      - name: l1_category_name
+        description: Top-level event category
+      - name: payload_format
+        description: Expected format of the response payload field
+      - name: has_geo
+        description: Whether this event captures a GPS location
+      - name: is_system_event
+        description: System-generated vs user-initiated
+      - name: event_type
+        description: Broad event classification
+      - name: log_level
+        description: INFO, WARN, or ERROR
+      - name: platforms
+        description: Comma-separated list of apps that emit this code
+
+  - name: dim_categories
+    description: BI-friendly dimension over seed_categories — product category lookup.
+    columns:
+      - name: category_id
+        description: Category identifier (PK)
+        tests: [not_null, unique]
+      - name: category_name
+        description: Human-readable category name
