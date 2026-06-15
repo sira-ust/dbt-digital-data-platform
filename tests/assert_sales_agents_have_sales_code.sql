@@ -16,6 +16,6 @@ select
     username,
     sales_code,
     created_at_utc
-from {{ ref('stg_mysql__system_events') }}
+from {{ ref('stg_mysql__system_event_log') }}
 where source_code in ('PDA-A', 'CatalogFS-I', 'CatalogFS-A')
   and (sales_code is null or trim(sales_code) = '')

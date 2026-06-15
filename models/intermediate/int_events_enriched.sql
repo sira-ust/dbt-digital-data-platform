@@ -6,7 +6,7 @@
 
 with events as (
 
-    select * from {{ ref('stg_mysql__system_events') }}
+    select * from {{ ref('stg_mysql__system_event_log') }}
 
 ),
 

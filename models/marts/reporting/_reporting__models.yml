@@ -71,11 +71,14 @@ models:
   - name: mart_team_performance
     description: >
       Cumulative per-rep activity summary across the full data window.
-      Grain: username x source_code. Powers the Team Performance dashboard page.
+      Grain: sales_code x username x source_code. A rep may appear under multiple
+      sales_codes if their team assignment changed over the data window.
+      Powers the Team Performance dashboard page.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns:
+              - sales_code
               - username
               - source_code
     columns:
@@ -108,3 +111,145 @@ models:
         description: Count of low-battery warnings — high values flag field device issues
       - name: timeout_events
         description: Count of login timeout events (02040100)
+
+  - name: mart_customer_engagement
+    description: >
+      Cumulative customer engagement summary from the mobile tracking data.
+      Grain: customer_id. Powers customer overview dashboard and chatbot queries
+      about how active specific B2B customers are, what pages they visit, and
+      which products they interact with.
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: customer_name
+      - name: total_sessions
+        description: Distinct tracking sessions by this customer
+      - name: first_session_at
+      - name: last_session_at
+      - name: active_days
+        description: Distinct calendar days with at least one session
+      - name: total_events
+        description: Total app events (page views, product interactions, etc.)
+      - name: avg_event_duration_seconds
+      - name: unique_pages_visited
+        description: Count of distinct page values seen across all events
+      - name: unique_skus_viewed
+        description: Distinct SKUs the customer interacted with
+      - name: total_qty_interacted
+        description: Sum of quantity fields where qty > 0
+      - name: cart_page_events
+        description: Events where page = 'Cart'
+      - name: device_model
+        description: Most recently seen device model
+      - name: app_version
+        description: Most recently seen app version
+
+  - name: mart_sales_rep_daily_activity
+    description: >
+      Daily sales rep activity scorecard from the iPad/PDA tracking data.
+      Grain: activity_date x username x sales_code. Powers the sales team
+      daily dashboard and chatbot queries about what reps did on a given day.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - activity_date
+              - username
+              - sales_code
+    columns:
+      - name: activity_date
+        description: Calendar date derived from event started_at
+        tests: [not_null]
+      - name: username
+        tests: [not_null]
+      - name: sales_code
+      - name: total_sessions
+        description: Distinct app sessions on this date
+      - name: total_events
+        description: Total activity events logged on this date
+      - name: login_events
+        description: Events where is_login = true
+      - name: completed_events
+        description: Events where is_done = true
+      - name: failed_events
+        description: Events where is_done = false
+      - name: unique_customers_visited
+        description: Distinct customer IDs logged against events on this date
+      - name: unique_skus_interacted
+        description: Distinct SKUs the rep scanned or interacted with
+      - name: avg_battery_pct
+        description: Average battery percentage across events with battery data
+      - name: min_battery_pct
+        description: Lowest battery reading — high values flagged by system health
+      - name: wifi_events
+        description: Events recorded over wifi
+      - name: cellular_events
+        description: Events recorded over cellular
+      - name: device_model
+        description: Most recently seen device model on this date
+      - name: app_version
+        description: Most recently seen app version on this date
+
+  - name: mart_customer_product_interactions
+    description: >
+      Customer x product interaction summary from mobile tracking data.
+      Grain: customer_id x sku. Powers product analytics dashboard and chatbot
+      queries about which products specific customers engage with most.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - customer_id
+              - sku
+    columns:
+      - name: customer_id
+        tests: [not_null]
+      - name: sku
+        tests: [not_null]
+      - name: customer_name
+      - name: item_no
+      - name: categories_name
+      - name: total_interactions
+        description: Total events where this SKU appeared
+      - name: sessions_with_interaction
+        description: Distinct sessions containing this SKU
+      - name: total_qty_interacted
+        description: Sum of qty where qty > 0
+      - name: active_days_with_interaction
+        description: Distinct days this customer interacted with this SKU
+      - name: first_seen_at
+      - name: last_seen_at
+
+  - name: mart_sales_rep_customer_visits
+    description: >
+      Lifetime summary of sales rep x customer interaction pairs.
+      Grain: username x sales_code x customer_id. Powers CRM-style dashboard
+      and chatbot queries like "which customers has rep X visited?" or
+      "when did rep X last visit customer Y?"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - username
+              - sales_code
+              - customer_id
+    columns:
+      - name: username
+        tests: [not_null]
+      - name: sales_code
+      - name: customer_id
+        tests: [not_null]
+      - name: total_sessions
+        description: Distinct sessions where this rep logged events for this customer
+      - name: total_events
+        description: Total events logged by this rep for this customer
+      - name: completed_actions
+        description: Events where is_done = true
+      - name: unique_skus_shown
+        description: Distinct SKUs the rep interacted with for this customer
+      - name: total_qty_ordered
+        description: Sum of qty where qty > 0
+      - name: first_visit_date
+      - name: last_visit_date
+      - name: visit_days
+        description: Distinct days this rep had activity for this customer

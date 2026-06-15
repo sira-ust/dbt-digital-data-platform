@@ -32,19 +32,21 @@ clean-targets:
 
 # Layering:
 
-#   staging/mysql/  view — source mapping (dedup, types, code split, UTC)
+#   staging/mysql/   view — 1:1 with MySQL tables (ust_website schema); local dev reads
+#                    JSON via external_location; remove external_location when MySQL
+#                    connection is available and add credentials to profiles.yml
 
-#   seeds/          reference data (event dictionary, apps, categories)
+#   seeds/           reference data (event dictionary, apps, categories)
 
-#   intermediate/       view — enrichment + per-family payload parsing
+#   intermediate/    view — enrichment + per-family payload parsing
 
 #   marts/core/facts/   fct_* event-grain facts for BI drill-down
 
 #   marts/reporting/    mart_* aggregated scorecards
 
-#   dq/                 audit tables + triage views
+#   dq/              audit tables + triage views
 
-#   tests/              singular pipeline gate tests
+#   tests/           singular pipeline gate tests
 
 
 
@@ -132,6 +134,14 @@ seeds:
         category_id: string
 
 
+
+vars:
+  # Whether the real MySQL source is connected. While false (POC phase),
+  # sources read sample data (DuckDB: JSON via external_location; Databricks:
+  # temp_mysql.* tables loaded by scripts/load_databricks_sample.py), and
+  # admin_users / category staging models return empty schema-correct results.
+  # Flip to true once MySQL credentials are live in profiles.yml.
+  mysql_available: false
 
 tests:
 

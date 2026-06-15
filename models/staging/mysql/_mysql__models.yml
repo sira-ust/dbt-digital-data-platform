@@ -1,83 +1,233 @@
 version: 2
 
 models:
-  - name: stg_mysql__system_events
+  - name: stg_mysql__tracking_report
     description: >
-      Typed, deduped view over the System Event Log (one row per entity_id,
-      latest updated_at wins). description_code split into L1-L4; event_time
-      converted to UTC via the per-row device offset; created_at/updated_at
-      converted from fixed PST (UTC-8, no DST) via a constant +8h.
-      The raw `response` payload is preserved for future parsing. Ordering
-      note — event_at_utc vs created_at_utc is
-      deliberately NOT tested: device clock drift and offline queueing make
-      cross-clock ordering unreliable; entity_id is the only ordering/dedup key.
+      Typed, deduped customer app sessions from tracking_report.
+      One row per entity_id (latest updated_at wins). Covers only customers
+      who opted in to tracking, sourced from mobile app only (not web).
+      Timestamps are device local — no timezone at session level.
     columns:
       - name: entity_id
-        description: Auto-increment PK from MySQL — dedup and incremental key
-        tests:
-          - unique
-          - not_null
+        tests: [unique, not_null]
+      - name: customer_id
+        tests: [not_null]
+      - name: customer_name
+      - name: session_id
+      - name: device_model
+      - name: app_version
+      - name: version_major
+      - name: version_minor
+      - name: version_build
+      - name: started_at
+        tests: [not_null]
+      - name: ended_at
+      - name: total_events
+      - name: created_at_server
+      - name: updated_at_server
 
+  - name: stg_mysql__tracking_report_event
+    description: >
+      Typed, deduped customer app events from tracking_report_event.
+      One row per entity_id (latest updated_at wins). Each event is a child
+      of a session via session_entity_id. Includes duration, product context,
+      and page navigation fields.
+    columns:
+      - name: entity_id
+        tests: [unique, not_null]
+      - name: session_entity_id
+        description: FK to stg_mysql__tracking_report.entity_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_mysql__tracking_report')
+                field: entity_id
+              config:
+                severity: warn
+      - name: customer_id
+        tests: [not_null]
+      - name: customer_name
+      - name: event_type_code
+      - name: title
+      - name: page
+      - name: event_type_label
+      - name: method_code
+      - name: started_at
+        tests: [not_null]
+      - name: ended_at
+      - name: device_timezone
+      - name: duration_seconds
+      - name: item_no
+      - name: sku
+      - name: qty
+      - name: quote_id
+      - name: categories_name
+      - name: keyword
+      - name: notes
+      - name: address
+      - name: source
+      - name: icon
+      - name: app_version
+      - name: created_at_server
+      - name: updated_at_server
+
+  - name: stg_mysql__user_activity_report
+    description: >
+      Typed, deduped salesperson login sessions from user_activity_report.
+      One row per entity_id (latest updated_at wins). Sourced from iPad
+      and PDA devices. GPS location split into latitude/longitude.
+    columns:
+      - name: entity_id
+        tests: [unique, not_null]
+      - name: username
+        description: Salesperson login account
+        tests: [not_null]
+      - name: display_name
+        description: Display name with sales code prefix (e.g. "024-JASON LI")
+      - name: session_id
+      - name: device_model
+      - name: app_version
+      - name: version_major
+      - name: version_minor
+      - name: version_build
+      - name: started_at
+        tests: [not_null]
+      - name: ended_at
+      - name: latitude
+      - name: longitude
+      - name: sales_name
+      - name: is_voluntary_exit
+      - name: event_count
+      - name: created_at_server
+      - name: updated_at_server
+
+  - name: stg_mysql__user_activity_report_event
+    description: >
+      Typed, deduped salesperson activity events from user_activity_report_event.
+      One row per entity_id (latest updated_at wins). Each event is a child
+      of a session via session_entity_id.
+    columns:
+      - name: entity_id
+        tests: [unique, not_null]
+      - name: session_entity_id
+        description: FK to stg_mysql__user_activity_report.entity_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_mysql__user_activity_report')
+                field: entity_id
+              config:
+                severity: warn
+      - name: username
+        tests: [not_null]
+      - name: display_name
+      - name: sales_code
+      - name: activity_type_code
+      - name: title
+      - name: started_at
+        tests: [not_null]
+      - name: ended_at
+      - name: device_timezone
+      - name: latitude
+      - name: longitude
+      - name: customer_id
+      - name: keyword
+      - name: category
+      - name: sku
+      - name: qty
+      - name: visits_num
+      - name: is_wifi
+      - name: battery_pct
+      - name: device_space
+      - name: app_version
+      - name: is_done
+      - name: is_login
+      - name: response
+      - name: method_code
+      - name: updated_at_server
+
+  - name: stg_mysql__system_event_log
+    description: >
+      Typed, deduped system event log from system_event_log. One row per
+      entity_id (latest updated_at wins). description_code split into L1-L4;
+      event_time converted to UTC via per-row device offset; created_at/updated_at
+      converted from fixed PST (UTC-8) via constant +8h. Raw API response has
+      nested envelope — staging handles unnesting; remove flattening CTEs when
+      reading directly from MySQL.
+    columns:
+      - name: entity_id
+        tests: [unique, not_null]
       - name: description_code
-        description: 8-digit hierarchical event code (string, leading zeros preserved)
         tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('seed_event_codes')
                 field: description_code
-              # warn, not error: the seed is a scaffold and reality already
-              # disagrees with the doc in places (e.g. 01020200 payload) —
-              # unknown codes are a signal to extend the seed, not a failure
               config:
                 severity: warn
-
       - name: source_code
-        description: App source code
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values:
-                  - PDA-A
-                  - CatalogFC-A
-                  - CatalogFC-I
-                  - CatalogFS-I
-                  - CatalogFS-A
-                  - Vegas-I
-                  - Vegas-A
-                  - CatalogSE
-                  - Web
-
+                values: [PDA-A, CatalogFC-A, CatalogFC-I, CatalogFS-I, CatalogFS-A, Vegas-I, Vegas-A, CatalogSE, Web]
       - name: created_at_utc
-        description: Server timestamp (fixed PST +8h -> UTC) — authoritative event time
-        tests:
-          - not_null
-
+        tests: [not_null]
       - name: event_at_utc
-        description: Device local time converted to UTC via GMT offset — advisory only (clock drift)
-
       - name: event_id_at_utc
-        description: Device-side epoch-millis timestamp (nullable, advisory)
-
       - name: is_success
-        description: l4_code = '01'
-
       - name: is_failure
-        description: l4_code = '02'
-
       - name: actor_type
-        description: sales (PDA-A, CatalogFS-*) vs customer (all other apps)
         tests:
           - accepted_values:
               arguments:
                 values: [sales, customer]
-
       - name: customer_key
-        description: >
-          Unified customer — ust_customer_no when a salesperson acts for a
-          customer; username (customer account no.) on customer apps; null
-          when a sales user acts for no customer
-
       - name: response
-        description: Raw payload string (NOT JSON) — parsed per event family downstream
+
+  - name: stg_mysql__admin_users
+    description: >
+      Typed salesperson and admin master data from admin_users.
+      Links to other staging models via username (= user_activity_report.user,
+      system_event_log.username) and salesperson_code (= system_event_log.sales_code).
+      NOTE: requires live MySQL connection — no JSON sample available.
+      Model is ready but will not run until credentials are added to profiles.yml.
+    columns:
+      - name: user_id
+        tests: [unique, not_null]
+      - name: username
+        description: Login account — FK to user_activity_report.user and system_event_log.username
+        tests: [unique, not_null]
+      - name: salesperson_code
+        description: Sales territory code — FK to system_event_log.sales_code
+      - name: firstname
+      - name: lastname
+      - name: full_name
+        description: Derived — firstname || ' ' || lastname
+      - name: role_name
+      - name: is_active
+
+  - name: stg_mysql__category
+    description: >
+      Typed product category master data from category.
+      Hierarchical — parent_category_name resolved via self-join one level up.
+      NOTE: requires live MySQL connection — no JSON sample available.
+      Column list may need expanding once MySQL schema is confirmed.
+      Returns empty schema-correct result in dev (where false).
+    columns:
+      - name: category_id
+        tests: [unique, not_null]
+      - name: parent_id
+        description: FK to parent category_id (null for root categories)
+      - name: category_name
+        tests: [not_null]
+      - name: parent_category_name
+        description: Resolved one level up via self-join
+      - name: level
+        description: Hierarchy depth — 1 is root
+      - name: is_active
+      - name: created_at
+      - name: updated_at

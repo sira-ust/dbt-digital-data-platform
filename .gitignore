@@ -13,6 +13,7 @@ __pycache__/
 # Local credentials & local-only config — never commit
 profiles.yml
 .env
+.mcp.json
 *.pem
 .user.yml
 

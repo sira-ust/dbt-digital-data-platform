@@ -3,76 +3,293 @@ version: 2
 sources:
   - name: mysql
     description: >
-      ustrading System Event Log — a MySQL table of system/event logs written
-      by all company apps (PDA, CatalogFS, CatalogFC, Vegas, CatalogSE, Web)
-      via a unified API. ~600k events/month. MySQL is strictly READ-ONLY for
-      dbt — never write back. Local dev reads data/system_events.parquet,
-      produced from raw API JSON by scripts/flatten_api_json.sql; production
-      connection method depends on the engine decision (followup.md).
+      UST website MySQL database. All tables are READ-ONLY for dbt.
+      POC phase (no live MySQL yet): each table reads sample data.
+        DuckDB (dev):     external_location reads the API JSON in data/raw_api/.
+        Databricks (POC): external_location is ignored; the source resolves to
+                          temp_mysql.<identifier>, loaded by
+                          scripts/load_databricks_sample.py.
+      When real MySQL lands, point schema at the live database, drop the temp_mysql
+      identifiers and external_location, and set mysql_available: true.
     tags: ["raw", "mysql"]
-    # TEMP: on Databricks the source is a sample upload (scripts/
-    # upload_sample_to_databricks.py) into temp_-prefixed schema/table —
-    # replace with the real MySQL ingestion target and drop temp_mysql
-    # once that lands (followup.md). Ignored on DuckDB (external_location
-    # wins there).
     schema: temp_mysql
     config:
       meta:
         access: read_only
         source_system: mysql
-      # dbt-duckdb: resolve the source table to the flattened local sample.
-      # Engine-specific by design; the production source overrides this.
-      external_location: "data/system_events.parquet"
 
     tables:
-      # TODO: confirm the real MySQL table name (doc is silent); local file
-      # name stays system_events.parquet either way.
-      - name: system_events
-        identifier: temp_system_events
-        description: One row per event from any app, written via the unified logging API
+      - name: tracking_report
+        identifier: temp_tracking_report
+        description: One row per customer app session. Source for /customer/tracking/ sessions.
         config:
+          external_location: "read_json_auto('data/raw_api/customer/tracking/customer_reports.json')"
+          loaded_at_field: updated_at
+          freshness:
+            warn_after: {count: 24, period: hour}
+        columns:
+          - name: entity_id
+            description: Primary key
+          - name: customer_id
+            description: Customer identifier
+          - name: customer_name
+            description: Customer name
+          - name: session_id
+            description: Session identifier (currently unpopulated)
+          - name: model
+            description: Device model
+          - name: version
+            description: Application version string
+          - name: start_time
+            description: Session start time (device local)
+          - name: end_time
+            description: Session end time (device local)
+          - name: total_event
+            description: Number of events in the session
+          - name: create_at
+            description: Record creation time (note — API/DB typo, missing 'd')
+          - name: updated_at
+            description: Record last update time
+
+      - name: tracking_report_event
+        identifier: temp_tracking_report_event
+        description: One row per customer action within a session. Child of tracking_report.
+        config:
+          external_location: "read_json_auto('data/raw_api/customer/tracking/customer_events.json')"
+        columns:
+          - name: entity_id
+            description: Primary key
+          - name: parent_id
+            description: FK -> tracking_report.entity_id
+          - name: customer_id
+            description: Customer identifier
+          - name: customer_name
+            description: Customer name (usually empty at event level)
+          - name: type
+            description: Event type code
+          - name: title
+            description: Page or product title
+          - name: start_time
+            description: Event start time (device local)
+          - name: end_time
+            description: Event end time (device local)
+          - name: item_no
+            description: Item number
+          - name: sku
+            description: Product SKU
+          - name: qty
+            description: Quantity
+          - name: quote_id
+            description: Quote identifier
+          - name: keyword
+            description: Search keyword
+          - name: page
+            description: Current page name
+          - name: event_type
+            description: Business event type label
+          - name: notes
+            description: Free-text notes
+          - name: address
+            description: Address string
+          - name: source
+            description: Event source label
+          - name: second
+            description: Duration in seconds (stored as string)
+          - name: method
+            description: Interaction method code
+          - name: categories_name
+            description: Product category name
+          - name: icon
+            description: Icon identifier
+          - name: timezone
+            description: Device UTC offset string
+          - name: version
+            description: App version (usually empty at event level)
+          - name: create_at
+            description: Record creation time (note — API/DB typo, missing 'd')
+          - name: updated_at
+            description: Record last update time
+
+      - name: user_activity_report
+        identifier: temp_user_activity_report
+        description: One row per salesperson login session. Source for /user/activity/ sessions.
+        config:
+          external_location: "read_json_auto('data/raw_api/user/activity/sales_reports.json')"
+          loaded_at_field: updated_at
+          freshness:
+            warn_after: {count: 24, period: hour}
+        columns:
+          - name: entity_id
+            description: Primary key
+          - name: user
+            description: Salesperson login account
+          - name: user_name
+            description: Salesperson display name with code prefix
+          - name: session_id
+            description: Session identifier (currently unpopulated)
+          - name: begin_time
+            description: Login / session start time
+          - name: end_time
+            description: Logout / session end time (null if still active)
+          - name: event_count
+            description: Number of recorded actions in the session
+          - name: voluntarily_exit
+            description: Whether the user exited normally (0/1)
+          - name: model
+            description: Device model
+          - name: location
+            description: GPS coordinates at session start ("lat,lon" or null)
+          - name: sales_name
+            description: Sales territory name (currently null)
+          - name: version
+            description: App version string
+          - name: created_at
+            description: Record creation time
+          - name: updated_at
+            description: Record last update time
+
+      - name: user_activity_report_event
+        identifier: temp_user_activity_report_event
+        description: One row per salesperson activity within a session. Child of user_activity_report.
+        config:
+          external_location: "read_json_auto('data/raw_api/user/activity/sales_events.json')"
+        columns:
+          - name: entity_id
+            description: Primary key
+          - name: report_entity_id
+            description: FK -> user_activity_report.entity_id
+          - name: user
+            description: Salesperson login account
+          - name: user_name
+            description: Salesperson display name
+          - name: sales_code
+            description: Sales territory code
+          - name: act_type
+            description: Activity type code
+          - name: begin_time
+            description: Activity start time
+          - name: end_time
+            description: Activity end time (empty string when not ended)
+          - name: customer
+            description: Customer being visited (if applicable)
+          - name: keyword
+            description: Search keyword
+          - name: location
+            description: GPS coordinates ("lat,lon" or empty)
+          - name: category
+            description: Product category context
+          - name: visits_num
+            description: Visit sequence number
+          - name: sku
+            description: Product SKU
+          - name: title
+            description: Activity label
+          - name: qty
+            description: Quantity
+          - name: response
+            description: API response payload
+          - name: battery
+            description: Device battery level percentage
+          - name: is_wifi
+            description: Wi-Fi status (0/1)
+          - name: is_done
+            description: Whether activity was completed (0/1)
+          - name: is_login
+            description: Whether this is a login event ("1" or empty)
+          - name: device_space
+            description: Available device storage
+          - name: timezone
+            description: Device UTC offset string
+          - name: method
+            description: Interaction method code
+          - name: version
+            description: App version string
+          - name: updated_at
+            description: Record last update time
+
+      - name: system_event_log
+        identifier: temp_system_events
+        description: >
+          Application and backend event logs with L1-L4 hierarchical event codes.
+          DuckDB reads the nested API envelope {code, msg, data: {data: [events]}}
+          and the staging model unnests it. Databricks reads the pre-flattened
+          temp_system_events table (one row per event); staging skips the unnest.
+        config:
+          external_location: "read_json_auto('data/raw_api/system/event/log/raw_log.json')"
           loaded_at_field: created_at
           freshness:
             warn_after: {count: 24, period: hour}
             error_after: {count: 72, period: hour}
         columns:
           - name: entity_id
-            description: Auto-increment PK — basis for dedup and incremental processing
+            description: Primary key
           - name: sales_code
-            description: Sales team / territory code
+            description: Salesperson code
           - name: username
             description: >
-              Salesperson login on sales apps (PDA-A, CatalogFS-*);
-              customer account no. on customer apps (Vegas-*, CatalogFC-*,
-              CatalogSE, Web)
+              Salesperson login on sales apps; customer account no. on customer apps
           - name: ust_customer_no
-            description: Customer the salesperson is acting for; empty if none / customer app
-          - name: location
-            description: '"lat,lon" decimal degrees, or empty; populated only when the event captures Geo'
-          - name: timezone
-            description: Device UTC offset, e.g. GMT+8
+            description: Customer the salesperson is acting for (empty if not applicable)
           - name: event_time
-            description: Device LOCAL time — convert to UTC by subtracting the timezone offset
-          - name: source
-            description: "App source code: PDA-A, CatalogFC-A/I, CatalogFS-I/A, Vegas-I/A, CatalogSE, Web"
-          - name: version
-            description: App version major.minor.build
+            description: Device LOCAL time — convert to UTC using timezone offset
           - name: description_code
-            description: >
-              8-digit hierarchical event code — digits 1-2 L1 Category,
-              3-4 L2 Sub-category, 5-6 L3 Action, 7-8 L4 Result
-              (01=Success, 02=Fail, 00=N/A). String — leading zeros matter.
+            description: 8-digit hierarchical event code (L1-L2-L3-L4)
           - name: response
-            description: >
-              Event payload — NOT JSON. Format varies by event family:
-              kv CSV (Catalog View 19010000, barcode 18010000), positional
-              CSV order metadata (04xx/05xx/06xx), Time:s duration (03xx
-              download successes), bare SKU/title/'Fail', or empty.
+            description: Event payload string (NOT JSON — format varies by event family)
+          - name: event_id
+            description: Epoch milliseconds string — device-side timestamp
           - name: device_name
-            description: alias-model, e.g. D8FA89-iPad Pro 12.9 3rd
+            description: Device alias-model string
+          - name: location
+            description: '"lat,lon" or empty'
+          - name: timezone
+            description: Device UTC offset string, e.g. GMT-5
+          - name: source
+            description: App source code (PDA-A, CatalogFC-*, etc.)
+          - name: version
+            description: App version string
           - name: created_at
-            description: Server time in FIXED PST (UTC-8, no DST) — authoritative for ordering/dedup
+            description: Server time in fixed PST (UTC-8, no DST) — authoritative for ordering
           - name: updated_at
             description: Server time in fixed PST; latest wins on dedup
-          - name: event_id
-            description: Epoch milliseconds (string) — device-side event timestamp; nullable
+
+      - name: admin_users
+        identifier: temp_admin_users
+        description: >
+          Administrator and salesperson master data. Links to other tables via
+          username or salesperson_code. No sample available yet — staging returns
+          an empty schema-correct result while mysql_available is false.
+        columns:
+          - name: user_id
+            description: Primary key
+          - name: username
+            description: Login account — links to system_event_log.username and user_activity_report.user
+          - name: firstname
+            description: First name
+          - name: lastname
+            description: Last name
+          - name: salesperson_code
+            description: Sales territory code — links to system_event_log.sales_code
+          - name: role_name
+            description: Role (admin, salesperson, etc.)
+          - name: is_active
+            description: Active flag
+
+      - name: category
+        identifier: temp_category
+        description: >
+          Product category master data. No sample available yet — staging returns
+          an empty schema-correct result while mysql_available is false.
+          Expand columns once MySQL schema is confirmed.
+        columns:
+          - name: entity_id
+            description: Primary key
+          - name: parent_id
+            description: FK to parent category (null for root categories)
+          - name: name
+            description: Category display name
+          - name: level
+            description: Hierarchy depth (1 = root)
+          - name: is_active
+          - name: created_at
+          - name: updated_at

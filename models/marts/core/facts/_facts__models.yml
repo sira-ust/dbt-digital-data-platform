@@ -11,3 +11,36 @@ models:
         tests: [not_null, unique]
       - name: increment_id
         description: Order increment id (e.g. M000072209)
+
+  - name: fct_customer_events
+    description: >
+      Customer app event fact at event grain. One row per tracking_report_event,
+      enriched with parent session context from tracking_report. Covers customers
+      who opted in to mobile tracking. Use for BI drill-down and chatbot queries
+      about specific customer journeys, pages visited, and product interactions.
+    columns:
+      - name: entity_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null]
+      - name: session_entity_id
+        tests: [not_null]
+      - name: started_at
+        tests: [not_null]
+
+  - name: fct_sales_rep_events
+    description: >
+      Sales rep activity event fact at event grain. One row per
+      user_activity_report_event, enriched with session context from
+      user_activity_report and user master data from admin_users (null until
+      MySQL connected). Use for BI drill-down and chatbot queries about
+      specific rep activity, customer visits, and product interactions.
+    columns:
+      - name: entity_id
+        tests: [not_null, unique]
+      - name: username
+        tests: [not_null]
+      - name: session_entity_id
+        tests: [not_null]
+      - name: started_at
+        tests: [not_null]
