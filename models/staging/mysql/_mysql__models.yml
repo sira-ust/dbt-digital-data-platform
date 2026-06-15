@@ -9,22 +9,36 @@ models:
       Timestamps are device local — no timezone at session level.
     columns:
       - name: entity_id
+        description: Primary key. One row per customer session.
         tests: [unique, not_null]
       - name: customer_id
+        description: Customer account identifier.
         tests: [not_null]
       - name: customer_name
+        description: Customer account name.
       - name: session_id
+        description: Session identifier.
       - name: device_model
+        description: Device model.
       - name: app_version
+        description: Application version string.
       - name: version_major
+        description: Major version component parsed from app_version.
       - name: version_minor
+        description: Minor version component parsed from app_version.
       - name: version_build
+        description: Build number parsed from app_version.
       - name: started_at
+        description: Session start time, device local.
         tests: [not_null]
       - name: ended_at
+        description: Session end time, device local.
       - name: total_events
+        description: Number of events recorded in the session.
       - name: created_at_server
+        description: Record creation time.
       - name: updated_at_server
+        description: Record last update time. Latest wins on dedup.
 
   - name: stg_mysql__tracking_report_event
     description: >
@@ -34,9 +48,10 @@ models:
       and page navigation fields.
     columns:
       - name: entity_id
+        description: Primary key. One row per customer event.
         tests: [unique, not_null]
       - name: session_entity_id
-        description: FK to stg_mysql__tracking_report.entity_id
+        description: FK to stg_mysql__tracking_report.entity_id.
         tests:
           - not_null
           - relationships:
@@ -46,31 +61,55 @@ models:
               config:
                 severity: warn
       - name: customer_id
+        description: Customer account identifier.
         tests: [not_null]
       - name: customer_name
+        description: Customer account name.
       - name: event_type_code
+        description: Numeric event type.
       - name: title
+        description: Page or product title.
       - name: page
+        description: Current page name.
       - name: event_type_label
+        description: Business event type label.
       - name: method_code
+        description: Interaction method code.
       - name: started_at
+        description: Event start time, device local.
         tests: [not_null]
       - name: ended_at
+        description: Event end time, device local.
       - name: device_timezone
+        description: Device UTC offset string.
       - name: duration_seconds
+        description: Event duration in seconds.
       - name: item_no
+        description: Item number.
       - name: sku
+        description: Product SKU.
       - name: qty
+        description: Quantity.
       - name: quote_id
+        description: Quote identifier.
       - name: categories_name
+        description: Product category name.
       - name: keyword
+        description: Search keyword.
       - name: notes
+        description: Free-text notes.
       - name: address
+        description: Address string.
       - name: source
+        description: Event source label.
       - name: icon
+        description: Icon identifier.
       - name: app_version
+        description: App version at event level.
       - name: created_at_server
+        description: Record creation time.
       - name: updated_at_server
+        description: Record last update time. Latest wins on dedup.
 
   - name: stg_mysql__user_activity_report
     description: >
@@ -79,28 +118,44 @@ models:
       and PDA devices. GPS location split into latitude/longitude.
     columns:
       - name: entity_id
+        description: Primary key. One row per salesperson session.
         tests: [unique, not_null]
       - name: username
-        description: Salesperson login account
+        description: Salesperson login account.
         tests: [not_null]
       - name: display_name
-        description: Display name with sales code prefix (e.g. "024-JASON LI")
+        description: Salesperson display name with sales code prefix.
       - name: session_id
+        description: Session identifier.
       - name: device_model
+        description: Device model.
       - name: app_version
+        description: Application version string.
       - name: version_major
+        description: Major version component parsed from app_version.
       - name: version_minor
+        description: Minor version component parsed from app_version.
       - name: version_build
+        description: Build number parsed from app_version.
       - name: started_at
+        description: Login and session start time.
         tests: [not_null]
       - name: ended_at
+        description: Logout and session end time.
       - name: latitude
+        description: Latitude parsed from the session location string.
       - name: longitude
+        description: Longitude parsed from the session location string.
       - name: sales_name
+        description: Sales territory name.
       - name: is_voluntary_exit
+        description: Whether the user exited normally.
       - name: event_count
+        description: Number of recorded actions in the session.
       - name: created_at_server
+        description: Record creation time.
       - name: updated_at_server
+        description: Record last update time. Latest wins on dedup.
 
   - name: stg_mysql__user_activity_report_event
     description: >
@@ -109,9 +164,10 @@ models:
       of a session via session_entity_id.
     columns:
       - name: entity_id
+        description: Primary key. One row per salesperson event.
         tests: [unique, not_null]
       - name: session_entity_id
-        description: FK to stg_mysql__user_activity_report.entity_id
+        description: FK to stg_mysql__user_activity_report.entity_id.
         tests:
           - not_null
           - relationships:
@@ -121,32 +177,57 @@ models:
               config:
                 severity: warn
       - name: username
+        description: Salesperson login account.
         tests: [not_null]
       - name: display_name
+        description: Salesperson display name.
       - name: sales_code
+        description: Salesperson territory code.
       - name: activity_type_code
+        description: Activity type code.
       - name: title
+        description: Activity label.
       - name: started_at
+        description: Activity start time.
         tests: [not_null]
       - name: ended_at
+        description: Activity end time.
       - name: device_timezone
+        description: Device UTC offset string.
       - name: latitude
+        description: Latitude parsed from the event location string.
       - name: longitude
+        description: Longitude parsed from the event location string.
       - name: customer_id
+        description: Customer being visited, when applicable.
       - name: keyword
+        description: Search keyword.
       - name: category
+        description: Product category context.
       - name: sku
+        description: Product SKU.
       - name: qty
+        description: Quantity.
       - name: visits_num
+        description: Visit sequence number.
       - name: is_wifi
+        description: Whether the action was over Wi-Fi.
       - name: battery_pct
+        description: Device battery level percentage.
       - name: device_space
+        description: Available device storage.
       - name: app_version
+        description: Application version string.
       - name: is_done
+        description: Whether the activity was completed.
       - name: is_login
+        description: Whether this is a login event.
       - name: response
+        description: API response payload.
       - name: method_code
+        description: Interaction method code.
       - name: updated_at_server
+        description: Record last update time. Latest wins on dedup.
 
   - name: stg_mysql__system_event_log
     description: >
@@ -158,8 +239,27 @@ models:
       reading directly from MySQL.
     columns:
       - name: entity_id
+        description: Primary key. One row per system event.
         tests: [unique, not_null]
+      - name: sales_code
+        description: Salesperson territory code.
+      - name: username
+        description: Salesperson login on sales apps; customer account number on customer apps.
+      - name: ust_customer_no
+        description: Customer the salesperson is acting for.
+      - name: device_name
+        description: Device alias-model string.
+      - name: source_code
+        description: App source code the event came from.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [PDA-A, CatalogFC-A, CatalogFC-I, CatalogFS-I, CatalogFS-A, Vegas-I, Vegas-A, CatalogSE, Web]
+      - name: app_version
+        description: App version string.
       - name: description_code
+        description: 8-digit hierarchical event code. Event category.
         tests:
           - not_null
           - relationships:
@@ -168,25 +268,43 @@ models:
                 field: description_code
               config:
                 severity: warn
-      - name: source_code
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: [PDA-A, CatalogFC-A, CatalogFC-I, CatalogFS-I, CatalogFS-A, Vegas-I, Vegas-A, CatalogSE, Web]
-      - name: created_at_utc
-        tests: [not_null]
-      - name: event_at_utc
-      - name: event_id_at_utc
+      - name: l1_code
+        description: Level-1 segment of description_code. Top category.
+      - name: l2_code
+        description: Level-2 segment of description_code.
+      - name: l3_code
+        description: Level-3 segment of description_code.
+      - name: l4_code
+        description: Level-4 segment of description_code. Outcome.
       - name: is_success
+        description: True when the L4 outcome segment is success.
       - name: is_failure
+        description: True when the L4 outcome segment is failure.
+      - name: event_at_utc
+        description: Device event time converted to UTC using the row timezone offset.
+      - name: device_timezone
+        description: Device UTC offset string.
+      - name: created_at_utc
+        description: Server created_at converted to UTC. Authoritative for ordering.
+        tests: [not_null]
+      - name: updated_at_utc
+        description: Server updated_at converted to UTC. Latest wins on dedup.
+      - name: event_id_at_utc
+        description: Device-side epoch-millis event_id parsed to a UTC timestamp.
+      - name: latitude
+        description: Latitude parsed from the location string.
+      - name: longitude
+        description: Longitude parsed from the location string.
       - name: actor_type
+        description: Sales for sales-app sources, otherwise customer.
         tests:
           - accepted_values:
               arguments:
                 values: [sales, customer]
       - name: customer_key
+        description: Unified customer key. ust_customer_no on sales apps, username on customer apps.
       - name: response
+        description: Event payload string. Not JSON; format varies by event family.
 
   - name: stg_mysql__admin_users
     description: >
@@ -194,21 +312,26 @@ models:
       Links to other staging models via username (= user_activity_report.user,
       system_event_log.username) and salesperson_code (= system_event_log.sales_code).
       NOTE: requires live MySQL connection — no JSON sample available.
-      Model is ready but will not run until credentials are added to profiles.yml.
+      Returns an empty schema-correct result while mysql_available is false.
     columns:
       - name: user_id
+        description: Primary key.
         tests: [unique, not_null]
       - name: username
-        description: Login account — FK to user_activity_report.user and system_event_log.username
+        description: Login account. FK to user_activity_report.user and system_event_log.username.
         tests: [unique, not_null]
       - name: salesperson_code
-        description: Sales territory code — FK to system_event_log.sales_code
+        description: Sales territory code. FK to system_event_log.sales_code.
       - name: firstname
+        description: First name.
       - name: lastname
+        description: Last name.
       - name: full_name
-        description: Derived — firstname || ' ' || lastname
+        description: Derived from firstname and lastname.
       - name: role_name
+        description: Role such as admin or salesperson.
       - name: is_active
+        description: Active flag.
 
   - name: stg_mysql__category
     description: >
@@ -216,18 +339,23 @@ models:
       Hierarchical — parent_category_name resolved via self-join one level up.
       NOTE: requires live MySQL connection — no JSON sample available.
       Column list may need expanding once MySQL schema is confirmed.
-      Returns empty schema-correct result in dev (where false).
+      Returns empty schema-correct result while mysql_available is false.
     columns:
       - name: category_id
+        description: Primary key.
         tests: [unique, not_null]
       - name: parent_id
-        description: FK to parent category_id (null for root categories)
+        description: FK to parent category_id. Null for root categories.
       - name: category_name
+        description: Category display name.
         tests: [not_null]
       - name: parent_category_name
-        description: Resolved one level up via self-join
+        description: Parent category name, resolved one level up via self-join.
       - name: level
-        description: Hierarchy depth — 1 is root
+        description: Hierarchy depth. 1 is root.
       - name: is_active
+        description: Active flag.
       - name: created_at
+        description: Record creation time.
       - name: updated_at
+        description: Record last update time.

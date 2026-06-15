@@ -120,17 +120,22 @@ models:
       which products they interact with.
     columns:
       - name: customer_id
+        description: Customer account identifier.
         tests: [not_null, unique]
       - name: customer_name
+        description: Customer account name.
       - name: total_sessions
         description: Distinct tracking sessions by this customer
       - name: first_session_at
+        description: Timestamp of the customer's earliest session in the data.
       - name: last_session_at
+        description: Timestamp of the customer's most recent session.
       - name: active_days
         description: Distinct calendar days with at least one session
       - name: total_events
-        description: Total app events (page views, product interactions, etc.)
+        description: Total app events such as page views and product interactions.
       - name: avg_event_duration_seconds
+        description: Average event duration in seconds across all the customer's events.
       - name: unique_pages_visited
         description: Count of distinct page values seen across all events
       - name: unique_skus_viewed
@@ -161,8 +166,10 @@ models:
         description: Calendar date derived from event started_at
         tests: [not_null]
       - name: username
+        description: Salesperson login account.
         tests: [not_null]
       - name: sales_code
+        description: Salesperson territory code.
       - name: total_sessions
         description: Distinct app sessions on this date
       - name: total_events
@@ -203,12 +210,17 @@ models:
               - sku
     columns:
       - name: customer_id
+        description: Customer account identifier.
         tests: [not_null]
       - name: sku
+        description: Product SKU the customer interacted with.
         tests: [not_null]
       - name: customer_name
+        description: Customer account name.
       - name: item_no
+        description: Item number associated with the SKU.
       - name: categories_name
+        description: Product category name for the SKU.
       - name: total_interactions
         description: Total events where this SKU appeared
       - name: sessions_with_interaction
@@ -235,9 +247,12 @@ models:
               - customer_id
     columns:
       - name: username
+        description: Salesperson login account.
         tests: [not_null]
       - name: sales_code
+        description: Salesperson territory code.
       - name: customer_id
+        description: Customer account the rep interacted with.
         tests: [not_null]
       - name: total_sessions
         description: Distinct sessions where this rep logged events for this customer
@@ -250,6 +265,40 @@ models:
       - name: total_qty_ordered
         description: Sum of qty where qty > 0
       - name: first_visit_date
+        description: Earliest date this rep had activity for this customer.
       - name: last_visit_date
+        description: Most recent date this rep had activity for this customer.
       - name: visit_days
         description: Distinct days this rep had activity for this customer
+
+  - name: mart_team_activity_daily
+    description: >
+      Daily per-rep activity broken down by event category, from the system
+      event log. Grain: activity_date x username x sales_code x source_code x
+      event_category x is_system_event. Powers stacked-bar / drill-down visuals
+      of what each rep did each day by category.
+    columns:
+      - name: activity_date
+        description: UTC calendar date from server created_at.
+        tests: [not_null]
+      - name: username
+        description: Salesperson login account.
+        tests: [not_null]
+      - name: sales_code
+        description: Salesperson territory code.
+      - name: source_code
+        description: App source the activity happened on.
+      - name: app_name
+        description: Friendly app name for the source.
+      - name: app_platform
+        description: Platform such as iOS, Android, or Web.
+      - name: event_category
+        description: L1 event category name, or Uncategorised when unmapped.
+      - name: is_system_event
+        description: Whether the category is a system/diagnostic event vs a user action.
+      - name: event_count
+        description: Number of events in this category for the rep that day.
+      - name: distinct_devices
+        description: Distinct devices the rep used that day in this category.
+      - name: distinct_customers_touched
+        description: Distinct customers the rep acted for in this category that day.
