@@ -1,198 +1,23 @@
 version: 2
 
 models:
-  - name: fct_orders_submitted
+  - name: fct_order_cycle
     description: >
-      Send-order fact at event grain (L1=04). One row per order submission
-      attempt from the system event log, with positional CSV payload parsed
-      into typed columns. Phase 2 may union or replace with NAV order facts.
+      Published order-cycle fact — one row per increment_id x customer. Thin
+      BI-facing view over int_order_cycle (open = Create Order, close = Group 04
+      submit success). Consumed by mart_order_journey and BI drill-down. Empty
+      until the event-log extract contains Group 04/09 events.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [increment_id, customer_key]
     columns:
-      - name: entity_id
-        tests: [not_null, unique]
       - name: increment_id
-        description: Order increment id (e.g. M000072209)
-
-  - name: fct_customer_events
-    description: >
-      Customer app event fact at event grain. One row per tracking_report_event,
-      enriched with parent session context from tracking_report. Covers customers
-      who opted in to mobile tracking. Use for BI drill-down and chatbot queries
-      about specific customer journeys, pages visited, and product interactions.
-    columns:
-      - name: entity_id
-        description: Primary key. One row per customer event.
-        tests: [not_null, unique]
-      - name: session_entity_id
-        description: FK to the parent customer session.
+        description: Order increment id.
         tests: [not_null]
-      - name: customer_id
-        description: Customer account identifier.
-        tests: [not_null]
-      - name: customer_name
-        description: Customer account name from the parent session.
-      - name: device_model
-        description: Device model from the parent session.
-      - name: app_version
-        description: App version from the parent session.
-      - name: version_major
-        description: Major component of the session app version.
-      - name: version_minor
-        description: Minor component of the session app version.
-      - name: version_build
-        description: Build number of the session app version.
-      - name: session_id
-        description: Session identifier.
-      - name: session_started_at
-        description: Parent session start time.
-      - name: session_ended_at
-        description: Parent session end time.
-      - name: session_total_events
-        description: Total events recorded in the parent session.
-      - name: event_type_code
-        description: Numeric event type.
-      - name: event_type_label
-        description: Business event type label.
-      - name: title
-        description: Page or product title for this event.
-      - name: page
-        description: Current page name.
-      - name: method_code
-        description: Interaction method code.
-      - name: started_at
-        description: Event start time, device local.
-        tests: [not_null]
-      - name: ended_at
-        description: Event end time, device local.
-      - name: device_timezone
-        description: Device UTC offset string for this event.
-      - name: duration_seconds
-        description: Event duration in seconds.
-      - name: item_no
-        description: Item number, when the event involves a product.
-      - name: sku
-        description: Product SKU, when the event involves a product.
-      - name: qty
-        description: Quantity, when applicable.
-      - name: quote_id
-        description: Quote identifier, when applicable.
-      - name: categories_name
-        description: Product category name, when applicable.
-      - name: keyword
-        description: Search keyword, for search events.
-      - name: notes
-        description: Free-text notes.
-      - name: address
-        description: Address string.
-      - name: source
-        description: Event source label.
-      - name: icon
-        description: Icon identifier.
-      - name: event_app_version
-        description: App version captured at the event.
-      - name: created_at_server
-        description: Record creation time.
-      - name: updated_at_server
-        description: Record last update time.
-
-  - name: fct_sales_rep_events
-    description: >
-      Sales rep activity event fact at event grain. One row per
-      user_activity_report_event, enriched with session context from
-      user_activity_report and user master data from admin_users (null until
-      MySQL connected). Use for BI drill-down and chatbot queries about
-      specific rep activity, customer visits, and product interactions.
-    columns:
-      - name: entity_id
-        description: Primary key. One row per sales rep event.
-        tests: [not_null, unique]
-      - name: session_entity_id
-        description: FK to the parent rep session.
-        tests: [not_null]
-      - name: username
-        description: Salesperson login account.
-        tests: [not_null]
-      - name: sales_code
-        description: Salesperson territory code.
-      - name: firstname
-        description: Rep first name from admin_users. Null until MySQL connected.
-      - name: lastname
-        description: Rep last name from admin_users. Null until MySQL connected.
-      - name: full_name
-        description: Rep full name from admin_users. Null until MySQL connected.
-      - name: role_name
-        description: Rep role from admin_users. Null until MySQL connected.
-      - name: user_is_active
-        description: Rep active flag from admin_users. Null until MySQL connected.
-      - name: display_name
-        description: Rep display name with sales code prefix, from the session.
-      - name: device_model
-        description: Device model from the parent session.
-      - name: session_app_version
-        description: App version from the parent session.
-      - name: version_major
-        description: Major component of the session app version.
-      - name: version_minor
-        description: Minor component of the session app version.
-      - name: version_build
-        description: Build number of the session app version.
-      - name: session_id
-        description: Session identifier.
-      - name: session_started_at
-        description: Parent session login and start time.
-      - name: session_ended_at
-        description: Parent session logout and end time.
-      - name: session_event_count
-        description: Total actions recorded in the parent session.
-      - name: is_voluntary_exit
-        description: Whether the parent session ended with a normal exit.
-      - name: session_latitude
-        description: Latitude captured at session start.
-      - name: session_longitude
-        description: Longitude captured at session start.
-      - name: sales_name
-        description: Sales territory name from the session.
-      - name: activity_type_code
-        description: Activity type code for this event.
-      - name: title
-        description: Activity label.
-      - name: started_at
-        description: Activity start time.
-        tests: [not_null]
-      - name: ended_at
-        description: Activity end time.
-      - name: device_timezone
-        description: Device UTC offset string for this event.
-      - name: latitude
-        description: Latitude captured at this event.
-      - name: longitude
-        description: Longitude captured at this event.
-      - name: customer_id
-        description: Customer being visited, when applicable.
-      - name: keyword
-        description: Search keyword, for search events.
-      - name: category
-        description: Product category context.
-      - name: sku
-        description: Product SKU, when applicable.
-      - name: qty
-        description: Quantity, when applicable.
-      - name: visits_num
-        description: Visit sequence number.
-      - name: is_wifi
-        description: Whether the action was over Wi-Fi.
-      - name: battery_pct
-        description: Device battery level percentage at this event.
-      - name: device_space
-        description: Available device storage.
-      - name: event_app_version
-        description: App version captured at the event.
-      - name: is_done
-        description: Whether the activity was completed.
-      - name: is_login
-        description: Whether this is a login event.
-      - name: response
-        description: API response payload.
-      - name: method_code
-        description: Interaction method code.
-      - name: updated_at_server
-        description: Record last update time.
+      - name: customer_key
+        description: Unified customer key the cycle belongs to.
+      - name: is_submitted
+        description: True when the cycle has a successful submit.
+      - name: days_to_close
+        description: Days from open to submit; null if not submitted.

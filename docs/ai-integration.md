@@ -49,15 +49,16 @@ that's what AI tools read most.
    is enabled in `dbt_project.yml`, so YAML descriptions are already
    written into Unity Catalog. `DESCRIBE TABLE` / `information_schema`
    returns them. This is why Genie works well here.
-3. **Dimension views** — `ust_dimensions.dim_event_codes`,
-   `dim_app_sources`, `dim_categories` give any tool the code→name
-   mappings (e.g. `01040100` = Location-Success).
+3. **Seed tables** — `ust_seeds.seed_event_codes`, `seed_app_sources`,
+   `seed_categories` give any tool the code→name mappings
+   (e.g. `01040100` = Location-Success). These are queryable tables in
+   Databricks, not views — include them when building the `list_tables` tool.
 
 ## Options compared
 
 | Option | Who can use it | Cost | Status |
 |---|---|---|---|
-| **Databricks Genie** | Databricks account holders only | Warehouse compute only (cents) | Available now — Genie Spaces in sidebar |
+| **Databricks Genie** | Databricks account holders only | Warehouse compute only (cents) | Available now — see `docs/genie-setup.md` |
 | **Power BI Copilot** | Anyone with report access | Requires Premium/Fabric license | Check org license first |
 | **Claude Code (this repo)** | Developer (me) | Claude subscription + warehouse | Works today — ask questions in a session |
 | **Custom Claude app** | Anyone we give access (web/Teams) | API tokens (~1-2¢/question) + warehouse | Not built — design below |
@@ -99,24 +100,23 @@ You give the model a set of tools, each with a name, description, and
 parameters. When a question comes in, the model reasons about what it
 needs and chains calls on its own. Worked example with our data:
 
-> *"Which sales team had the most failed orders per active rep last month?"*
+> *"Which customers are browsing the catalog the longest without adding to cart?"*
 >
-> 1. `list_tables` → sees `mart_team_performance` and `fct_orders_submitted`
-> 2. `describe_table` on both → notices it must relate `sales_code`
->    across them
-> 3. `sample_rows` on `fct_orders_submitted` → checks what `is_failure`
->    values actually look like
+> 1. `list_tables` → sees `mart_catalog_dwell` and `mart_cart_behaviour`
+> 2. `describe_table` on both → notices `customer_key` is the join field
+> 3. `sample_rows` on `mart_catalog_dwell` → checks that `distinct_customers`
+>    is a count, not a list
 > 4. Writes and runs the SQL via `run_sql`
 > 5. If Databricks returns an error, reads the error text and fixes the
 >    query itself
 
-**Real example from the build session (2026-06-12):** investigating why
-`mart_team_activity_daily` showed only one event category, the model
-queried the mart, then tried `stg_mysql__system_events` for
-`l1_category_name`, got `UNRESOLVED_COLUMN` back from Databricks, read the
-error, realized the category lives in the enrichment layer, and re-queried
-`int_events_enriched` instead. Nobody scripted that recovery — the error
-message came back as a tool result and the model adjusted course.
+**Real example from the build session (2026-06-12):** investigating why an
+intermediate model showed only one event category, the model queried the
+mart, then tried the staging layer for `l1_category_name`, got
+`UNRESOLVED_COLUMN` back from Databricks, read the error, realized the
+category lives in the enrichment layer, and re-queried `int_events_enriched`
+instead. Nobody scripted that recovery — the error message came back as a
+tool result and the model adjusted course.
 
 ### What makes it work well vs poorly
 

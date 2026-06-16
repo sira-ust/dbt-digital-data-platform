@@ -4,7 +4,7 @@ with source as (
 
 ),
 
-deduped as (
+numbered as (
 
     select
         *,
@@ -14,61 +14,34 @@ deduped as (
         ) as _rn
     from source
 
-),
-
-transformed as (
-
-    select
-        -- ── identifiers ────────────────────────────────────────────────
-        cast(entity_id as bigint)                                           as entity_id,
-        cast(report_entity_id as bigint)                                    as session_entity_id,
-        nullif(trim(user), '')                                              as username,
-        nullif(trim(user_name), '')                                         as display_name,
-        nullif(trim(sales_code), '')                                        as sales_code,
-
-        -- ── event classification ────────────────────────────────────────
-        cast(act_type as integer)                                           as activity_type_code,
-        nullif(trim(title), '')                                             as title,
-
-        -- ── timestamps ─────────────────────────────────────────────────
-        cast(begin_time as timestamp)                                       as started_at,
-        -- end_time can be an empty string ("") in the source
-        try_cast(nullif(trim(cast(end_time as {{ dbt.type_string() }})), '') as timestamp)  as ended_at,
-        cast(timezone as {{ dbt.type_string() }})                          as device_timezone,
-
-        -- ── geo: "lat,lon" or empty ─────────────────────────────────────
-        try_cast({{ response_part('location', 1) }} as double)              as latitude,
-        try_cast({{ response_part('location', 2) }} as double)              as longitude,
-
-        -- ── customer context ────────────────────────────────────────────
-        nullif(trim(customer), '')                                          as customer_id,
-        nullif(trim(keyword), '')                                           as keyword,
-        nullif(trim(category), '')                                          as category,
-        nullif(trim(sku), '')                                               as sku,
-        cast(qty as integer)                                                as qty,
-        nullif(trim(visits_num), '')                                        as visits_num,
-
-        -- ── device state ────────────────────────────────────────────────
-        cast(is_wifi as boolean)                                            as is_wifi,
-        cast(battery as integer)                                            as battery_pct,
-        nullif(trim(device_space), '')                                      as device_space,
-        nullif(trim(version), '')                                           as app_version,
-
-        -- ── flags ──────────────────────────────────────────────────────
-        cast(is_done as boolean)                                            as is_done,
-        -- is_login is a string "1" or empty in source, not a native boolean
-        coalesce(nullif(trim(is_login), '') = '1', false)                  as is_login,
-
-        -- ── payload ─────────────────────────────────────────────────────
-        nullif(trim(response), '')                                          as response,
-        cast(method as integer)                                             as method_code,
-
-        -- ── server timestamps ───────────────────────────────────────────
-        cast(updated_at as timestamp)                                       as updated_at_server
-
-    from deduped
-    where _rn = 1
-
 )
 
-select * from transformed
+select
+    cast(entity_id as bigint)                                                             as entity_id,
+    cast(report_entity_id as bigint)                                                      as user_activity_report_id,
+    nullif(trim(cast(user        as {{ dbt.type_string() }})), '')                         as username,
+    nullif(trim(cast(user_name   as {{ dbt.type_string() }})), '')                         as user_name,
+    nullif(trim(cast(sales_code  as {{ dbt.type_string() }})), '')                         as sales_code,
+    nullif(trim(cast(act_type    as {{ dbt.type_string() }})), '')                         as activity_type,
+    cast(begin_time as timestamp)                                                          as begin_time,
+    try_cast(nullif(trim(cast(end_time   as {{ dbt.type_string() }})), '') as timestamp)   as end_time,
+    nullif(trim(cast(customer     as {{ dbt.type_string() }})), '')                        as customer,
+    nullif(trim(cast(keyword      as {{ dbt.type_string() }})), '')                        as keyword,
+    nullif(trim(cast(location     as {{ dbt.type_string() }})), '')                        as location,
+    nullif(trim(cast(category     as {{ dbt.type_string() }})), '')                        as category,
+    try_cast(nullif(trim(cast(visits_num  as {{ dbt.type_string() }})), '') as bigint)     as visits_num,
+    nullif(trim(cast(sku          as {{ dbt.type_string() }})), '')                        as sku,
+    nullif(trim(cast(title        as {{ dbt.type_string() }})), '')                        as title,
+    nullif(trim(cast(qty          as {{ dbt.type_string() }})), '')                        as qty,
+    nullif(trim(cast(response     as {{ dbt.type_string() }})), '')                        as response,
+    try_cast(nullif(trim(cast(battery    as {{ dbt.type_string() }})), '') as bigint)      as battery,
+    try_cast(nullif(trim(cast(is_wifi    as {{ dbt.type_string() }})), '') as bigint)      as is_wifi,
+    try_cast(nullif(trim(cast(is_done    as {{ dbt.type_string() }})), '') as bigint)      as is_done,
+    try_cast(nullif(trim(cast(is_login   as {{ dbt.type_string() }})), '') as bigint)      as is_login,
+    nullif(trim(cast(device_space as {{ dbt.type_string() }})), '')                        as device_space,
+    nullif(trim(cast(timezone     as {{ dbt.type_string() }})), '')                        as timezone,
+    nullif(trim(cast(method       as {{ dbt.type_string() }})), '')                        as method,
+    nullif(trim(cast(version      as {{ dbt.type_string() }})), '')                        as app_version,
+    cast(updated_at as timestamp)                                                          as updated_at
+from numbered
+where _rn = 1

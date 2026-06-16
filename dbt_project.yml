@@ -84,22 +84,12 @@ models:
 
 
 
-    dq:
-
-      +schema: ust_dq
-
-      +tags: ["dq"]
-
     marts:
       core:
         facts:
           +materialized: view
           +schema: ust_facts
           +tags: ["facts"]
-        dimensions:
-          +materialized: view
-          +schema: ust_dimensions
-          +tags: ["dimensions"]
       reporting:
         +materialized: table
         +schema: ust_reporting
@@ -132,8 +122,6 @@ seeds:
       +column_types:
 
         category_id: string
-
-
 
 vars:
   # Whether the real MySQL source is connected. While false (POC phase),

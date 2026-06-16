@@ -1,304 +1,99 @@
 version: 2
 
 models:
-  - name: mart_sales_agent_performance
+  - name: mart_order_journey
     description: >
-      Daily sales-rep scorecard from the system event log (Phase 1: log-only).
-      Combines send-order outcomes (L1=04) with app usage on sales apps
-      (PDA-A, CatalogFS-I, CatalogFS-A).
-      Grain: activity_date (UTC) x username x source_code.
-      Order value metrics come from successful send-order payloads; Phase 2
-      can replace or enrich with NAV/replication order facts.
+      Page 1 order journey at order-cycle grain (one row per increment_id x
+      customer). Exact lifecycle from fct_order_cycle: days_to_close +
+      close_bucket (distribution), is_pending + days_pending + pending_priority
+      (H/M/L), and behavior_segment (Decisive / Planner / Slow Sender from days
+      in cycle). High-Editor segment and add-count weighting are deferred (need
+      per-cycle edit counts); store-type cuts need NAV. Empty until the extract
+      contains Group 04/09 events.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns:
-              - activity_date
-              - username
-              - source_code
+            combination_of_columns: [increment_id, customer_key]
     columns:
-      - name: activity_date
-        description: UTC date from server-side created_at
+      - name: increment_id
+        description: Order increment id (PK with customer_key).
         tests: [not_null]
-      - name: username
-        description: Salesperson login on the sales app
-        tests: [not_null]
-      - name: source_code
-        description: Sales app the activity happened on
-        tests:
-          - accepted_values:
-              arguments:
-                values: [PDA-A, CatalogFS-I, CatalogFS-A]
-      - name: order_success_rate
-        description: orders_succeeded / orders_submitted; null when no orders that day
-      - name: download_failure_rate
-        description: failed / (failed + succeeded) data syncs; null when no syncs
-      - name: distinct_customers_touched
-        description: Distinct customers the agent acted for across all events
-      - name: customers_ordered_for
-        description: Distinct customers with at least one successful order submission
+      - name: customer_key
+        description: Unified customer key the cycle belongs to.
+      - name: days_to_close
+        description: Days from cycle open to submit; null if pending.
+      - name: close_bucket
+        description: Same day / 1-3 / 4-7 / 8-13 / 14+ days; null if pending.
+      - name: is_pending
+        description: True when the cycle opened but never submitted.
+      - name: days_pending
+        description: Days since the cycle opened, for pending cycles.
+      - name: pending_priority
+        description: H/M/L by days pending; null when submitted.
+      - name: behavior_segment
+        description: Decisive / Planner / Slow Sender from days in cycle; null if pending.
 
-  - name: mart_daily_activity
+  - name: mart_discovery_navigation
     description: >
-      Daily activity summary across all apps and user types.
-      Grain: activity_date x source_code. Powers the Daily Activity dashboard page.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - activity_date
-              - source_code
+      Page 2 feature click->add funnel. Grain: feature (Recommend / Promo /
+      New / Backorder). Per feature: icon clicks, page adds, customers who
+      clicked vs added, and the behaviour-level click->add conversion. Resolves
+      entirely from the event log — no order, NAV, or Address dependency.
+      Companion mart_catalog_dwell covers the category dwell heatmap.
     columns:
-      - name: activity_date
-        tests: [not_null]
-      - name: source_code
-        tests: [not_null]
-      - name: total_events
-        description: All events on that date for that app
-      - name: active_users
-        description: Distinct usernames active on that date
-      - name: location_success
-        description: Count of GPS location-success events (01040100)
-      - name: location_fail
-        description: Count of GPS location-fail events (01040200)
-      - name: low_battery_events
-        description: Count of low-battery warnings (01020200)
-      - name: search_events
-        description: Count of search events
-      - name: order_operation_events
-        description: Count of add-to-cart / order operation events
-
-  - name: mart_team_performance
-    description: >
-      Cumulative per-rep activity summary across the full data window.
-      Grain: sales_code x username x source_code. A rep may appear under multiple
-      sales_codes if their team assignment changed over the data window.
-      Powers the Team Performance dashboard page.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - sales_code
-              - username
-              - source_code
-    columns:
-      - name: username
-        tests: [not_null]
-      - name: source_code
-        tests: [not_null]
-      - name: sales_code
-        description: Team the rep belongs to
-      - name: active_days
-        description: Number of distinct days the rep had any activity
-      - name: last_active_date
-        description: Most recent day the rep was seen in the data
-      - name: distinct_customers_touched
-        description: Distinct customers the rep acted for
-
-  - name: mart_system_health
-    description: >
-      Device and system health signals by rep, device, and date.
-      Grain: activity_date x username x source_code x device_name.
-      Powers the System Health dashboard page and field ops triage.
-    columns:
-      - name: activity_date
-        tests: [not_null]
-      - name: username
-        tests: [not_null]
-      - name: location_success_pct
-        description: GPS success rate 0–100; null if no location events that day
-      - name: low_battery_events
-        description: Count of low-battery warnings — high values flag field device issues
-      - name: timeout_events
-        description: Count of login timeout events (02040100)
-
-  - name: mart_customer_engagement
-    description: >
-      Cumulative customer engagement summary from the mobile tracking data.
-      Grain: customer_id. Powers customer overview dashboard and chatbot queries
-      about how active specific B2B customers are, what pages they visit, and
-      which products they interact with.
-    columns:
-      - name: customer_id
-        description: Customer account identifier.
+      - name: feature
+        description: Discovery feature — Recommend, Promo, New, or Backorder.
         tests: [not_null, unique]
-      - name: customer_name
-        description: Customer account name.
-      - name: total_sessions
-        description: Distinct tracking sessions by this customer
-      - name: first_session_at
-        description: Timestamp of the customer's earliest session in the data.
-      - name: last_session_at
-        description: Timestamp of the customer's most recent session.
-      - name: active_days
-        description: Distinct calendar days with at least one session
-      - name: total_events
-        description: Total app events such as page views and product interactions.
-      - name: avg_event_duration_seconds
-        description: Average event duration in seconds across all the customer's events.
-      - name: unique_pages_visited
-        description: Count of distinct page values seen across all events
-      - name: unique_skus_viewed
-        description: Distinct SKUs the customer interacted with
-      - name: total_qty_interacted
-        description: Sum of quantity fields where qty > 0
-      - name: cart_page_events
-        description: Events where page = 'Cart'
-      - name: device_model
-        description: Most recently seen device model
-      - name: app_version
-        description: Most recently seen app version
+      - name: click_events
+        description: Total feature icon-click events (Group 18).
+      - name: add_events
+        description: Total adds from the feature's page (Group 10.5).
+      - name: customers_clicked
+        description: Distinct customers who clicked the feature icon.
+      - name: customers_added
+        description: Distinct customers who added from the feature page.
+      - name: click_to_add_rate
+        description: Of customers who clicked the feature icon, the share who also added from its page.
 
-  - name: mart_sales_rep_daily_activity
+  - name: mart_catalog_dwell
     description: >
-      Daily sales rep activity scorecard from the iPad/PDA tracking data.
-      Grain: activity_date x username x sales_code. Powers the sales team
-      daily dashboard and chatbot queries about what reps did on a given day.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - activity_date
-              - username
-              - sales_code
+      Page 2 category dwell heatmap. Grain: category. Aggregates Catalog View
+      analytics (19010000) per category — view events, distinct customers,
+      pages viewed, and average / total time-on-page. Unknown category ids roll
+      up to (unknown). CatalogFS / CatalogFC only.
     columns:
-      - name: activity_date
-        description: Calendar date derived from event started_at
-        tests: [not_null]
-      - name: username
-        description: Salesperson login account.
-        tests: [not_null]
-      - name: sales_code
-        description: Salesperson territory code.
-      - name: total_sessions
-        description: Distinct app sessions on this date
-      - name: total_events
-        description: Total activity events logged on this date
-      - name: login_events
-        description: Events where is_login = true
-      - name: completed_events
-        description: Events where is_done = true
-      - name: failed_events
-        description: Events where is_done = false
-      - name: unique_customers_visited
-        description: Distinct customer IDs logged against events on this date
-      - name: unique_skus_interacted
-        description: Distinct SKUs the rep scanned or interacted with
-      - name: avg_battery_pct
-        description: Average battery percentage across events with battery data
-      - name: min_battery_pct
-        description: Lowest battery reading — high values flagged by system health
-      - name: wifi_events
-        description: Events recorded over wifi
-      - name: cellular_events
-        description: Events recorded over cellular
-      - name: device_model
-        description: Most recently seen device model on this date
-      - name: app_version
-        description: Most recently seen app version on this date
+      - name: category_id
+        description: Category id (PK), or (unknown) when unmapped.
+        tests: [not_null, unique]
+      - name: category_name
+        description: Category name from seed_categories.
+      - name: view_events
+        description: Count of catalog-view events for the category.
+      - name: avg_dwell_seconds
+        description: Average time-on-page in seconds for the category.
 
-  - name: mart_customer_product_interactions
+  - name: mart_cart_behaviour
     description: >
-      Customer x product interaction summary from mobile tracking data.
-      Grain: customer_id x sku. Powers product analytics dashboard and chatbot
-      queries about which products specific customers engage with most.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - customer_id
-              - sku
+      Page 3 cart behaviour at CUSTOMER grain (no order linkage available).
+      Per customer: add / remove / qty-change event counts, distinct skus
+      added, churn ratio (remove_events / add_events), and cart activity dates.
+      Order-cycle framing (churn per cycle, same-day vs multi-day, conversion)
+      is deferred until order events land — see DEFERRED-MODELS.md.
     columns:
-      - name: customer_id
-        description: Customer account identifier.
-        tests: [not_null]
-      - name: sku
-        description: Product SKU the customer interacted with.
-        tests: [not_null]
-      - name: customer_name
-        description: Customer account name.
-      - name: item_no
-        description: Item number associated with the SKU.
-      - name: categories_name
-        description: Product category name for the SKU.
-      - name: total_interactions
-        description: Total events where this SKU appeared
-      - name: sessions_with_interaction
-        description: Distinct sessions containing this SKU
-      - name: total_qty_interacted
-        description: Sum of qty where qty > 0
-      - name: active_days_with_interaction
-        description: Distinct days this customer interacted with this SKU
-      - name: first_seen_at
-      - name: last_seen_at
-
-  - name: mart_sales_rep_customer_visits
-    description: >
-      Lifetime summary of sales rep x customer interaction pairs.
-      Grain: username x sales_code x customer_id. Powers CRM-style dashboard
-      and chatbot queries like "which customers has rep X visited?" or
-      "when did rep X last visit customer Y?"
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - username
-              - sales_code
-              - customer_id
-    columns:
-      - name: username
-        description: Salesperson login account.
-        tests: [not_null]
-      - name: sales_code
-        description: Salesperson territory code.
-      - name: customer_id
-        description: Customer account the rep interacted with.
-        tests: [not_null]
-      - name: total_sessions
-        description: Distinct sessions where this rep logged events for this customer
-      - name: total_events
-        description: Total events logged by this rep for this customer
-      - name: completed_actions
-        description: Events where is_done = true
-      - name: unique_skus_shown
-        description: Distinct SKUs the rep interacted with for this customer
-      - name: total_qty_ordered
-        description: Sum of qty where qty > 0
-      - name: first_visit_date
-        description: Earliest date this rep had activity for this customer.
-      - name: last_visit_date
-        description: Most recent date this rep had activity for this customer.
-      - name: visit_days
-        description: Distinct days this rep had activity for this customer
-
-  - name: mart_team_activity_daily
-    description: >
-      Daily per-rep activity broken down by event category, from the system
-      event log. Grain: activity_date x username x sales_code x source_code x
-      event_category x is_system_event. Powers stacked-bar / drill-down visuals
-      of what each rep did each day by category.
-    columns:
-      - name: activity_date
-        description: UTC calendar date from server created_at.
-        tests: [not_null]
-      - name: username
-        description: Salesperson login account.
-        tests: [not_null]
-      - name: sales_code
-        description: Salesperson territory code.
-      - name: source_code
-        description: App source the activity happened on.
-      - name: app_name
-        description: Friendly app name for the source.
-      - name: app_platform
-        description: Platform such as iOS, Android, or Web.
-      - name: event_category
-        description: L1 event category name, or Uncategorised when unmapped.
-      - name: is_system_event
-        description: Whether the category is a system/diagnostic event vs a user action.
-      - name: event_count
-        description: Number of events in this category for the rep that day.
-      - name: distinct_devices
-        description: Distinct devices the rep used that day in this category.
-      - name: distinct_customers_touched
-        description: Distinct customers the rep acted for in this category that day.
+      - name: customer_key
+        description: Unified customer key (PK).
+        tests: [not_null, unique]
+      - name: actor_type
+        description: sales or customer, from the source app.
+      - name: add_events
+        description: Count of add_item_* events (Group 10.5).
+      - name: remove_events
+        description: Count of remove_item_* events (Group 10.4).
+      - name: qty_change_events
+        description: Count of change_qty_item_* events (Group 10.15).
+      - name: distinct_skus_added
+        description: Distinct SKUs the customer added.
+      - name: churn_ratio
+        description: remove_events / add_events; null when no adds.
+      - name: active_cart_days
+        description: Distinct days with cart activity.

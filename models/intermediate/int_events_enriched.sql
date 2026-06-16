@@ -1,12 +1,14 @@
 -- All events enriched with the event dictionary (seed_event_codes) and the
 -- app-source registry. Event grain — one row per log record.
 --
--- Foundation for analytics: per-family int_* parsers and future fct_* facts
--- select from here. Aggregations belong in mart_* (not in intermediate).
+-- Reads the decoded spine (int_events_decoded); decoding/parsing lives there,
+-- this model only adds the dictionary + app-source joins. Foundation for
+-- analytics: per-family int_* parsers and fct_* facts select from here.
+-- Aggregations belong in mart_* (not in intermediate).
 
 with events as (
 
-    select * from {{ ref('stg_mysql__system_event_log') }}
+    select * from {{ ref('int_events_decoded') }}
 
 ),
 

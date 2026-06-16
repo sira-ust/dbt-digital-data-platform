@@ -22,64 +22,66 @@ dbt `persist_docs`), the **general instructions** you paste in, and the
 ## 2. Add tables (start narrow — quality over coverage)
 
 Add these and nothing else at first. A focused set gives far better answers
-than dumping all 30 objects in.
+than dumping all objects in.
 
 **Reporting marts (the primary answer surface):**
-- `ust_databricks.ust_reporting.mart_customer_engagement`
-- `ust_databricks.ust_reporting.mart_customer_product_interactions`
-- `ust_databricks.ust_reporting.mart_sales_rep_daily_activity`
-- `ust_databricks.ust_reporting.mart_sales_rep_customer_visits`
-- `ust_databricks.ust_reporting.mart_sales_agent_performance`
+- `ust_databricks.ust_reporting.mart_order_journey` — one row per order (increment_id × customer); order status, submission timing, behavior segment
+- `ust_databricks.ust_reporting.mart_discovery_navigation` — one row per app feature; click-to-add funnel metrics
+- `ust_databricks.ust_reporting.mart_catalog_dwell` — one row per catalog category; browse depth and dwell time
+- `ust_databricks.ust_reporting.mart_cart_behaviour` — one row per customer; add/remove/qty-change activity, churn ratio
 
-**Facts (for detail / drill-down questions):**
-- `ust_databricks.ust_facts.fct_customer_events`
-- `ust_databricks.ust_facts.fct_sales_rep_events`
+**Fact (for detail / drill-down questions):**
+- `ust_databricks.ust_facts.fct_order_cycle` — one row per order; raw cycle metrics without bucketing
 
-**Dimensions (code/label lookups):**
-- `ust_databricks.ust_dimensions.dim_event_codes`
+**Seed lookups:**
+- `ust_databricks.ust_seeds.seed_event_codes` — 8-digit code → human-readable label
+- `ust_databricks.ust_seeds.seed_app_sources` — source code → app name + platform
+- `ust_databricks.ust_seeds.seed_categories` — category_id → name hierarchy
 
-Add `mart_system_health`, `mart_team_performance`, `mart_daily_activity`,
-`dim_app_sources`, `dim_categories` later if people start asking about device
-health or system-event analytics.
+> **Note:** Page 4 (sales rep field activity) is not yet built — it requires
+> the NAV address master for geofencing. Add those marts when available.
 
 ---
 
 ## 3. General instructions (paste into the space's "Instructions" box)
 
 ```
-You answer questions about the UST Digital Platform — a B2B ordering system
-used by customers (mobile app) and sales reps (iPad / PDA devices).
+You answer questions about the UST Digital Platform — a B2B ordering and
+catalogue system used by customers (mobile app) and sales reps (iPad / PDA).
 
-Data domains:
-- Customer engagement & product interest: mart_customer_engagement (one row
-  per customer), mart_customer_product_interactions (one row per customer+SKU),
-  and the event detail in fct_customer_events.
-- Sales rep activity: mart_sales_rep_daily_activity (one row per rep per day),
-  mart_sales_rep_customer_visits (one row per rep+customer), and the event
-  detail in fct_sales_rep_events.
-- Sales order performance from the system event log: mart_sales_agent_performance.
+Data covers three dashboard domains:
+
+- Order journey: mart_order_journey (one row per order increment_id ×
+  customer_key). Shows whether orders were submitted, how long they took,
+  and behavior segments (Decisive / Planner / Slow Sender). For now these
+  are empty — Group 04/09 events land when a fuller extract is loaded.
+
+- Discovery & navigation: mart_discovery_navigation (one row per app feature
+  — Recommend, Promo, New, Backorder) shows click-to-add funnel.
+  mart_catalog_dwell (one row per catalog category) shows how long customers
+  browse each section.
+
+- Cart behaviour: mart_cart_behaviour (one row per customer_key) shows
+  add/remove/qty-change events, distinct SKUs added, and churn_ratio
+  (removes ÷ adds — high = lots of second-guessing).
 
 Key vocabulary:
-- "customer" = a B2B account, identified by customer_id (e.g. CHA024, POT001,
-  ASI168). customer_name may be blank.
-- "rep" / "sales rep" / "agent" = a salesperson, identified by username
-  (e.g. emilyma, henghear, michaelyap) and grouped by sales_code (territory:
-  001, 008, 024, 028, ...).
-- "session" = one app login/visit. "event" = one action within a session
-  (page view, search, scan, order step).
-- "visit" = a rep interacting with a customer.
-- SKU = product code. "page" values include Home, Cart, Categories, Backorder,
-  My Orders, Purchase History.
+- "customer_key" = B2B account identifier: ust_customer_no on sales apps
+  (PDA, CatalogFS); username on customer apps (Vegas, Web).
+- "click_to_add_rate" = share of customers who clicked a feature and then
+  added an item to cart. Higher is better engagement.
+- "churn_ratio" = remove_events / add_events per customer. >1 means more
+  removals than additions.
+- "behavior_segment" (mart_order_journey): Decisive = same-day close,
+  Planner = 1-3 days, Slow Sender = 4+ days.
+- "pending_priority" (mart_order_journey): H = 8+ days pending, M = 4-7,
+  L = 0-3.
 
 Rules:
-- Prefer the mart_* tables for aggregate questions; only use fct_* tables when
-  the user asks for individual events or specific detail.
-- "active" customers/reps = those with activity in the data window; use
-  last_session_at / last_visit_date for recency.
-- Dates: activity_date / *_date columns are calendar dates. *_at columns are
-  timestamps.
-- When asked "how many" of something distinct, count the relevant id column.
-- The data is a sample (one-month window), so totals are illustrative.
+- Prefer mart_* tables for aggregate questions; only use fct_order_cycle
+  when the user asks for individual order detail.
+- mart_order_journey rows with is_submitted = false are open/pending orders.
+- The data is a sample window, so totals are illustrative.
 ```
 
 ---
@@ -87,98 +89,69 @@ Rules:
 ## 4. Example queries (add each as a certified/"trusted" SQL example)
 
 Genie learns the most from example question → SQL pairs. Add these via
-**Add instruction → SQL query** (or "Example queries"). All are valid
-Databricks SQL against the POC tables.
+**Add instruction → SQL query**. All are valid Databricks SQL against the
+POC tables.
 
-**Q: Who are our most engaged customers?**
+**Q: Which app features drive the most adds to cart?**
 ```sql
-select customer_id, customer_name, total_sessions, total_events, active_days,
-       last_session_at
-from ust_databricks.ust_reporting.mart_customer_engagement
-order by total_events desc
+select feature_name, click_events, add_events, customers_clicked,
+       customers_added, click_to_add_rate
+from ust_databricks.ust_reporting.mart_discovery_navigation
+order by click_to_add_rate desc;
+```
+
+**Q: Which catalog categories get the most browsing time?**
+```sql
+select category_name, view_events, distinct_customers,
+       total_dwell_seconds, avg_dwell_seconds
+from ust_databricks.ust_reporting.mart_catalog_dwell
+order by total_dwell_seconds desc;
+```
+
+**Q: Which customers remove the most items relative to what they add?**
+```sql
+select customer_key, add_events, remove_events, churn_ratio,
+       distinct_skus_added, active_cart_days
+from ust_databricks.ust_reporting.mart_cart_behaviour
+where churn_ratio is not null
+order by churn_ratio desc
 limit 20;
 ```
 
-**Q: How active is customer CHA024?**
+**Q: How many customers added items but never removed any?**
 ```sql
-select *
-from ust_databricks.ust_reporting.mart_customer_engagement
-where customer_id = 'CHA024';
+select count(*) as loyal_cart_customers
+from ust_databricks.ust_reporting.mart_cart_behaviour
+where remove_events = 0 and add_events > 0;
 ```
 
-**Q: What products does customer POT001 interact with most?**
+**Q: What is the order breakdown by behavior segment?**
 ```sql
-select sku, categories_name, total_interactions, total_qty_interacted,
-       last_seen_at
-from ust_databricks.ust_reporting.mart_customer_product_interactions
-where customer_id = 'POT001'
-order by total_interactions desc
-limit 20;
+select behavior_segment, pending_priority,
+       count(*)                                          as orders,
+       sum(case when is_submitted then 1 else 0 end)    as submitted,
+       avg(days_to_close)                               as avg_days_to_close
+from ust_databricks.ust_reporting.mart_order_journey
+group by behavior_segment, pending_priority
+order by orders desc;
 ```
 
-**Q: Which SKUs get the most customer interest overall?**
+**Q: Show me open orders with the highest priority (pending 8+ days).**
 ```sql
-select sku, categories_name,
-       count(distinct customer_id) as customers,
-       sum(total_interactions)     as interactions
-from ust_databricks.ust_reporting.mart_customer_product_interactions
-group by sku, categories_name
-order by interactions desc
-limit 20;
+select increment_id, customer_key, opened_at, days_pending,
+       create_events, submit_fail_events
+from ust_databricks.ust_reporting.mart_order_journey
+where is_submitted = false and pending_priority = 'H'
+order by days_pending desc;
 ```
 
-**Q: Show me sales rep activity by day.**
+**Q: Which catalog categories have customers browsing the longest per visit?**
 ```sql
-select activity_date, username, sales_code, total_events, login_events,
-       unique_customers_visited, completed_events, failed_events
-from ust_databricks.ust_reporting.mart_sales_rep_daily_activity
-order by activity_date desc, total_events desc;
-```
-
-**Q: Which reps visited the most customers?**
-```sql
-select username, sales_code,
-       count(distinct customer_id) as customers_visited,
-       sum(total_events)           as total_events
-from ust_databricks.ust_reporting.mart_sales_rep_customer_visits
-group by username, sales_code
-order by customers_visited desc;
-```
-
-**Q: Which customers has rep emilyma visited and when last?**
-```sql
-select customer_id, total_sessions, total_events, completed_actions,
-       last_visit_date, visit_days
-from ust_databricks.ust_reporting.mart_sales_rep_customer_visits
-where username = 'emilyma'
-order by last_visit_date desc;
-```
-
-**Q: Which reps have device battery problems in the field?**
-```sql
-select username, sales_code, activity_date, min_battery_pct, avg_battery_pct,
-       total_events
-from ust_databricks.ust_reporting.mart_sales_rep_daily_activity
-where min_battery_pct is not null
-order by min_battery_pct asc
-limit 20;
-```
-
-**Q: What were customer CHA024's most recent actions?**
-```sql
-select started_at, page, title, event_type_label, sku, qty, duration_seconds
-from ust_databricks.ust_facts.fct_customer_events
-where customer_id = 'CHA024'
-order by started_at desc
-limit 50;
-```
-
-**Q: What's each sales agent's order performance?**
-```sql
-select activity_date, username, source_code, orders_submitted,
-       orders_succeeded, order_success_rate, distinct_customers_touched
-from ust_databricks.ust_reporting.mart_sales_agent_performance
-order by activity_date desc, orders_submitted desc;
+select category_name, view_events, avg_dwell_seconds,
+       total_dwell_seconds / nullif(distinct_customers, 0) as avg_seconds_per_customer
+from ust_databricks.ust_reporting.mart_catalog_dwell
+order by avg_dwell_seconds desc
+limit 10;
 ```
 
 ---

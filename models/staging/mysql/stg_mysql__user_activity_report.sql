@@ -4,7 +4,7 @@ with source as (
 
 ),
 
-deduped as (
+numbered as (
 
     select
         *,
@@ -14,52 +14,22 @@ deduped as (
         ) as _rn
     from source
 
-),
-
-transformed as (
-
-    select
-        -- ── identifiers ────────────────────────────────────────────────
-        cast(entity_id as bigint)                                           as entity_id,
-        nullif(trim(user), '')                                              as username,
-        nullif(trim(user_name), '')                                         as display_name,
-        nullif(trim(session_id), '')                                        as session_id,
-
-        -- ── device ─────────────────────────────────────────────────────
-        nullif(trim(model), '')                                             as device_model,
-        nullif(trim(version), '')                                           as app_version,
-        try_cast(nullif(split_part(version, '.', 1), '') as integer)        as version_major,
-        try_cast(nullif(split_part(version, '.', 2), '') as integer)        as version_minor,
-        -- build segment may have suffix ("18b178 - PDA") — extract leading digits only
-        try_cast(
-            nullif(regexp_extract(split_part(version, '.', 3), '^([0-9]+)', 1), '')
-            as integer
-        )                                                                   as version_build,
-
-        -- ── timestamps (no timezone at session level) ───────────────────
-        cast(begin_time as timestamp)                                       as started_at,
-        try_cast(end_time as timestamp)                                     as ended_at,
-
-        -- ── geo: "lat,lon" or null ──────────────────────────────────────
-        try_cast({{ response_part('location', 1) }} as double)              as latitude,
-        try_cast({{ response_part('location', 2) }} as double)              as longitude,
-
-        -- ── additional session context ─────────────────────────────────
-        nullif(trim(sales_name), '')                                        as sales_name,
-
-        -- ── flags ──────────────────────────────────────────────────────
-        cast(voluntarily_exit as boolean)                                   as is_voluntary_exit,
-
-        -- ── metrics ────────────────────────────────────────────────────
-        cast(event_count as integer)                                        as event_count,
-
-        -- ── server timestamps ───────────────────────────────────────────
-        cast(created_at as timestamp)                                       as created_at_server,
-        cast(updated_at as timestamp)                                       as updated_at_server
-
-    from deduped
-    where _rn = 1
-
 )
 
-select * from transformed
+select
+    cast(entity_id as bigint)                                                             as entity_id,
+    nullif(trim(cast(user             as {{ dbt.type_string() }})), '')                    as username,
+    nullif(trim(cast(user_name        as {{ dbt.type_string() }})), '')                    as user_name,
+    nullif(trim(cast(session_id       as {{ dbt.type_string() }})), '')                    as session_id,
+    cast(begin_time as timestamp)                                                          as begin_time,
+    try_cast(nullif(trim(cast(end_time        as {{ dbt.type_string() }})), '') as timestamp) as end_time,
+    try_cast(nullif(trim(cast(event_count     as {{ dbt.type_string() }})), '') as bigint) as event_count,
+    try_cast(nullif(trim(cast(voluntarily_exit as {{ dbt.type_string() }})), '') as bigint) as voluntarily_exit,
+    nullif(trim(cast(model            as {{ dbt.type_string() }})), '')                    as device_model,
+    nullif(trim(cast(location         as {{ dbt.type_string() }})), '')                    as location,
+    nullif(trim(cast(sales_name       as {{ dbt.type_string() }})), '')                    as sales_name,
+    nullif(trim(cast(version          as {{ dbt.type_string() }})), '')                    as app_version,
+    cast(created_at as timestamp)                                                          as created_at,
+    cast(updated_at as timestamp)                                                          as updated_at
+from numbered
+where _rn = 1

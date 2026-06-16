@@ -4,7 +4,7 @@ with source as (
 
 ),
 
-deduped as (
+numbered as (
 
     select
         *,
@@ -14,42 +14,19 @@ deduped as (
         ) as _rn
     from source
 
-),
-
-transformed as (
-
-    select
-        -- ── identifiers ────────────────────────────────────────────────
-        cast(entity_id as bigint)                                           as entity_id,
-        nullif(trim(customer_id), '')                                       as customer_id,
-        nullif(trim(customer_name), '')                                     as customer_name,
-        nullif(trim(session_id), '')                                        as session_id,
-
-        -- ── device ─────────────────────────────────────────────────────
-        nullif(trim(model), '')                                             as device_model,
-        nullif(trim(version), '')                                           as app_version,
-        try_cast(nullif(split_part(version, '.', 1), '') as integer)        as version_major,
-        try_cast(nullif(split_part(version, '.', 2), '') as integer)        as version_minor,
-        -- build segment may have suffix ("21b204 - Android 16") — extract leading digits only
-        try_cast(
-            nullif(regexp_extract(split_part(version, '.', 3), '^([0-9]+)', 1), '')
-            as integer
-        )                                                                   as version_build,
-
-        -- ── timestamps (device local — no timezone at session level) ────
-        cast(start_time as timestamp)                                       as started_at,
-        try_cast(nullif(trim(cast(end_time as {{ dbt.type_string() }})), '') as timestamp)  as ended_at,
-
-        -- ── metrics ────────────────────────────────────────────────────
-        cast(total_event as integer)                                        as total_events,
-
-        -- ── server timestamps (source field is 'create_at' — DB typo) ──
-        cast(create_at as timestamp)                                        as created_at_server,
-        cast(updated_at as timestamp)                                       as updated_at_server
-
-    from deduped
-    where _rn = 1
-
 )
 
-select * from transformed
+select
+    cast(entity_id as bigint)                                                          as entity_id,
+    nullif(trim(cast(customer_id   as {{ dbt.type_string() }})), '')                   as customer_id,
+    nullif(trim(cast(customer_name as {{ dbt.type_string() }})), '')                   as customer_name,
+    nullif(trim(cast(session_id    as {{ dbt.type_string() }})), '')                   as session_id,
+    nullif(trim(cast(model         as {{ dbt.type_string() }})), '')                   as device_model,
+    nullif(trim(cast(version       as {{ dbt.type_string() }})), '')                   as app_version,
+    cast(start_time as timestamp)                                                      as start_time,
+    try_cast(nullif(trim(cast(end_time    as {{ dbt.type_string() }})), '') as timestamp) as end_time,
+    try_cast(nullif(trim(cast(total_event as {{ dbt.type_string() }})), '') as bigint)  as total_events,
+    cast(create_at  as timestamp)                                                      as created_at,
+    cast(updated_at as timestamp)                                                      as updated_at
+from numbered
+where _rn = 1
