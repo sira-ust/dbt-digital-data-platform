@@ -1,6 +1,38 @@
 version: 2
 
 models:
+  - name: int_customer_sessions
+    description: >
+      Event-grain join of stg_mysql__tracking_report (session header) and
+      stg_mysql__tracking_report_event (page/action events). One row per
+      session x event; sessions with no events still appear (left join).
+      Used by mart_customer_app_session and mart_page_dwell.
+    columns:
+      - name: session_id
+        description: FK to stg_mysql__tracking_report.entity_id.
+        tests: [not_null]
+      - name: customer_id
+        description: Customer identifier.
+      - name: event_id
+        description: FK to stg_mysql__tracking_report_event.entity_id. Null for sessions with no events.
+
+  - name: int_rep_activity_events
+    description: >
+      Event-grain join of stg_mysql__user_activity_report_event (activity
+      events) and stg_mysql__user_activity_report (session header). One row
+      per rep activity event enriched with device_model and activity_date.
+      Used by mart_rep_customer_visits and mart_rep_daily_activity.
+    columns:
+      - name: entity_id
+        description: Primary key from stg_mysql__user_activity_report_event.
+        tests: [not_null, unique]
+      - name: session_id
+        description: FK to stg_mysql__user_activity_report.entity_id.
+      - name: username
+        description: Sales rep login account.
+      - name: activity_date
+        description: Calendar date derived from begin_time.
+
   - name: int_events_decoded
     description: >
       Decode/parse spine for the system event log. Reads lossless staging and
