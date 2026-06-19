@@ -64,7 +64,7 @@ models:
 
     staging:
       +materialized: view
-      +schema: staging
+      +schema: ust_staging
       mysql:
         +materialized: table        
         +tags: ["staging", "mysql"]
@@ -91,6 +91,11 @@ models:
         +materialized: table
         +schema: ust_reporting
         +tags: ["reporting"]
+
+    dq:
+      +materialized: view
+      +schema: ust_dq
+      +tags: ["dq"]
 
 seeds:
 

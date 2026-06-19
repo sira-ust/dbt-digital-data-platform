@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: dq_quarantine_invalid_source
+    description: >
+      Quarantine for system_event_log rows whose `source` is not a recognised app
+      source code (seed_app_sources). In the live data these are scanner/bot
+      payloads (SQLi / XSS / path-traversal / SSRF probes) logged into the source
+      column by the Web endpoint. Excluded from int_events_decoded and captured
+      here for inspection and security review. One row per quarantined event.
+    columns:
+      - name: entity_id
+        description: Primary key from system_event_log.
+        tests: [unique, not_null]
+      - name: source
+        description: The raw (invalid) source value as logged.
+      - name: event_time
+        description: Raw device-side event time string.
+      - name: created_at
+        description: Server write time (PST).

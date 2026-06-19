@@ -13,6 +13,16 @@ with events as (
 
     select * from {{ ref('stg_mysql__system_event_log') }}
 
+),
+
+valid_sources as (
+
+    -- canonical app source registry. Anything else is scanner/bot noise logged
+    -- into the source column (SQLi/XSS/path-traversal probes against the Web
+    -- endpoint); those rows are quarantined in dq_quarantine_invalid_source and
+    -- excluded here so the analytics spine only contains real app events.
+    select source_code from {{ ref('seed_app_sources') }}
+
 )
 
 select
@@ -66,3 +76,4 @@ select
     response
 
 from events
+where source in (select source_code from valid_sources)
