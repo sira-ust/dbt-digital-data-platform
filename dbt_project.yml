@@ -63,13 +63,10 @@ models:
 
 
     staging:
-
       +materialized: view
-
-      +schema: ust_staging
-
+      +schema: staging
       mysql:
-
+        +materialized: table        
         +tags: ["staging", "mysql"]
 
 
