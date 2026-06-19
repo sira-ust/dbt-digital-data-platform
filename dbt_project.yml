@@ -123,14 +123,6 @@ seeds:
 
         category_id: string
 
-vars:
-  # Whether the real MySQL source is connected. While false (POC phase),
-  # sources read sample data (DuckDB: JSON via external_location; Databricks:
-  # temp_mysql.* tables loaded by scripts/load_databricks_sample.py), and
-  # admin_users / category staging models return empty schema-correct results.
-  # Flip to true once MySQL credentials are live in profiles.yml.
-  mysql_available: false
-
 tests:
 
   +store_failures: true

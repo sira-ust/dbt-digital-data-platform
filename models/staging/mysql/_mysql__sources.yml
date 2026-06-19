@@ -3,16 +3,21 @@ version: 2
 sources:
   - name: mysql
     description: >
-      UST website MySQL database. All tables are READ-ONLY for dbt.
-      POC phase (no live MySQL yet): each table reads sample data.
-        DuckDB (dev):     external_location reads the API JSON in data/raw_api/.
-        Databricks (POC): external_location is ignored; the source resolves to
-                          temp_mysql.<identifier>, loaded by
-                          scripts/load_databricks_sample.py.
-      When real MySQL lands, point schema at the live database, drop the temp_mysql
-      identifiers and external_location, and set mysql_available: true.
+      UST website MySQL database. All tables are READ-ONLY for dbt. The source
+      location is target-dependent:
+        DuckDB (dev):     external_location reads the API JSON in data/raw_api/;
+                          schema/identifier are symbolic. admin_users and category
+                          have no sample, so their staging models return empty.
+        Databricks (POC): reads the real MySQL tables mirrored into the `mysql`
+                          schema of catalog ust_databricks (one Delta table per
+                          MySQL table, same names). external_location is ignored.
+      Switch a table's source by editing its identifier; the schema flips to
+      `mysql` automatically on the databricks target.
     tags: ["raw", "mysql"]
-    schema: temp_mysql
+    # Pin the catalog explicitly on databricks so resolution does not depend on
+    # the connection's default catalog (which can fall back to hive_metastore).
+    database: "{{ 'ust_databricks' if target.type == 'databricks' else target.database }}"
+    schema: "{{ 'mysql' if target.type == 'databricks' else 'temp_mysql' }}"
     config:
       meta:
         access: read_only
@@ -20,7 +25,7 @@ sources:
 
     tables:
       - name: tracking_report
-        identifier: temp_tracking_report
+        identifier: "{{ 'ust_tracking_report' if target.type == 'databricks' else 'temp_tracking_report' }}"
         description: One row per customer app session. Source for /customer/tracking/ sessions.
         config:
           external_location: "read_json_auto('data/raw_api/customer/tracking/customer_reports.json')"
@@ -52,7 +57,7 @@ sources:
             description: Record last update time
 
       - name: tracking_report_event
-        identifier: temp_tracking_report_event
+        identifier: "{{ 'ust_tracking_report_event' if target.type == 'databricks' else 'temp_tracking_report_event' }}"
         description: One row per customer action within a session. Child of tracking_report.
         config:
           external_location: "read_json_auto('data/raw_api/customer/tracking/customer_events.json')"
@@ -111,7 +116,7 @@ sources:
             description: Record last update time
 
       - name: user_activity_report
-        identifier: temp_user_activity_report
+        identifier: "{{ 'ust_user_activity_report' if target.type == 'databricks' else 'temp_user_activity_report' }}"
         description: One row per salesperson login session. Source for /user/activity/ sessions.
         config:
           external_location: "read_json_auto('data/raw_api/user/activity/sales_reports.json')"
@@ -149,7 +154,7 @@ sources:
             description: Record last update time
 
       - name: user_activity_report_event
-        identifier: temp_user_activity_report_event
+        identifier: "{{ 'ust_user_activity_report_event' if target.type == 'databricks' else 'temp_user_activity_report_event' }}"
         description: One row per salesperson activity within a session. Child of user_activity_report.
         config:
           external_location: "read_json_auto('data/raw_api/user/activity/sales_events.json')"
@@ -160,10 +165,6 @@ sources:
             description: FK -> user_activity_report.entity_id
           - name: user
             description: Salesperson login account
-          - name: user_name
-            description: Salesperson display name
-          - name: sales_code
-            description: Sales territory code
           - name: act_type
             description: Activity type code
           - name: begin_time
@@ -176,6 +177,8 @@ sources:
             description: Search keyword
           - name: location
             description: GPS coordinates ("lat,lon" or empty)
+          - name: layout
+            description: UI layout context for the activity
           - name: category
             description: Product category context
           - name: visits_num
@@ -202,13 +205,11 @@ sources:
             description: Device UTC offset string
           - name: method
             description: Interaction method code
-          - name: version
-            description: App version string
           - name: updated_at
             description: Record last update time
 
       - name: system_event_log
-        identifier: temp_system_events
+        identifier: "{{ 'ust_system_event_log' if target.type == 'databricks' else 'temp_system_events' }}"
         description: >
           Application and backend event logs with L1-L4 hierarchical event codes.
           DuckDB reads the nested API envelope {code, msg, data: {data: [events]}}
@@ -254,42 +255,74 @@ sources:
             description: Server time in fixed PST; latest wins on dedup
 
       - name: admin_users
-        identifier: temp_admin_users
+        identifier: "{{ 'ust_admin_users' if target.type == 'databricks' else 'temp_admin_users' }}"
         description: >
           Administrator and salesperson master data. Links to other tables via
-          username or salesperson_code. No sample available yet — staging returns
-          an empty schema-correct result while mysql_available is false.
+          username or salesperson_code. No local JSON sample — the staging model
+          returns an empty schema-correct result on DuckDB and reads the real
+          table on the databricks target.
         columns:
           - name: user_id
             description: Primary key
-          - name: username
-            description: Login account — links to system_event_log.username and user_activity_report.user
           - name: firstname
             description: First name
           - name: lastname
             description: Last name
+          - name: email
+            description: Email address
+          - name: username
+            description: Login account — links to system_event_log.username and user_activity_report.user
+          - name: created
+            description: Record creation time
+          - name: modified
+            description: Record last update time (on update CURRENT_TIMESTAMP)
+          - name: logdate
+            description: Last login timestamp
+          - name: lognum
+            description: Login count
+          - name: is_active
+            description: Active flag (smallint 0/1)
+          - name: interface_locale
+            description: Admin UI locale
+          - name: is_salesperson
+            description: Salesperson flag (smallint 0/1)
           - name: salesperson_code
             description: Sales territory code — links to system_event_log.sales_code
+          - name: convert_quotes
+            description: Convert-quotes permission flag (smallint 0/1)
+          - name: receive_quote_emails
+            description: Receive-quote-emails flag (smallint 0/1)
           - name: role_name
             description: Role (admin, salesperson, etc.)
-          - name: is_active
-            description: Active flag
 
       - name: category
-        identifier: temp_category
+        identifier: "{{ 'ust_category' if target.type == 'databricks' else 'temp_category' }}"
         description: >
-          Product category master data. No sample available yet — staging returns
-          an empty schema-correct result while mysql_available is false.
-          Expand columns once MySQL schema is confirmed.
+          Product category master data. No local JSON sample — the staging model
+          returns an empty schema-correct result on DuckDB and reads the real
+          table on the databricks target.
         columns:
-          - name: entity_id
+          - name: category_id
             description: Primary key
           - name: parent_id
-            description: FK to parent category (null for root categories)
+            description: FK to parent category (0 for root categories)
           - name: name
             description: Category display name
-          - name: level
-            description: Hierarchy depth (1 = root)
           - name: is_active
-          - name: created_at
+            description: Active flag (stored as varchar in this table)
+          - name: position
+            description: Sort position within the parent
+          - name: level
+            description: Hierarchy depth (0 = root)
+          - name: product_count
+            description: Number of products in the category
+          - name: meta_title
+            description: SEO meta title
+          - name: meta_keywords
+            description: SEO meta keywords
+          - name: meta_description
+            description: SEO meta description
+          - name: create_at
+            description: Record creation time (note — DB typo, missing 'd')
           - name: updated_at
+            description: Record last update time

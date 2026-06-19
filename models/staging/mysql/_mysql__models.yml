@@ -138,10 +138,14 @@ models:
 
   - name: stg_mysql__user_activity_report_event
     description: >
-      Staging for user_activity_report_event (salesperson activity events). One
-      row per entity_id (latest updated_at wins). Cast, trim, dedupe, rename to
-      analytics-friendly names. Location parsing, activity label decoding belong
-      in the int layer. Source has updated_at but no created_at.
+      Staging for user_activity_report_event (salesperson activity events).
+      Lossless 1:1 with the real MySQL table (24 columns). One row per entity_id
+      (latest updated_at wins). Cast, trim, dedupe, rename to analytics-friendly
+      names. Location parsing and activity label decoding belong in the int layer.
+      Source has updated_at but no created_at. The table carries no sales_code /
+      app_version — territory is resolved from admin_users and app_version from
+      the user_activity_report header in int_rep_activity_events. The local JSON
+      sample has no `layout` column, so it is emitted as NULL on the duckdb target.
     columns:
       - name: entity_id
         description: Primary key. One row per salesperson event.
@@ -157,10 +161,6 @@ models:
                 severity: warn
       - name: username
         description: Salesperson login account. Source column is `user`.
-      - name: user_name
-        description: Salesperson display name.
-      - name: sales_code
-        description: Sales territory code.
       - name: activity_type
         description: Activity type code. Source column is `act_type`.
       - name: begin_time
@@ -173,6 +173,8 @@ models:
         description: Search keyword.
       - name: location
         description: GPS coordinates ("lat,lon" or null).
+      - name: layout
+        description: UI layout context. NULL on the duckdb target (absent from the JSON sample).
       - name: category
         description: Product category context.
       - name: visits_num
@@ -199,8 +201,6 @@ models:
         description: Device UTC offset string.
       - name: method
         description: Interaction method code.
-      - name: app_version
-        description: App version string. Source column is `version`.
       - name: updated_at
         description: Record last update time. Latest wins on dedup.
 
@@ -229,7 +229,10 @@ models:
       - name: timezone
         description: Device local UTC offset string at event time, e.g. GMT+8.
       - name: event_time
-        description: Device LOCAL time the event occurred. Convert to UTC downstream via timezone.
+        description: >
+          Device LOCAL time the event occurred, kept as a raw string (format
+          varies by source — epoch on live MySQL, datetime string in the sample).
+          Parsed and converted to UTC downstream in int_events_decoded via timezone.
       - name: source
         description: Originating app + platform variant. Raw source code, e.g. CatalogFS-I, PDA-A, Web.
         tests: [not_null]
@@ -254,10 +257,12 @@ models:
 
   - name: stg_mysql__admin_users
     description: >
-      Staging for admin_users (salesperson + admin master data). Cast, trim,
-      rename to analytics-friendly names (firstname→first_name, etc.). Derived
-      fields (full_name concatenation) belong in the int layer. Requires live
-      MySQL — returns an empty schema-correct result while mysql_available is false.
+      Staging for admin_users (salesperson + admin master data). Lossless 1:1 with
+      the source (all 16 columns). Cast, trim, rename to analytics-friendly names
+      (firstname→first_name, created→created_at, modified→updated_at). Derived
+      fields (full_name concatenation) belong in the int layer. No local JSON
+      sample — returns an empty schema-correct result on duckdb; reads the real
+      ust_databricks.mysql.admin_users table on the databricks target.
     columns:
       - name: user_id
         description: Primary key.
@@ -268,32 +273,61 @@ models:
         description: First name. Source column is `firstname`.
       - name: last_name
         description: Last name. Source column is `lastname`.
+      - name: email
+        description: Email address.
       - name: salesperson_code
         description: Sales territory code. Links to system_event_log.sales_code.
       - name: role_name
         description: Role such as admin or salesperson.
+      - name: interface_locale
+        description: Admin UI locale.
       - name: is_active
-        description: Active flag.
+        description: Active flag (bigint 0/1). Source type is smallint.
+      - name: is_salesperson
+        description: Salesperson flag (bigint 0/1). Source type is smallint.
+      - name: convert_quotes
+        description: Convert-quotes permission flag (bigint 0/1).
+      - name: receive_quote_emails
+        description: Receive-quote-emails flag (bigint 0/1).
+      - name: lognum
+        description: Login count (bigint).
+      - name: logdate
+        description: Last login timestamp.
+      - name: created_at
+        description: Record creation time. Source column is `created`.
+      - name: updated_at
+        description: Record last update time. Source column is `modified`.
 
   - name: stg_mysql__category
     description: >
-      Staging for category (product category master data). Cast, trim, rename to
-      analytics-friendly names. Parent category resolution via self-join belongs
-      in the int layer. Requires live MySQL — returns an empty schema-correct
-      result while mysql_available is false.
+      Staging for category (product category master data). Lossless 1:1 with the
+      source (all 12 columns). Cast, trim, rename to analytics-friendly names.
+      Parent category resolution via self-join belongs in the int layer. No local
+      JSON sample — returns an empty schema-correct result on duckdb; reads the real
+      ust_databricks.mysql.category table on the databricks target.
     columns:
       - name: entity_id
-        description: Primary key.
+        description: Primary key. Source column is `category_id`.
         tests: [unique, not_null]
       - name: parent_id
-        description: FK to parent category entity_id. Null for root categories.
+        description: FK to parent category entity_id. 0 for root categories.
       - name: category_name
         description: Category display name. Source column is `name`.
-      - name: category_level
-        description: Hierarchy depth (bigint). 1 is root. Source column is `level`.
       - name: is_active
-        description: Active flag.
+        description: Active flag (stored as varchar in this source table).
+      - name: position
+        description: Sort position within the parent (bigint).
+      - name: category_level
+        description: Hierarchy depth (bigint). 0 is root. Source column is `level`.
+      - name: product_count
+        description: Number of products in the category (bigint).
+      - name: meta_title
+        description: SEO meta title.
+      - name: meta_keywords
+        description: SEO meta keywords.
+      - name: meta_description
+        description: SEO meta description.
       - name: created_at
-        description: Record creation time.
+        description: Record creation time. Source column is `create_at` (source typo).
       - name: updated_at
         description: Record last update time.

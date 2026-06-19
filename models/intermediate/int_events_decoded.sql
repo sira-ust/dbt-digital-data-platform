@@ -37,7 +37,7 @@ select
     -- ── timestamps ─────────────────────────────────────────────────────
     -- event_time is device LOCAL; convert to UTC via the row timezone offset.
     {{ add_hours(
-        'event_time',
+        event_time_to_ts('event_time'),
         '-coalesce(' ~ tz_offset_hours('timezone') ~ ', 0)'
     ) }}                                                                as event_at_utc,
     timezone                                                            as device_timezone,

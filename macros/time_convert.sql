@@ -44,3 +44,33 @@
 {% macro databricks__epoch_millis_to_ts(column) -%}
     timestamp_millis(try_cast({{ column }} as bigint))
 {%- endmacro %}
+
+
+{# event_time -> timestamp, format-agnostic. The column is kept as a raw string
+   in staging because its format varies by source: the live MySQL stores an
+   epoch value (seconds, or milliseconds when >= 12 digits) while the local JSON
+   sample stores a datetime string. All-digit values are read as epoch; anything
+   else is parsed as a datetime string. Null/blank/garbage -> null. #}
+{% macro event_time_to_ts(column) -%}
+    {{ return(adapter.dispatch('event_time_to_ts', 'ust_digital_platform')(column)) }}
+{%- endmacro %}
+
+{% macro default__event_time_to_ts(column) -%}
+    case
+        when nullif(trim(cast({{ column }} as {{ dbt.type_string() }})), '') is null then null
+        when regexp_matches(trim(cast({{ column }} as {{ dbt.type_string() }})), '^[0-9]{12,}$')
+            then to_timestamp(try_cast({{ column }} as bigint) / 1000.0)
+        when regexp_matches(trim(cast({{ column }} as {{ dbt.type_string() }})), '^[0-9]+$')
+            then to_timestamp(try_cast({{ column }} as bigint))
+        else try_cast({{ column }} as timestamp)
+    end
+{%- endmacro %}
+
+{% macro databricks__event_time_to_ts(column) -%}
+    case
+        when nullif(trim({{ column }}), '') is null then null
+        when {{ column }} rlike '^[0-9]{12,}$' then timestamp_millis(try_cast({{ column }} as bigint))
+        when {{ column }} rlike '^[0-9]+$' then timestamp_seconds(try_cast({{ column }} as bigint))
+        else try_cast({{ column }} as timestamp)
+    end
+{%- endmacro %}

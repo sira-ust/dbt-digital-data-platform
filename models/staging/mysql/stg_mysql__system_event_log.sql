@@ -60,7 +60,7 @@ typed as (
         trim(cast(ust_customer_no  as {{ dbt.type_string() }})) as ust_customer_no,
         trim(cast(location         as {{ dbt.type_string() }})) as location,
         trim(cast(timezone         as {{ dbt.type_string() }})) as timezone,
-        cast(event_time       as timestamp)                  as event_time,
+        trim(cast(event_time       as {{ dbt.type_string() }})) as event_time,
         trim(cast(source           as {{ dbt.type_string() }})) as source,
         trim(cast(version          as {{ dbt.type_string() }})) as version,
         trim(cast(description_code as {{ dbt.type_string() }})) as description_code,

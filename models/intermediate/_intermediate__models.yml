@@ -19,9 +19,13 @@ models:
   - name: int_rep_activity_events
     description: >
       Event-grain join of stg_mysql__user_activity_report_event (activity
-      events) and stg_mysql__user_activity_report (session header). One row
-      per rep activity event enriched with device_model and activity_date.
-      Used by mart_rep_customer_visits and mart_rep_daily_activity.
+      events) and stg_mysql__user_activity_report (session header), plus a lookup
+      to stg_mysql__admin_users for the rep territory. One row per rep activity
+      event enriched with device_model, app_version (both from the session header)
+      and activity_date. sales_code is resolved from admin_users.salesperson_code
+      via the login account (the event table no longer carries it) — NULL on the
+      duckdb target where admin_users is empty. Used by mart_rep_customer_visits
+      and mart_rep_daily_activity.
     columns:
       - name: entity_id
         description: Primary key from stg_mysql__user_activity_report_event.
