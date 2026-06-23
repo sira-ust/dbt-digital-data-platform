@@ -21,7 +21,7 @@ select
     cast(report_entity_id as bigint)                                                      as user_activity_report_id,
     nullif(trim(cast(user        as {{ dbt.type_string() }})), '')                         as username,
     nullif(trim(cast(act_type    as {{ dbt.type_string() }})), '')                         as activity_type,
-    cast(begin_time as timestamp)                                                          as begin_time,
+    try_cast(nullif(trim(cast(begin_time as {{ dbt.type_string() }})), '') as timestamp)   as begin_time,
     try_cast(nullif(trim(cast(end_time   as {{ dbt.type_string() }})), '') as timestamp)   as end_time,
     nullif(trim(cast(customer     as {{ dbt.type_string() }})), '')                        as customer,
     nullif(trim(cast(keyword      as {{ dbt.type_string() }})), '')                        as keyword,

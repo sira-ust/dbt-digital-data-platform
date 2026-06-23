@@ -23,7 +23,7 @@ select
     nullif(trim(cast(customer_name   as {{ dbt.type_string() }})), '')                   as customer_name,
     nullif(trim(cast(type            as {{ dbt.type_string() }})), '')                   as event_type_code,
     nullif(trim(cast(title           as {{ dbt.type_string() }})), '')                   as title,
-    cast(start_time as timestamp)                                                        as start_time,
+    try_cast(nullif(trim(cast(start_time as {{ dbt.type_string() }})), '') as timestamp)  as start_time,
     try_cast(nullif(trim(cast(end_time as {{ dbt.type_string() }})), '') as timestamp)   as end_time,
     nullif(trim(cast(item_no         as {{ dbt.type_string() }})), '')                   as item_no,
     nullif(trim(cast(sku             as {{ dbt.type_string() }})), '')                   as sku,

@@ -23,7 +23,7 @@ select
     nullif(trim(cast(session_id    as {{ dbt.type_string() }})), '')                   as session_id,
     nullif(trim(cast(model         as {{ dbt.type_string() }})), '')                   as device_model,
     nullif(trim(cast(version       as {{ dbt.type_string() }})), '')                   as app_version,
-    cast(start_time as timestamp)                                                      as start_time,
+    try_cast(nullif(trim(cast(start_time as {{ dbt.type_string() }})), '') as timestamp) as start_time,
     try_cast(nullif(trim(cast(end_time    as {{ dbt.type_string() }})), '') as timestamp) as end_time,
     try_cast(nullif(trim(cast(total_event as {{ dbt.type_string() }})), '') as bigint)  as total_events,
     cast(create_at  as timestamp)                                                      as created_at,
