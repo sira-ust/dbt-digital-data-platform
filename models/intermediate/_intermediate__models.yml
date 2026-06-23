@@ -84,11 +84,10 @@ models:
       - name: l3_code
         description: Level-3 segment of description_code.
       - name: l4_code
-        description: Level-4 segment of description_code. Outcome.
-      - name: is_success
-        description: True when the L4 outcome segment is success (01).
-      - name: is_failure
-        description: True when the L4 outcome segment is failure (02).
+        description: >
+          Level-4 (deepest) segment of description_code. Not interpreted here:
+          success/failure is NOT derived because the outcome marker sits at
+          different segments by family — apply outcome logic downstream JIT.
       - name: event_at_utc
         description: Device event time converted to UTC using the row timezone offset.
       - name: device_timezone
@@ -124,73 +123,3 @@ models:
     columns:
       - name: entity_id
         tests: [not_null, unique]
-
-  - name: int_feature_funnel
-    description: >
-      Behaviour-level discovery funnel — links a home-page feature icon click
-      (Group 18) to an add from that feature's page (Group 10.5), per customer
-      per feature (Recommend / Promo / New / Backorder). No session container
-      exists, so this is a behaviour-level funnel (clicked feature X then added
-      from page X), not a strict within-session sequence.
-      Grain: customer_key x feature.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [customer_key, feature]
-    columns:
-      - name: customer_key
-        description: Unified customer key the funnel activity belongs to.
-        tests: [not_null]
-      - name: feature
-        description: Discovery feature — Recommend, Promo, New, or Backorder.
-        tests: [not_null]
-      - name: click_events
-        description: Count of feature icon-click events for this customer.
-      - name: add_events
-        description: Count of add-from-feature-page events for this customer.
-
-  - name: int_catalog_dwell
-    description: >
-      Catalog View analytics (19010000) parsed to one row per view event, with
-      the kv payload (category, visits_num, time) decoded and the category id
-      resolved via seed_categories. The only event family recording actual
-      time-on-page. Grain: one row per catalog-view event.
-    columns:
-      - name: entity_id
-        description: Primary key from the source event.
-        tests: [not_null, unique]
-      - name: category_id
-        description: Category id parsed from the kv payload.
-      - name: category_name
-        description: Category name resolved from seed_categories; null if unmapped.
-      - name: pages_viewed
-        description: visits_num from the payload — pages viewed in the category.
-      - name: dwell_seconds
-        description: time from the payload — seconds spent in the category.
-
-  - name: int_order_cycle
-    description: >
-      Keystone order grain — one row per increment_id x customer, reconstructed
-      exactly from order events that carry increment_id: open = Create Order
-      (09010000), close = any Group 04 submit success. days_to_close =
-      submitted_at - opened_at; a cycle with an open and no submit is pending.
-      Per-cycle cart-edit counts are NOT here (add/remove events carry no
-      increment_id — deferred). Empty until the extract contains Group 04/09.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [increment_id, customer_key]
-    columns:
-      - name: increment_id
-        description: Order increment id parsed from the order-event payload.
-        tests: [not_null]
-      - name: customer_key
-        description: Unified customer key the cycle belongs to.
-      - name: opened_at
-        description: Cycle open time (UTC) from the Create Order event.
-      - name: submitted_at
-        description: Cycle close time (UTC) from the first successful submit.
-      - name: is_submitted
-        description: True when the cycle has a successful submit.
-      - name: days_to_close
-        description: Days from opened_at to submitted_at; null if not submitted or no open.

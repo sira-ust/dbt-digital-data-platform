@@ -1,9 +1,15 @@
 -- int_events_decoded — the decode/parse layer for the system event log.
 -- Reads lossless staging (stg_mysql__system_event_log) and applies everything
 -- that is NOT a 1:1 source map: rename to analytics names, split the 8-digit
--- description_code into L1-L4, derive success/failure, convert device-local
--- event_time and server PST timestamps to UTC, parse the location string into
--- lat/lon, and decode the app source into actor_type + a unified customer_key.
+-- description_code into L1-L4, convert device-local event_time and server PST
+-- timestamps to UTC, parse the location string into lat/lon, and decode the app
+-- source into actor_type + a unified customer_key.
+--
+-- NOTE: success/failure is intentionally NOT derived here. The outcome marker
+-- sits at different segments by family (L4 for some, L3 for orders/location/
+-- downloads) and EVENT codes reuse '01' as a page variant — positional logic is
+-- wrong and dictionary-driven logic isn't this layer's job. The raw L1-L4 splits
+-- are passed through losslessly; a consumer applies correct outcome logic JIT.
 --
 -- This is the workhorse spine: int_events_enriched (dictionary + app-source
 -- join) and every downstream fact/mart read from here, never from staging.
@@ -41,8 +47,6 @@ select
     substr(description_code, 3, 2)                                      as l2_code,
     substr(description_code, 5, 2)                                      as l3_code,
     substr(description_code, 7, 2)                                      as l4_code,
-    substr(description_code, 7, 2) = '01'                               as is_success,
-    substr(description_code, 7, 2) = '02'                               as is_failure,
 
     -- ── timestamps ─────────────────────────────────────────────────────
     -- event_time is device LOCAL; convert to UTC via the row timezone offset.

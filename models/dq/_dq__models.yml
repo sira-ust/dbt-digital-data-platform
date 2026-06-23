@@ -18,3 +18,31 @@ models:
         description: Raw device-side event time string.
       - name: created_at
         description: Server write time (PST).
+
+  - name: dq_unmapped_event_codes
+    description: >
+      DQ audit of event codes seen in the data but missing from the event
+      dictionary (seed_event_codes). These are genuine app events (they pass the
+      source filter) whose description_code has no dictionary entry, so they get
+      null function_name / l1_category_name downstream. One row per unmapped code,
+      most frequent first. is_well_formed_code distinguishes true dictionary gaps
+      (8-digit codes to add to the seed) from malformed/junk codes. Used to keep
+      the dictionary in sync with the app's emitted codes.
+    columns:
+      - name: description_code
+        description: The unmapped event code as logged.
+        tests: [unique, not_null]
+      - name: is_well_formed_code
+        description: True for 8-digit numeric codes (real dictionary gaps); false for malformed/junk.
+      - name: l1_code
+        description: First two digits — the L1 family, resolvable even when the full code is unmapped.
+      - name: event_count
+        description: Number of events carrying this unmapped code.
+      - name: distinct_sources
+        description: Number of distinct app sources that emitted it.
+      - name: example_source
+        description: One source code that emitted it (for triage).
+      - name: first_seen_utc
+        description: Earliest server time the code appeared.
+      - name: last_seen_utc
+        description: Latest server time the code appeared.

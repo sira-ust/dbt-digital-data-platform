@@ -17,8 +17,12 @@
     {{ return(adapter.dispatch('parse_kv_response', 'ust_digital_platform')(column, key)) }}
 {%- endmacro %}
 
+{# space-tolerant: the order-submit payload has ", key:val" (space after comma)
+   while the catalog-view payload has "key:val,key:val" (no spaces). Optional
+   spaces around the comma/colon match both; trimming leaves no-space values
+   unchanged, so this stays backward-compatible with int_catalog_dwell. #}
 {% macro default__parse_kv_response(column, key) -%}
-    nullif(regexp_extract({{ column }}, '(^|,){{ key }}:([^,]*)', 2), '')
+    nullif(trim(regexp_extract({{ column }}, '(^|,) *{{ key }} *:([^,]*)', 2)), '')
 {%- endmacro %}
 
 

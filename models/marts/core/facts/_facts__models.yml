@@ -1,23 +1,81 @@
 version: 2
 
 models:
-  - name: fct_order_cycle
+  - name: fct_orders
     description: >
-      Published order-cycle fact — one row per increment_id x customer. Thin
-      BI-facing view over int_order_cycle (open = Create Order, close = Group 04
-      submit success). Consumed by mart_order_journey and BI drill-down. Empty
-      until the event-log extract contains Group 04/09 events.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [increment_id, customer_key]
+      Submitted-order fact — one row per Group 04 submit-success, keyed on the
+      M-prefixed increment_id parsed from the KV payload (latest wins on
+      resubmit). EXACT and self-contained: it does NOT join to Create Order (09)
+      because submit ids (M…) and create ids (032-…) are different ID spaces with
+      zero overlap, so order shopping-cycle / days-to-close is not reconstructable
+      from this source (see docs/event-log-dashboard-build-spec.md §0). Carries
+      order value + channel. Powers #1 Revenue/AOV and P1 order-volume.
     columns:
       - name: increment_id
-        description: Order increment id.
-        tests: [not_null]
+        description: Magento order increment id (M-prefixed), parsed from the submit payload.
+        tests: [unique, not_null]
       - name: customer_key
-        description: Unified customer key the cycle belongs to.
-      - name: is_submitted
-        description: True when the cycle has a successful submit.
-      - name: days_to_close
-        description: Days from open to submit; null if not submitted.
+        description: Unified customer key the order belongs to.
+      - name: actor_type
+        description: sales or customer, from the originating app source.
+      - name: source_code
+        description: App source code the submit event came from (PDA-A, Web, etc.).
+      - name: app_name
+        description: App the submit came from, from seed_app_sources.
+      - name: sales_code
+        description: Sales territory code, when a sales app facilitated the order.
+      - name: username
+        description: Login account that submitted (salesperson or customer account).
+      - name: submitted_at
+        description: Submit event time in UTC.
+        tests: [not_null]
+      - name: submitted_date
+        description: Calendar date of submitted_at.
+      - name: order_channel
+        description: >
+          Coarse channel from the payload order_source (WEB / APP / PDA),
+          upper-cased. Distinct from source_code.
+      - name: grand_total
+        description: Order grand total from the payload (double).
+      - name: subtotal
+        description: Order subtotal from the payload (double).
+      - name: freight_and_adj
+        description: grand_total - subtotal (freight, tax, and adjustments).
+      - name: total_item_count
+        description: Number of line items on the order, from the payload.
+
+  - name: fct_events
+    description: >
+      Published event-grain fact — the denormalised event spine. One row per
+      system_event_log record = int_events_enriched (decoded spine + event
+      dictionary + app-source registry) materialised for BI, plus the raw
+      payload. No payload-derived columns: per-family fields (cart sku/qty,
+      search query, viewed sku, catalog dwell, price overrides, feature titles)
+      are parsed just-in-time from `response` when a dashboard needs them, since
+      the payload is non-JSON and drifts by app version.
+    columns:
+      - name: entity_id
+        description: Primary key. One row per event.
+        tests: [unique, not_null]
+      - name: event_at_utc
+        description: Device event time converted to UTC.
+      - name: customer_key
+        description: Unified customer key (ust_customer_no on sales apps, username on customer apps).
+      - name: actor_type
+        description: sales or customer.
+      - name: source_code
+        description: App source code (PDA-A, Web, …).
+      - name: app_name
+        description: App the event came from, from seed_app_sources.
+      - name: app_platform
+        description: Device platform (iOS / Android / Web), from seed_app_sources.
+      - name: app_user_type
+        description: Sales or Customer app, from seed_app_sources.
+      - name: description_code
+        description: 8-digit hierarchical event code.
+      - name: l1_category_name
+        description: Event family name from seed_event_codes (denormalised).
+      - name: function_name
+        description: Specific event function name from seed_event_codes (denormalised).
+      - name: response
+        description: Raw payload string (non-JSON). Parsed per-family downstream when needed.
