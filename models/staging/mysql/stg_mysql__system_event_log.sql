@@ -78,7 +78,19 @@ numbered as (
     select
         *,
         row_number() over (
-            partition by entity_id
+            partition by
+                sales_code,
+                username,
+                ust_customer_no,
+                location,
+                timezone,
+                event_time,
+                source,
+                description_code,
+                response,
+                device_name,
+                nullif(trim(event_id), ''),  -- treat empty as null so blanks group together
+                version
             order by updated_at desc
         ) as _rn
     from typed
