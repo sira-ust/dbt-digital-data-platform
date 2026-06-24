@@ -72,7 +72,10 @@ select
     end                                                                 as actor_type,
     case
         when source in ('PDA-A', 'CatalogFS-I', 'CatalogFS-A')
-            then nullif(ust_customer_no, '')
+            then coalesce(
+                nullif(ust_customer_no, ''),
+                {{ parse_kv_response('response', 'ust_customer_no') }}
+            )
         else nullif(username, '')
     end                                                                 as customer_key,
 
