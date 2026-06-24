@@ -39,8 +39,8 @@ select
     e.*,
     c.function_name,
     c.l1_category_name,
-    c.payload_format as expected_payload_format,
-    c.has_geo as expects_geo,
+    c.payload_format                as expected_payload_format,
+    c.has_geo                       as expects_geo,
     c.is_system_event,
     c.event_type,
     c.log_level,
@@ -107,3 +107,10 @@ left join codes as c
     on e.description_code = c.description_code
 left join apps as a
     on e.source_code = a.source_code
+
+where e.sales_code not in ('001', '000')
+  and e.username not in (
+      'cndev', 'cndev2', 'emilyma', 'itadmin',
+      'jennifertov', 'michaelyap', 'patterklomjit', 'vincetov', 'Unlogged', 'SME001'
+  )
+  and e.event_at_utc is not null
