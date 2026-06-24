@@ -44,9 +44,9 @@ left join codes as c
 left join apps as a
     on e.source_code = a.source_code
 
-where e.sales_code not in ('001', '000')
+where e.sales_code not in ('000')
   and e.username not in (
-      'cndev', 'cndev2', 'emilyma', 'itadmin',
+      'cndev', 'Cndev', 'cndev2', 'emilyma', 'itadmin',
       'jennifertov', 'michaelyap', 'patterklomjit', 'vincetov', 'Unlogged', 'SME001'
   )
   and e.event_at_utc is not null
