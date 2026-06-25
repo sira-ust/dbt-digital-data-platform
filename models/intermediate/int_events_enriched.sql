@@ -33,6 +33,12 @@ apps as (
 
     select * from {{ ref('seed_app_sources') }}
 
+),
+
+system_accounts as (
+
+    select username from {{ ref('seed_system_accounts') }}
+
 )
 
 select
@@ -109,8 +115,5 @@ left join apps as a
     on e.source_code = a.source_code
 
 where e.sales_code not in ('000')
-  and e.username not in (
-      'cndev', 'Cndev', 'cndev2', 'emilyma', 'itadmin',
-      'jennifertov', 'michaelyap', 'patterklomjit', 'vincetov', 'Unlogged', 'SME001'
-  )
+  and (e.username is null or e.username not in (select username from system_accounts))
   and e.event_at_utc is not null
