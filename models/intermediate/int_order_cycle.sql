@@ -5,10 +5,13 @@
 --
 -- Create Order events (l1=09) carry a device-side local_id in the response;
 -- Send Order success events (l1=04, l3=01) carry the server-assigned
--- increment_id in the KV payload. The two ID spaces never overlap so direct
--- ID joins are impossible. Cycles are matched via temporal LEFT JOIN: for each
--- close, find the closest Create Order event that precedes it for the same
--- username + customer, then keep only 1:1 pairs via dual ROW_NUMBER.
+-- increment_id — in KV format for PDA/CatalogFS events, or bare value
+-- (e.g. "M000123456") for Vegas/CatalogFC events. payload_format from
+-- seed_event_codes drives which parse strategy is used.
+-- The two ID spaces never overlap so direct ID joins are impossible. Cycles
+-- are matched via temporal LEFT JOIN: for each close, find the closest Create
+-- Order event that precedes it for the same username + customer, then keep
+-- only 1:1 pairs via dual ROW_NUMBER.
 --
 -- Excludes 09060000 (BLE use-existing) and 09070000 (BLE merge).
 
@@ -41,7 +44,11 @@ send_events as (
         username,
         customer_key,
         event_at_utc,
-        {{ parse_kv_response('response', 'increment_id') }}            as increment_id
+        case
+            when expected_payload_format = 'kv'
+                then {{ parse_kv_response('response', 'increment_id') }}
+            else nullif(trim(regexp_extract(response, '([A-Z][0-9]{9})', 1)), '')
+        end                                                             as increment_id
     from events
     where l1_category_name = 'Send Order'
       and l3_code = '01'

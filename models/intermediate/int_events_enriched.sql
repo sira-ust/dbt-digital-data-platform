@@ -3,7 +3,7 @@
 --
 -- Reads the decoded spine (int_events_decoded); decoding/parsing lives there,
 -- this model adds the dictionary + app-source joins and applies quality filters:
--- sales_code/username exclusions and event_at_utc not null.
+-- sales_code exclusion, username exclusion via seed_system_accounts, event_at_utc not null.
 -- Foundation for analytics: per-family int_* parsers and fct_* facts select
 -- from here. Aggregations belong in mart_* (not in intermediate).
 
@@ -22,6 +22,12 @@ codes as (
 apps as (
 
     select * from {{ ref('seed_app_sources') }}
+
+),
+
+system_accounts as (
+
+    select username from {{ ref('seed_system_accounts') }}
 
 )
 
@@ -45,8 +51,5 @@ left join apps as a
     on e.source_code = a.source_code
 
 where e.sales_code not in ('000')
-  and e.username not in (
-      'cndev', 'Cndev', 'cndev2', 'emilyma', 'itadmin',
-      'jennifertov', 'michaelyap', 'patterklomjit', 'vincetov', 'Unlogged', 'SME001'
-  )
+  and (e.username is null or e.username not in (select username from system_accounts))
   and e.event_at_utc is not null
