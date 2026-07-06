@@ -1,0 +1,1724 @@
+version: 2
+
+sources:
+  - name: jdawms
+    description: >
+      JDA / Blue Yonder WMS (jdawmsrep) replication feed, landed into Unity Catalog
+      catalog ust_databricks, schema jdawmsrep, via Azure Blob ingestion. All tables
+      are READ-ONLY. `loaddate` is the ingestion watermark. Databricks-only source:
+      there is no local DuckDB sample, so jdawms staging is gated to the databricks target.
+    database: ust_databricks
+    schema: jdawmsrep
+    config:
+      tags: ["raw", "jdawms", "wms"]
+      meta:
+        access: read_only
+        source_system: jdawms
+        doc_status: ai_generated   # column descriptions AI-inferred; pending SME verification
+    tables:
+      - name: dlytrn
+        description: "Daily inventory transaction log — one row per stock movement/adjustment (receipt, pick, putaway, transfer). The WMS activity ledger."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: dlytrn_id
+            description: "Primary key — unique id of the daily transaction."
+          - name: trndte
+            description: "Transaction date/time."
+          - name: oprcod
+            description: "Operation code — high-level operation (receive, pick, adjust, move)."
+          - name: actcod
+            description: "Activity code — specific activity within the operation."
+          - name: lodnum
+            description: "License-plate / load (LPN) number."
+          - name: subnum
+            description: "Sub (carton/case) number nested within a load."
+          - name: dtlnum
+            description: "Inventory detail number (innermost unit)."
+          - name: to_lodnum
+            description: "Code/identifier: to_lodnum."
+          - name: to_subnum
+            description: "Code/identifier: to_subnum."
+          - name: to_dtlnum
+            description: "Code/identifier: to_dtlnum."
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: orgcod
+            description: "Country/origin code of the goods."
+          - name: revlvl
+            description: "Revision level of the part."
+          - name: lotnum
+            description: "Lot/batch number."
+          - name: sup_lotnum
+            description: "Supplier lot number."
+          - name: supnum
+            description: "Supplier number."
+          - name: inv_attr_str1
+            description: "User-defined inventory string attribute 1 (inv_attr_str1)."
+          - name: inv_attr_str2
+            description: "User-defined inventory string attribute 2 (inv_attr_str2)."
+          - name: inv_attr_str3
+            description: "User-defined inventory string attribute 3 (inv_attr_str3)."
+          - name: inv_attr_str4
+            description: "User-defined inventory string attribute 4 (inv_attr_str4)."
+          - name: inv_attr_str5
+            description: "User-defined inventory string attribute 5 (inv_attr_str5)."
+          - name: inv_attr_str6
+            description: "User-defined inventory string attribute 6 (inv_attr_str6)."
+          - name: inv_attr_str7
+            description: "User-defined inventory string attribute 7 (inv_attr_str7)."
+          - name: inv_attr_str8
+            description: "User-defined inventory string attribute 8 (inv_attr_str8)."
+          - name: inv_attr_str9
+            description: "User-defined inventory string attribute 9 (inv_attr_str9)."
+          - name: inv_attr_str10
+            description: "User-defined inventory string attribute 0 (inv_attr_str10)."
+          - name: inv_attr_str11
+            description: "User-defined inventory string attribute 1 (inv_attr_str11)."
+          - name: inv_attr_str12
+            description: "User-defined inventory string attribute 2 (inv_attr_str12)."
+          - name: inv_attr_str13
+            description: "User-defined inventory string attribute 3 (inv_attr_str13)."
+          - name: inv_attr_str14
+            description: "User-defined inventory string attribute 4 (inv_attr_str14)."
+          - name: inv_attr_str15
+            description: "User-defined inventory string attribute 5 (inv_attr_str15)."
+          - name: inv_attr_str16
+            description: "User-defined inventory string attribute 6 (inv_attr_str16)."
+          - name: inv_attr_str17
+            description: "User-defined inventory string attribute 7 (inv_attr_str17)."
+          - name: inv_attr_str18
+            description: "User-defined inventory string attribute 8 (inv_attr_str18)."
+          - name: inv_attr_int1
+            description: "User-defined inventory attribute: inv_attr_int1."
+          - name: inv_attr_int2
+            description: "User-defined inventory attribute: inv_attr_int2."
+          - name: inv_attr_int3
+            description: "User-defined inventory attribute: inv_attr_int3."
+          - name: inv_attr_int4
+            description: "User-defined inventory attribute: inv_attr_int4."
+          - name: inv_attr_int5
+            description: "User-defined inventory attribute: inv_attr_int5."
+          - name: inv_attr_flt1
+            description: "User-defined inventory attribute: inv_attr_flt1."
+          - name: inv_attr_flt2
+            description: "User-defined inventory attribute: inv_attr_flt2."
+          - name: inv_attr_flt3
+            description: "User-defined inventory attribute: inv_attr_flt3."
+          - name: inv_attr_dte1
+            description: "User-defined inventory attribute: inv_attr_dte1."
+          - name: inv_attr_dte2
+            description: "User-defined inventory attribute: inv_attr_dte2."
+          - name: movref
+            description: "Movement reference linking related transactions."
+          - name: reacod
+            description: "Reason code for the transaction/adjustment."
+          - name: trnqty
+            description: "Transaction quantity (signed by movement direction)."
+          - name: catch_qty
+            description: "Catch weight/quantity (variable-weight items)."
+          - name: traknm
+            description: "WMS traknm attribute."
+          - name: catch_unttyp
+            description: "WMS catch_unttyp attribute."
+          - name: fr_arecod
+            description: "From area code (source of the move)."
+          - name: frstol
+            description: "From storage location."
+          - name: frinvs
+            description: "From inventory status."
+          - name: fr_age_pflnam
+            description: "WMS fr_age_pflnam attribute."
+          - name: to_arecod
+            description: "To area code (destination of the move)."
+          - name: tostol
+            description: "To storage location."
+          - name: toinvs
+            description: "To inventory status."
+          - name: to_age_pflnam
+            description: "WMS to_age_pflnam attribute."
+          - name: trlr_num
+            description: "Code/identifier: trlr_num."
+          - name: trct_num
+            description: "Code/identifier: trct_num."
+          - name: carcod
+            description: "Carrier code."
+          - name: ship_id
+            description: "Shipment identifier."
+          - name: client_id
+            description: "Client/owner id for the record (multi-client warehouse partitioning)."
+          - name: ordnum
+            description: "Order number."
+          - name: trndtl_id
+            description: "Code/identifier: trndtl_id."
+          - name: trndtl_table
+            description: "WMS trndtl_table attribute."
+          - name: adj_ref1
+            description: "WMS adj_ref1 attribute."
+          - name: adj_ref2
+            description: "WMS adj_ref2 attribute."
+          - name: usr_id
+            description: "User who performed the transaction."
+          - name: devcod
+            description: "Device code that performed/recorded the activity."
+          - name: arcdte
+            description: "Date/time field: arcdte."
+          - name: arc_src
+            description: "WMS arc_src attribute."
+          - name: cmnt
+            description: "WMS cmnt attribute."
+          - name: asset_typ
+            description: "Material-handling asset type (e.g. pallet, tote)."
+          - name: asset_id
+            description: "Code/identifier: asset_id."
+          - name: asset_stat
+            description: "WMS asset_stat attribute."
+          - name: load_attr1_flg
+            description: "Flag (0/1): load_attr1_flg."
+          - name: load_attr2_flg
+            description: "Flag (0/1): load_attr2_flg."
+          - name: load_attr3_flg
+            description: "Flag (0/1): load_attr3_flg."
+          - name: load_attr4_flg
+            description: "Flag (0/1): load_attr4_flg."
+          - name: load_attr5_flg
+            description: "Flag (0/1): load_attr5_flg."
+          - name: var_nam
+            description: "WMS var_nam attribute."
+          - name: fr_value
+            description: "WMS fr_value attribute."
+          - name: to_value
+            description: "WMS to_value attribute."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: uomcod
+            description: "Unit-of-measure code."
+          - name: ftpcod
+            description: "Fetch/pack-type code — packaging configuration key for the part."
+          - name: distro_excp_id
+            description: "Code/identifier: distro_excp_id."
+          - name: excp_code
+            description: "WMS excp_code attribute."
+          - name: expqty
+            description: "Quantity field: expqty."
+          - name: rptqty
+            description: "Quantity field: rptqty."
+          - name: u_version
+            description: "Optimistic-lock version counter maintained by the WMS."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: to_trct_num
+            description: "Code/identifier: to_trct_num."
+          - name: to_trlr_num
+            description: "Code/identifier: to_trlr_num."
+          - name: to_carcod
+            description: "Code/identifier: to_carcod."
+          - name: srvlvl
+            description: "Carrier service level."
+          - name: to_srvlvl
+            description: "WMS to_srvlvl attribute."
+          - name: rowid
+            description: "Source database internal row identifier."
+          - name: _rescued_data
+            description: "Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: inv_snap
+        description: "Inventory snapshot per part — point-in-time on-hand/shippable/ordered quantity rollup generated by a snapshot job."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: inv_snap_id
+            description: "Primary key — snapshot row id."
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: gendte
+            description: "Generation timestamp of the snapshot/record."
+          - name: rcvqty
+            description: "Received quantity since prior snapshot."
+          - name: shpqty
+            description: "Shipped quantity since prior snapshot."
+          - name: adjqty
+            description: "Adjusted quantity since prior snapshot."
+          - name: wko_cnsqty
+            description: "Quantity field: wko_cnsqty."
+          - name: wko_rcvqty
+            description: "Quantity field: wko_rcvqty."
+          - name: on_hand_qty
+            description: "On-hand quantity at snapshot time."
+          - name: shippable_qty
+            description: "Shippable (available) quantity at snapshot time."
+          - name: ordered_qty
+            description: "Ordered quantity outstanding at snapshot time."
+          - name: planned_qty
+            description: "Planned quantity at snapshot time."
+          - name: wko_ordered_qty
+            description: "Quantity field: wko_ordered_qty."
+          - name: pnd_rcvqty
+            description: "Quantity field: pnd_rcvqty."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: snap_gen_num
+            description: "Snapshot generation number."
+          - name: moddte
+            description: "Last-modified timestamp in the source WMS."
+          - name: mod_usr_id
+            description: "User/process that last modified the row in the WMS."
+          - name: u_version
+            description: "Optimistic-lock version counter maintained by the WMS."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: rowid
+            description: "Source database internal row identifier."
+          - name: _rescued_data
+            description: "Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: invdtl
+        description: "Inventory detail — stock at the innermost unit (detail) level: quantity, status, dates, and its parent sub/load."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: dtlnum
+            description: "Inventory detail number (innermost unit)."
+          - name: subnum
+            description: "Sub (carton/case) number nested within a load."
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: invsts
+            description: "Inventory status code (e.g. available, hold, damaged)."
+          - name: fifdte
+            description: "FIFO date used for stock rotation."
+          - name: expire_dte
+            description: "Expiration date of the stock."
+          - name: untqty
+            description: "Quantity in stock/base units."
+          - name: untcas
+            description: "Units per case."
+          - name: untpak
+            description: "Units per pack/inner."
+          - name: ftpcod
+            description: "Fetch/pack-type code — packaging configuration key for the part."
+          - name: rcvkey
+            description: "WMS rcvkey attribute."
+          - name: ship_line_id
+            description: "Shipment line identifier."
+          - name: wrkref
+            description: "Pick-work reference (task) identifier."
+          - name: wrkref_dtl
+            description: "Pick-work detail (task line) identifier."
+          - name: adddte
+            description: "Timestamp the record was created/added."
+          - name: rcvdte
+            description: "Received date of the detail."
+          - name: lstmov
+            description: "Timestamp of the last movement of this unit."
+          - name: lstdte
+            description: "Timestamp of the last activity against this record."
+          - name: lstcod
+            description: "Code describing the last activity/movement type."
+          - name: lst_usr_id
+            description: "User associated with the last activity."
+          - name: alcflg
+            description: "Allocated flag (1 = allocated to demand)."
+          - name: catch_qty
+            description: "Catch weight/quantity (variable-weight items)."
+          - name: lst_mov_zone_id
+            description: "Code/identifier: lst_mov_zone_id."
+          - name: hld_flg
+            description: "Hold flag (1 = on hold)."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: invlod
+        description: "Inventory load (LPN/pallet) — the top-level license-plate unit stored in a location."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: lodnum
+            description: "License-plate / load (LPN) number."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: stoloc
+            description: "Storage location (slot) code."
+          - name: lodwgt
+            description: "Weight field: lodwgt."
+          - name: prmflg
+            description: "Flag (0/1): prmflg."
+          - name: unkflg
+            description: "Flag (0/1): unkflg."
+          - name: mvlflg
+            description: "Flag (0/1): mvlflg."
+          - name: adddte
+            description: "Timestamp the record was created/added."
+          - name: lstmov
+            description: "Timestamp of the last movement of this unit."
+          - name: lstdte
+            description: "Timestamp of the last activity against this record."
+          - name: lstcod
+            description: "Code describing the last activity/movement type."
+          - name: lst_usr_id
+            description: "User associated with the last activity."
+          - name: loducc
+            description: "WMS loducc attribute."
+          - name: uccdte
+            description: "Date/time field: uccdte."
+          - name: palpos
+            description: "WMS palpos attribute."
+          - name: asset_typ
+            description: "Material-handling asset type (e.g. pallet, tote)."
+          - name: avg_unt_catch_qty
+            description: "Quantity field: avg_unt_catch_qty."
+          - name: u_version
+            description: "Optimistic-lock version counter maintained by the WMS."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: lodtag
+            description: "WMS lodtag attribute."
+          - name: lod_tagsts
+            description: "WMS lod_tagsts attribute."
+          - name: lodhgt
+            description: "WMS lodhgt attribute."
+          - name: bundled_flg
+            description: "Flag (0/1): bundled_flg."
+          - name: distro_palopn_flg
+            description: "Flag (0/1): distro_palopn_flg."
+          - name: load_attr1_flg
+            description: "Flag (0/1): load_attr1_flg."
+          - name: load_attr2_flg
+            description: "Flag (0/1): load_attr2_flg."
+          - name: load_attr3_flg
+            description: "Flag (0/1): load_attr3_flg."
+          - name: load_attr4_flg
+            description: "Flag (0/1): load_attr4_flg."
+          - name: load_attr5_flg
+            description: "Flag (0/1): load_attr5_flg."
+          - name: no_loc_putaway
+            description: "WMS no_loc_putaway attribute."
+          - name: completed_receiving_date
+            description: "Date/time field: completed_receiving_date."
+          - name: est_time
+            description: "Estimated task time (system-computed)."
+          - name: lodlen
+            description: "WMS lodlen attribute."
+          - name: lodwdt
+            description: "WMS lodwdt attribute."
+          - name: no_of_boxes
+            description: "WMS no_of_boxes attribute."
+          - name: est_lodwgt
+            description: "Weight field: est_lodwgt."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: invsub
+        description: "Inventory sub (carton/case) — the intermediate unit nested inside a load and containing details."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: subnum
+            description: "Sub (carton/case) number nested within a load."
+          - name: lodnum
+            description: "License-plate / load (LPN) number."
+          - name: subwgt
+            description: "Weight field: subwgt."
+          - name: prmflg
+            description: "Flag (0/1): prmflg."
+          - name: phyflg
+            description: "Flag (0/1): phyflg."
+          - name: mvsflg
+            description: "Flag (0/1): mvsflg."
+          - name: ctnflg
+            description: "Flag (0/1): ctnflg."
+          - name: idmflg
+            description: "Flag (0/1): idmflg."
+          - name: distro_ctnopn_flg
+            description: "Flag (0/1): distro_ctnopn_flg."
+          - name: wrkref
+            description: "Pick-work reference (task) identifier."
+          - name: tagdev
+            description: "WMS tagdev attribute."
+          - name: adddte
+            description: "Timestamp the record was created/added."
+          - name: lstmov
+            description: "Timestamp of the last movement of this unit."
+          - name: lstdte
+            description: "Timestamp of the last activity against this record."
+          - name: lstcod
+            description: "Code describing the last activity/movement type."
+          - name: lst_usr_id
+            description: "User associated with the last activity."
+          - name: subucc
+            description: "WMS subucc attribute."
+          - name: uccdte
+            description: "Date/time field: uccdte."
+          - name: subtag
+            description: "WMS subtag attribute."
+          - name: sub_tagsts
+            description: "WMS sub_tagsts attribute."
+          - name: asset_typ
+            description: "Material-handling asset type (e.g. pallet, tote)."
+          - name: est_subwgt
+            description: "Weight field: est_subwgt."
+          - name: u_version
+            description: "Optimistic-lock version counter maintained by the WMS."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: invsum
+        description: "Inventory summary — aggregated on-hand quantity per storage location, part, and status."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: stoloc
+            description: "Storage location (slot) code."
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: arecod
+            description: "Area code — logical warehouse area/zone the location belongs to."
+          - name: invsts
+            description: "Inventory status code (e.g. available, hold, damaged)."
+          - name: untpak
+            description: "Units per pack/inner."
+          - name: untcas
+            description: "Units per case."
+          - name: untpal
+            description: "Units per pallet."
+          - name: untqty
+            description: "Quantity in stock/base units."
+          - name: comqty
+            description: "Committed quantity (allocated)."
+          - name: pndqty
+            description: "Pending quantity (inbound not yet available)."
+          - name: com_catch_qty
+            description: "Quantity field: com_catch_qty."
+          - name: catch_qty
+            description: "Catch weight/quantity (variable-weight items)."
+          - name: olddte
+            description: "Date/time field: olddte."
+          - name: newdte
+            description: "Date/time field: newdte."
+          - name: old_expire_dte
+            description: "Date/time field: old_expire_dte."
+          - name: new_expire_dte
+            description: "Date/time field: new_expire_dte."
+          - name: old_inv_attr_dte1
+            description: "WMS old_inv_attr_dte1 attribute."
+          - name: new_inv_attr_dte1
+            description: "WMS new_inv_attr_dte1 attribute."
+          - name: old_inv_attr_dte2
+            description: "WMS old_inv_attr_dte2 attribute."
+          - name: new_inv_attr_dte2
+            description: "WMS new_inv_attr_dte2 attribute."
+          - name: u_version
+            description: "Optimistic-lock version counter maintained by the WMS."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: rowid
+            description: "Source database internal row identifier."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: locmst
+        description: "Location master — every storage location (slot) in the warehouse with its area, dimensions, and control flags."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: stoloc
+            description: "Storage location (slot) code."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: arecod
+            description: "Area code — logical warehouse area/zone the location belongs to."
+          - name: loccod
+            description: "Location type/usage code."
+          - name: locsts
+            description: "Location status code."
+          - name: velzon
+            description: "Velocity zone."
+          - name: aisle_id
+            description: "Aisle identifier."
+          - name: trvseq
+            description: "WMS trvseq attribute."
+          - name: sto_seq
+            description: "WMS sto_seq attribute."
+          - name: rescod
+            description: "Code/identifier: rescod."
+          - name: bay
+            description: "Bay identifier within the aisle."
+          - name: lvl
+            description: "Level (shelf height) within the bay."
+          - name: locpos
+            description: "WMS locpos attribute."
+          - name: lochgt
+            description: "WMS lochgt attribute."
+          - name: loclen
+            description: "WMS loclen attribute."
+          - name: locwid
+            description: "Code/identifier: locwid."
+          - name: dck_acc_cod
+            description: "Code/identifier: dck_acc_cod."
+          - name: locvrc
+            description: "WMS locvrc attribute."
+          - name: maxqvl
+            description: "Maximum capacity value of the location."
+          - name: curqvl
+            description: "Current occupancy value of the location."
+          - name: pndqvl
+            description: "Pending (inbound) occupancy value."
+          - name: trfpct
+            description: "WMS trfpct attribute."
+          - name: erfpct
+            description: "WMS erfpct attribute."
+          - name: esc_type
+            description: "WMS esc_type attribute."
+          - name: esc_thr
+            description: "WMS esc_thr attribute."
+          - name: useflg
+            description: "Flag (0/1): useflg."
+          - name: stoflg
+            description: "Flag (0/1): stoflg."
+          - name: pckflg
+            description: "Flag (0/1): pckflg."
+          - name: repflg
+            description: "Flag (0/1): repflg."
+          - name: asgflg
+            description: "Flag (0/1): asgflg."
+          - name: cipflg
+            description: "Flag (0/1): cipflg."
+          - name: cntseq
+            description: "WMS cntseq attribute."
+          - name: numcnt
+            description: "WMS numcnt attribute."
+          - name: abccod
+            description: "ABC velocity classification code."
+          - name: cntdte
+            description: "Date/time field: cntdte."
+          - name: devcod
+            description: "Device code that performed/recorded the activity."
+          - name: lokcod
+            description: "Code/identifier: lokcod."
+          - name: locacc
+            description: "WMS locacc attribute."
+          - name: voc_chkdgt
+            description: "WMS voc_chkdgt attribute."
+          - name: voc_chkdgt_2
+            description: "WMS voc_chkdgt_2 attribute."
+          - name: voc_chkdgt_3
+            description: "WMS voc_chkdgt_3 attribute."
+          - name: lstdte
+            description: "Timestamp of the last activity against this record."
+          - name: lstcod
+            description: "Code describing the last activity/movement type."
+          - name: lst_usr_id
+            description: "User associated with the last activity."
+          - name: slotseq
+            description: "WMS slotseq attribute."
+          - name: perm_asgflg
+            description: "Flag (0/1): perm_asgflg."
+          - name: cnt_zone_id
+            description: "Code/identifier: cnt_zone_id."
+          - name: pck_zone_id
+            description: "Code/identifier: pck_zone_id."
+          - name: sto_zone_id
+            description: "Code/identifier: sto_zone_id."
+          - name: mov_zone_id
+            description: "Movement zone identifier."
+          - name: wrk_zone_id
+            description: "Code/identifier: wrk_zone_id."
+          - name: loc_typ_id
+            description: "Code/identifier: loc_typ_id."
+          - name: of_lvl_unit
+            description: "WMS of_lvl_unit attribute."
+          - name: section
+            description: "WMS section attribute."
+          - name: x
+            description: "WMS x attribute."
+          - name: y
+            description: "WMS y attribute."
+          - name: z
+            description: "WMS z attribute."
+          - name: attr1
+            description: "User-defined attribute: attr1."
+          - name: attr2
+            description: "User-defined attribute: attr2."
+          - name: attr3
+            description: "User-defined attribute: attr3."
+          - name: attr4
+            description: "User-defined attribute: attr4."
+          - name: attr5
+            description: "User-defined attribute: attr5."
+          - name: basepoint_id
+            description: "Code/identifier: basepoint_id."
+          - name: top_left_x
+            description: "WMS top_left_x attribute."
+          - name: top_left_y
+            description: "WMS top_left_y attribute."
+          - name: top_right_x
+            description: "WMS top_right_x attribute."
+          - name: top_right_y
+            description: "WMS top_right_y attribute."
+          - name: bottom_left_x
+            description: "WMS bottom_left_x attribute."
+          - name: bottom_left_y
+            description: "WMS bottom_left_y attribute."
+          - name: bottom_right_x
+            description: "WMS bottom_right_x attribute."
+          - name: bottom_right_y
+            description: "WMS bottom_right_y attribute."
+          - name: border_pad
+            description: "WMS border_pad attribute."
+          - name: auto_mov_flg
+            description: "Flag (0/1): auto_mov_flg."
+          - name: slot_id
+            description: "Code/identifier: slot_id."
+          - name: def_maxqvl
+            description: "WMS def_maxqvl attribute."
+          - name: u_version
+            description: "Optimistic-lock version counter maintained by the WMS."
+          - name: ateseq
+            description: "WMS ateseq attribute."
+          - name: atedte
+            description: "Date/time field: atedte."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: cntbck_ena_flg
+            description: "Flag (0/1): cntbck_ena_flg."
+          - name: prdlin
+            description: "WMS prdlin attribute."
+          - name: stgloc
+            description: "WMS stgloc attribute."
+          - name: rcv_rescod
+            description: "Code/identifier: rcv_rescod."
+          - name: pal_stck_rst
+            description: "WMS pal_stck_rst attribute."
+          - name: maxwgt
+            description: "Weight field: maxwgt."
+          - name: lvl_typ_id
+            description: "Code/identifier: lvl_typ_id."
+          - name: billing_flg
+            description: "Flag (0/1): billing_flg."
+          - name: prtadr
+            description: "WMS prtadr attribute."
+          - name: lbl_prtadr
+            description: "WMS lbl_prtadr attribute."
+          - name: min_lvl_unit
+            description: "WMS min_lvl_unit attribute."
+          - name: max_lvl_unit
+            description: "WMS max_lvl_unit attribute."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: pckwrk_dtl
+        description: "Pick work detail — line-level pick tasks: source detail, quantities, destination, and order linkage."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: wrkref_dtl
+            description: "Pick-work detail (task line) identifier."
+          - name: wrkref
+            description: "Pick-work reference (task) identifier."
+          - name: cmbcod
+            description: "Code/identifier: cmbcod."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: client_id
+            description: "Client/owner id for the record (multi-client warehouse partitioning)."
+          - name: dstloc
+            description: "Destination location for the picked stock."
+          - name: dst_mov_zone_id
+            description: "Code/identifier: dst_mov_zone_id."
+          - name: ship_line_id
+            description: "Shipment line identifier."
+          - name: ship_id
+            description: "Shipment identifier."
+          - name: ordnum
+            description: "Order number."
+          - name: ordlin
+            description: "Order line number."
+          - name: ordsln
+            description: "Order sub-line number."
+          - name: stcust
+            description: "WMS stcust attribute."
+          - name: rtcust
+            description: "WMS rtcust attribute."
+          - name: concod
+            description: "Code/identifier: concod."
+          - name: pckqty
+            description: "Picked quantity (planned to pick)."
+          - name: pck_catch_qty
+            description: "Picked catch weight/quantity."
+          - name: appqty
+            description: "Applied/confirmed quantity."
+          - name: app_catch_qty
+            description: "Quantity field: app_catch_qty."
+          - name: lodlvl
+            description: "Load level indicator."
+          - name: ship_ctncod
+            description: "Code/identifier: ship_ctncod."
+          - name: ship_ctnnum
+            description: "Code/identifier: ship_ctnnum."
+          - name: wkonum
+            description: "Code/identifier: wkonum."
+          - name: wkorev
+            description: "WMS wkorev attribute."
+          - name: wkolin
+            description: "WMS wkolin attribute."
+          - name: seqnum
+            description: "Sequence number."
+          - name: subnum
+            description: "Sub (carton/case) number nested within a load."
+          - name: dtlnum
+            description: "Inventory detail number (innermost unit)."
+          - name: subucc
+            description: "WMS subucc attribute."
+          - name: subtag
+            description: "WMS subtag attribute."
+          - name: cur_cas
+            description: "WMS cur_cas attribute."
+          - name: tot_cas_cnt
+            description: "WMS tot_cas_cnt attribute."
+          - name: prtdte
+            description: "Date/time field: prtdte."
+          - name: bto_seqnum
+            description: "Code/identifier: bto_seqnum."
+          - name: slot
+            description: "WMS slot attribute."
+          - name: bto_dlv_seq
+            description: "WMS bto_dlv_seq attribute."
+          - name: lm_assign_num
+            description: "Code/identifier: lm_assign_num."
+          - name: lm_assign_seqnum
+            description: "Code/identifier: lm_assign_seqnum."
+          - name: pm_err_cod
+            description: "Code/identifier: pm_err_cod."
+          - name: pm_err_desc
+            description: "WMS pm_err_desc attribute."
+          - name: ctnerr_flg
+            description: "Flag (0/1): ctnerr_flg."
+          - name: res_uom
+            description: "WMS res_uom attribute."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: rowid
+            description: "Source database internal row identifier."
+          - name: schbat
+            description: "Scheduled batch / wave identifier."
+          - name: untcas
+            description: "Units per case."
+          - name: wrktyp
+            description: "Work type code."
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: pckwrk_hdr
+        description: "Pick work header — one row per pick task/directive with status, part, quantities, and staging attributes."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: wrkref
+            description: "Pick-work reference (task) identifier."
+          - name: wrktyp
+            description: "Work type code."
+          - name: schbat
+            description: "Scheduled batch / wave identifier."
+          - name: srcloc
+            description: "Source location for the pick."
+          - name: srcare
+            description: "WMS srcare attribute."
+          - name: client_id
+            description: "Client/owner id for the record (multi-client warehouse partitioning)."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: lblbat
+            description: "WMS lblbat attribute."
+          - name: lblseq
+            description: "WMS lblseq attribute."
+          - name: devcod
+            description: "Device code that performed/recorded the activity."
+          - name: oprcod
+            description: "Code/identifier: oprcod."
+          - name: pck_mthd_id
+            description: "Code/identifier: pck_mthd_id."
+          - name: pckqty
+            description: "Picked quantity (planned to pick)."
+          - name: pck_catch_qty
+            description: "Quantity field: pck_catch_qty."
+          - name: appqty
+            description: "Applied/confirmed quantity."
+          - name: app_catch_qty
+            description: "Quantity field: app_catch_qty."
+          - name: pcksts
+            description: "Pick status code (open, in-progress, completed)."
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: orgcod
+            description: "Country/origin code of the goods."
+          - name: revlvl
+            description: "Revision level of the part."
+          - name: lotnum
+            description: "Lot/batch number."
+          - name: asset_slot
+            description: "WMS asset_slot attribute."
+          - name: sup_lotnum
+            description: "Supplier lot number."
+          - name: invsts
+            description: "Inventory status code (e.g. available, hold, damaged)."
+          - name: invsts_prg
+            description: "WMS invsts_prg attribute."
+          - name: lodlvl
+            description: "Load level indicator."
+          - name: loducc
+            description: "WMS loducc attribute."
+          - name: lodtag
+            description: "WMS lodtag attribute."
+          - name: lodnum
+            description: "License-plate / load (LPN) number."
+          - name: untcas
+            description: "Units per case."
+          - name: untpak
+            description: "Units per pack/inner."
+          - name: ftpcod
+            description: "Fetch/pack-type code — packaging configuration key for the part."
+          - name: ctncod
+            description: "Code/identifier: ctncod."
+          - name: ctnnum
+            description: "Code/identifier: ctnnum."
+          - name: ctnseg
+            description: "WMS ctnseg attribute."
+          - name: pos_id
+            description: "Code/identifier: pos_id."
+          - name: visflg
+            description: "Flag (0/1): visflg."
+          - name: splflg
+            description: "Flag (0/1): splflg."
+          - name: locflg
+            description: "Flag (0/1): locflg."
+          - name: lodflg
+            description: "Flag (0/1): lodflg."
+          - name: subflg
+            description: "Flag (0/1): subflg."
+          - name: dtlflg
+            description: "Flag (0/1): dtlflg."
+          - name: prtflg
+            description: "Flag (0/1): prtflg."
+          - name: orgflg
+            description: "Flag (0/1): orgflg."
+          - name: revflg
+            description: "Flag (0/1): revflg."
+          - name: lotflg
+            description: "Flag (0/1): lotflg."
+          - name: sup_lot_flg
+            description: "Flag (0/1): sup_lot_flg."
+          - name: qtyflg
+            description: "Flag (0/1): qtyflg."
+          - name: catch_qty_flg
+            description: "Flag (0/1): catch_qty_flg."
+          - name: adddte
+            description: "Timestamp the record was created/added."
+          - name: pckdte
+            description: "Pick timestamp."
+          - name: cmpdte
+            description: "Pick completion timestamp."
+          - name: refloc
+            description: "Reference location."
+          - name: ackdevcod
+            description: "Code/identifier: ackdevcod."
+          - name: pipflg
+            description: "Flag (0/1): pipflg."
+          - name: frsflg
+            description: "Flag (0/1): frsflg."
+          - name: clst_seq
+            description: "WMS clst_seq attribute."
+          - name: min_shelf_hrs
+            description: "WMS min_shelf_hrs attribute."
+          - name: prtdte
+            description: "Date/time field: prtdte."
+          - name: list_grp_id
+            description: "Code/identifier: list_grp_id."
+          - name: list_id
+            description: "Code/identifier: list_id."
+          - name: list_seqnum
+            description: "Code/identifier: list_seqnum."
+          - name: est_time
+            description: "Estimated task time (system-computed)."
+          - name: lm_assign_num
+            description: "Code/identifier: lm_assign_num."
+          - name: lm_assign_seqnum
+            description: "Code/identifier: lm_assign_seqnum."
+          - name: skip_cnt
+            description: "WMS skip_cnt attribute."
+          - name: pallet_pos
+            description: "WMS pallet_pos attribute."
+          - name: pallet_id
+            description: "Code/identifier: pallet_id."
+          - name: pallet_load_seq
+            description: "WMS pallet_load_seq attribute."
+          - name: rttn_id
+            description: "Code/identifier: rttn_id."
+          - name: rttn_id_flg
+            description: "Flag (0/1): rttn_id_flg."
+          - name: unassign_flg
+            description: "Flag (0/1): unassign_flg."
+          - name: asset_typ
+            description: "Material-handling asset type (e.g. pallet, tote)."
+          - name: supnum
+            description: "Supplier number."
+          - name: supflg
+            description: "Flag (0/1): supflg."
+          - name: unique_pallet_id
+            description: "Code/identifier: unique_pallet_id."
+          - name: palctlsts
+            description: "WMS palctlsts attribute."
+          - name: start_pal_flg
+            description: "Flag (0/1): start_pal_flg."
+          - name: list_conf_flg
+            description: "Flag (0/1): list_conf_flg."
+          - name: pck_uom
+            description: "WMS pck_uom attribute."
+          - name: assign_grp
+            description: "WMS assign_grp attribute."
+          - name: lock_flg
+            description: "Flag (0/1): lock_flg."
+          - name: abs_ordinv_dte
+            description: "Date/time field: abs_ordinv_dte."
+          - name: thresh_pck_flg
+            description: "Flag (0/1): thresh_pck_flg."
+          - name: pck_to_id
+            description: "Code/identifier: pck_to_id."
+          - name: last_pck_usr_id
+            description: "Code/identifier: last_pck_usr_id."
+          - name: sp_hand_flg
+            description: "Flag (0/1): sp_hand_flg."
+          - name: rule_nam
+            description: "WMS rule_nam attribute."
+          - name: mandte
+            description: "Date/time field: mandte."
+          - name: expire_dte
+            description: "Expiration date of the stock."
+          - name: mandte_flg
+            description: "Flag (0/1): mandte_flg."
+          - name: expire_dte_flg
+            description: "Flag (0/1): expire_dte_flg."
+          - name: palctl_split_flg
+            description: "Flag (0/1): palctl_split_flg."
+          - name: attr_str1_flg
+            description: "Flag (0/1): attr_str1_flg."
+          - name: attr_str2_flg
+            description: "Flag (0/1): attr_str2_flg."
+          - name: attr_str3_flg
+            description: "Flag (0/1): attr_str3_flg."
+          - name: attr_str4_flg
+            description: "Flag (0/1): attr_str4_flg."
+          - name: attr_str5_flg
+            description: "Flag (0/1): attr_str5_flg."
+          - name: attr_str6_flg
+            description: "Flag (0/1): attr_str6_flg."
+          - name: attr_str7_flg
+            description: "Flag (0/1): attr_str7_flg."
+          - name: attr_str8_flg
+            description: "Flag (0/1): attr_str8_flg."
+          - name: attr_str9_flg
+            description: "Flag (0/1): attr_str9_flg."
+          - name: attr_str10_flg
+            description: "Flag (0/1): attr_str10_flg."
+          - name: attr_str11_flg
+            description: "Flag (0/1): attr_str11_flg."
+          - name: attr_str12_flg
+            description: "Flag (0/1): attr_str12_flg."
+          - name: attr_str13_flg
+            description: "Flag (0/1): attr_str13_flg."
+          - name: attr_str14_flg
+            description: "Flag (0/1): attr_str14_flg."
+          - name: attr_str15_flg
+            description: "Flag (0/1): attr_str15_flg."
+          - name: attr_str16_flg
+            description: "Flag (0/1): attr_str16_flg."
+          - name: attr_str17_flg
+            description: "Flag (0/1): attr_str17_flg."
+          - name: attr_str18_flg
+            description: "Flag (0/1): attr_str18_flg."
+          - name: attr_int1_flg
+            description: "Flag (0/1): attr_int1_flg."
+          - name: attr_int2_flg
+            description: "Flag (0/1): attr_int2_flg."
+          - name: attr_int3_flg
+            description: "Flag (0/1): attr_int3_flg."
+          - name: attr_int4_flg
+            description: "Flag (0/1): attr_int4_flg."
+          - name: attr_int5_flg
+            description: "Flag (0/1): attr_int5_flg."
+          - name: attr_flt1_flg
+            description: "Flag (0/1): attr_flt1_flg."
+          - name: attr_flt2_flg
+            description: "Flag (0/1): attr_flt2_flg."
+          - name: attr_flt3_flg
+            description: "Flag (0/1): attr_flt3_flg."
+          - name: attr_dte1_flg
+            description: "Flag (0/1): attr_dte1_flg."
+          - name: attr_dte2_flg
+            description: "Flag (0/1): attr_dte2_flg."
+          - name: inv_attr_str1
+            description: "User-defined inventory string attribute 1 (inv_attr_str1)."
+          - name: inv_attr_str2
+            description: "User-defined inventory string attribute 2 (inv_attr_str2)."
+          - name: inv_attr_str3
+            description: "User-defined inventory string attribute 3 (inv_attr_str3)."
+          - name: inv_attr_str4
+            description: "User-defined inventory string attribute 4 (inv_attr_str4)."
+          - name: inv_attr_str5
+            description: "User-defined inventory string attribute 5 (inv_attr_str5)."
+          - name: inv_attr_str6
+            description: "User-defined inventory string attribute 6 (inv_attr_str6)."
+          - name: inv_attr_str7
+            description: "User-defined inventory string attribute 7 (inv_attr_str7)."
+          - name: inv_attr_str8
+            description: "User-defined inventory string attribute 8 (inv_attr_str8)."
+          - name: inv_attr_str9
+            description: "User-defined inventory string attribute 9 (inv_attr_str9)."
+          - name: inv_attr_str10
+            description: "User-defined inventory string attribute 0 (inv_attr_str10)."
+          - name: inv_attr_str11
+            description: "User-defined inventory string attribute 1 (inv_attr_str11)."
+          - name: inv_attr_str12
+            description: "User-defined inventory string attribute 2 (inv_attr_str12)."
+          - name: inv_attr_str13
+            description: "User-defined inventory string attribute 3 (inv_attr_str13)."
+          - name: inv_attr_str14
+            description: "User-defined inventory string attribute 4 (inv_attr_str14)."
+          - name: inv_attr_str15
+            description: "User-defined inventory string attribute 5 (inv_attr_str15)."
+          - name: inv_attr_str16
+            description: "User-defined inventory string attribute 6 (inv_attr_str16)."
+          - name: inv_attr_str17
+            description: "User-defined inventory string attribute 7 (inv_attr_str17)."
+          - name: inv_attr_str18
+            description: "User-defined inventory string attribute 8 (inv_attr_str18)."
+          - name: inv_attr_int1
+            description: "User-defined inventory attribute: inv_attr_int1."
+          - name: inv_attr_int2
+            description: "User-defined inventory attribute: inv_attr_int2."
+          - name: inv_attr_int3
+            description: "User-defined inventory attribute: inv_attr_int3."
+          - name: inv_attr_int4
+            description: "User-defined inventory attribute: inv_attr_int4."
+          - name: inv_attr_int5
+            description: "User-defined inventory attribute: inv_attr_int5."
+          - name: inv_attr_flt1
+            description: "User-defined inventory attribute: inv_attr_flt1."
+          - name: inv_attr_flt2
+            description: "User-defined inventory attribute: inv_attr_flt2."
+          - name: inv_attr_flt3
+            description: "User-defined inventory attribute: inv_attr_flt3."
+          - name: inv_attr_dte1
+            description: "User-defined inventory attribute: inv_attr_dte1."
+          - name: inv_attr_dte2
+            description: "User-defined inventory attribute: inv_attr_dte2."
+          - name: wcs_pck_grp
+            description: "WMS wcs_pck_grp attribute."
+          - name: wcs_reported_dt
+            description: "Date/time field: wcs_reported_dt."
+          - name: wcs_can_pcksts
+            description: "WMS wcs_can_pcksts attribute."
+          - name: wcs_can_req_dt
+            description: "Date/time field: wcs_can_req_dt."
+          - name: cstms_typ
+            description: "WMS cstms_typ attribute."
+          - name: cstms_typ_flg
+            description: "Flag (0/1): cstms_typ_flg."
+          - name: pip_counter
+            description: "WMS pip_counter attribute."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: rowid
+            description: "Source database internal row identifier."
+          - name: uc_inch_volume
+            description: "WMS uc_inch_volume attribute."
+          - name: uc_aisle_volume
+            description: "WMS uc_aisle_volume attribute."
+          - name: uc_layers
+            description: "WMS uc_layers attribute."
+          - name: uc_picks
+            description: "WMS uc_picks attribute."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: prtdsc
+        description: "Part description — localized long/short descriptions for part attributes (key-value by column + locale)."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: colnam
+            description: "Attribute (column) name the description applies to."
+          - name: colval
+            description: "Attribute value the description applies to."
+          - name: locale_id
+            description: "Locale of the description."
+          - name: lngdsc
+            description: "Long description."
+          - name: short_dsc
+            description: "Short description."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: prtftp
+        description: "Part fetch/pack-type header — packaging configuration (nesting, stack height, method) per part and pack type."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: ftpcod
+            description: "Fetch/pack-type code — packaging configuration key for the part."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: caslvl
+            description: "WMS caslvl attribute."
+          - name: nstlen
+            description: "WMS nstlen attribute."
+          - name: nstwid
+            description: "Code/identifier: nstwid."
+          - name: nsthgt
+            description: "WMS nsthgt attribute."
+          - name: pal_stck_hgt
+            description: "WMS pal_stck_hgt attribute."
+          - name: def_asset_typ
+            description: "WMS def_asset_typ attribute."
+          - name: defftp_flg
+            description: "Flag (0/1): defftp_flg."
+          - name: stkmtd
+            description: "WMS stkmtd attribute."
+          - name: load_attr1_cfg
+            description: "WMS load_attr1_cfg attribute."
+          - name: load_attr2_cfg
+            description: "WMS load_attr2_cfg attribute."
+          - name: load_attr3_cfg
+            description: "WMS load_attr3_cfg attribute."
+          - name: load_attr4_cfg
+            description: "WMS load_attr4_cfg attribute."
+          - name: load_attr5_cfg
+            description: "WMS load_attr5_cfg attribute."
+          - name: rcvftp_flg
+            description: "Flag (0/1): rcvftp_flg."
+          - name: level_units
+            description: "WMS level_units attribute."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: prtftp_dtl
+        description: "Part fetch/pack-type detail — per unit-of-measure dimensions, weights, and packaging flags for a part pack type."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: ftpcod
+            description: "Fetch/pack-type code — packaging configuration key for the part."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: uomcod
+            description: "Unit-of-measure code."
+          - name: uomlvl
+            description: "Unit-of-measure level in the packaging hierarchy (1=each … up)."
+          - name: len
+            description: "WMS len attribute."
+          - name: wid
+            description: "Code/identifier: wid."
+          - name: hgt
+            description: "WMS hgt attribute."
+          - name: grswgt
+            description: "Weight field: grswgt."
+          - name: netwgt
+            description: "Weight field: netwgt."
+          - name: pal_flg
+            description: "Flag (0/1): pal_flg."
+          - name: layer_flg
+            description: "Flag (0/1): layer_flg."
+          - name: cas_flg
+            description: "Flag (0/1): cas_flg."
+          - name: pak_flg
+            description: "Flag (0/1): pak_flg."
+          - name: stk_flg
+            description: "Flag (0/1): stk_flg."
+          - name: rcv_flg
+            description: "Flag (0/1): rcv_flg."
+          - name: untqty
+            description: "Quantity in stock/base units."
+          - name: ctn_flg
+            description: "Flag (0/1): ctn_flg."
+          - name: thresh_pct
+            description: "WMS thresh_pct attribute."
+          - name: ctn_dstr_flg
+            description: "Flag (0/1): ctn_dstr_flg."
+          - name: bulk_pck_flg
+            description: "Flag (0/1): bulk_pck_flg."
+          - name: ins_dt
+            description: "Row insert timestamp in the source WMS."
+          - name: last_upd_dt
+            description: "Row last-update timestamp in the source WMS."
+          - name: ins_user_id
+            description: "User/process that inserted the row in the WMS."
+          - name: last_upd_user_id
+            description: "User/process that last updated the row in the WMS."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: prtmst
+        description: "Part master — item master data: part number, family, stock UOM, velocity, date-control, and receiving flags."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: wh_id_tmpl
+            description: "Warehouse template identifier the part master belongs to."
+          - name: prtfam
+            description: "Part family/grouping."
+          - name: dsp_prtnum
+            description: "Display/formatted part number."
+          - name: age_pflnam
+            description: "WMS age_pflnam attribute."
+          - name: lodlvl
+            description: "Load level indicator."
+          - name: orgflg
+            description: "Flag (0/1): orgflg."
+          - name: revflg
+            description: "Flag (0/1): revflg."
+          - name: lotflg
+            description: "Flag (0/1): lotflg."
+          - name: sup_lot_flg
+            description: "Flag (0/1): sup_lot_flg."
+          - name: stkuom
+            description: "Stocking unit of measure."
+          - name: abccod
+            description: "ABC velocity classification code."
+          - name: fifwin
+            description: "WMS fifwin attribute."
+          - name: velzon
+            description: "Velocity zone."
+          - name: rcvsts
+            description: "Receiving status of the part."
+          - name: rcvflg
+            description: "Flag (0/1): rcvflg."
+          - name: prdflg
+            description: "Flag (0/1): prdflg."
+          - name: wgtcod
+            description: "Code/identifier: wgtcod."
+          - name: prtfit
+            description: "WMS prtfit attribute."
+          - name: moddte
+            description: "Last-modified timestamp in the source WMS."
+          - name: mod_usr_id
+            description: "User/process that last modified the row in the WMS."
+          - name: dspuom
+            description: "WMS dspuom attribute."
+          - name: rptuom
+            description: "WMS rptuom attribute."
+          - name: dte_win_typ
+            description: "WMS dte_win_typ attribute."
+          - name: dte_code
+            description: "Date-control code (shelf-life handling)."
+          - name: ordinv
+            description: "WMS ordinv attribute."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: rplcfg
+        description: "Replenishment configuration — min/max rules that trigger replenishment of a part into a location."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 168, period: hour}
+        columns:
+          - name: rplnum
+            description: "Replenishment rule number."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: stoloc
+            description: "Storage location (slot) code."
+          - name: mov_zone_id
+            description: "Movement zone identifier."
+          - name: invsts
+            description: "Inventory status code (e.g. available, hold, damaged)."
+          - name: pctflg
+            description: "Flag (0/1): pctflg."
+          - name: maxunt
+            description: "Maximum units target for the location."
+          - name: minunt
+            description: "Minimum units trigger for the location."
+          - name: maxloc
+            description: "Maximum locations to replenish."
+          - name: cmpflg
+            description: "Flag (0/1): cmpflg."
+          - name: rpldte
+            description: "Last replenishment date."
+          - name: inc_pct_flg
+            description: "Flag (0/1): inc_pct_flg."
+          - name: inc_unt
+            description: "WMS inc_unt attribute."
+          - name: rls_pct
+            description: "WMS rls_pct attribute."
+          - name: mod_usr_id
+            description: "User/process that last modified the row in the WMS."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: shipment
+        description: "Shipment header — one row per outbound shipment: carrier, status, dates, destination, and freight details."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: ship_id
+            description: "Shipment identifier."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: host_client_id
+            description: "Host system client/owner id."
+          - name: host_ext_id
+            description: "Code/identifier: host_ext_id."
+          - name: shpsts
+            description: "Shipment status code."
+          - name: stop_id
+            description: "Route stop identifier."
+          - name: rt_adr_id
+            description: "Code/identifier: rt_adr_id."
+          - name: cargrp
+            description: "WMS cargrp attribute."
+          - name: carcod
+            description: "Carrier code."
+          - name: srvlvl
+            description: "Carrier service level."
+          - name: sddflg
+            description: "Flag (0/1): sddflg."
+          - name: doc_num
+            description: "Shipping document number."
+          - name: track_num
+            description: "Carrier tracking number."
+          - name: mst_waybill
+            description: "WMS mst_waybill attribute."
+          - name: frtchg
+            description: "Freight charge."
+          - name: frtcod
+            description: "Code/identifier: frtcod."
+          - name: frtrte
+            description: "WMS frtrte attribute."
+          - name: adddte
+            description: "Timestamp the record was created/added."
+          - name: alcdte
+            description: "Date/time field: alcdte."
+          - name: stgdte
+            description: "Staged timestamp."
+          - name: loddte
+            description: "Loaded (onto vehicle) timestamp."
+          - name: entdte
+            description: "Date/time field: entdte."
+          - name: early_shpdte
+            description: "Earliest allowed ship date."
+          - name: late_shpdte
+            description: "Latest allowed ship date."
+          - name: early_dlvdte
+            description: "Earliest allowed delivery date."
+          - name: late_dlvdte
+            description: "Latest allowed delivery date."
+          - name: dstloc
+            description: "Destination/staging location."
+          - name: rrlflg
+            description: "Flag (0/1): rrlflg."
+          - name: wave_set
+            description: "WMS wave_set attribute."
+          - name: tms_group_id
+            description: "Code/identifier: tms_group_id."
+          - name: tms_move_id
+            description: "Code/identifier: tms_move_id."
+          - name: tms_move_plan_id
+            description: "Code/identifier: tms_move_plan_id."
+          - name: lst_prtdte
+            description: "Date/time field: lst_prtdte."
+          - name: super_ship_id
+            description: "Code/identifier: super_ship_id."
+          - name: super_ship_flg
+            description: "Flag (0/1): super_ship_flg."
+          - name: in_transit_flg
+            description: "Flag (0/1): in_transit_flg."
+          - name: pln_shpsts
+            description: "WMS pln_shpsts attribute."
+          - name: ses_grp_nam
+            description: "WMS ses_grp_nam attribute."
+          - name: optm_base_cost
+            description: "WMS optm_base_cost attribute."
+          - name: rate_serv_nam
+            description: "WMS rate_serv_nam attribute."
+          - name: arcdte
+            description: "Date/time field: arcdte."
+          - name: arc_src
+            description: "WMS arc_src attribute."
+          - name: lbl_prtdte
+            description: "Date/time field: lbl_prtdte."
+          - name: ses_tag
+            description: "WMS ses_tag attribute."
+          - name: price_sts
+            description: "WMS price_sts attribute."
+          - name: src_sys
+            description: "WMS src_sys attribute."
+          - name: par_ship_id
+            description: "Code/identifier: par_ship_id."
+          - name: hub_adr_id
+            description: "Code/identifier: hub_adr_id."
+          - name: hub_arrdte
+            description: "Date/time field: hub_arrdte."
+          - name: zs_line_haul_id
+            description: "Code/identifier: zs_line_haul_id."
+          - name: hub_rate_serv_nam
+            description: "WMS hub_rate_serv_nam attribute."
+          - name: tot_pkg_qty
+            description: "Total package count on the shipment."
+          - name: crncy_code
+            description: "WMS crncy_code attribute."
+          - name: aesitn
+            description: "WMS aesitn attribute."
+          - name: aes_typ
+            description: "WMS aes_typ attribute."
+          - name: aes_acpt_dte
+            description: "Date/time field: aes_acpt_dte."
+          - name: ftsrnum
+            description: "Code/identifier: ftsrnum."
+          - name: export_typ
+            description: "WMS export_typ attribute."
+          - name: docind
+            description: "WMS docind attribute."
+          - name: descgoods
+            description: "WMS descgoods attribute."
+          - name: exprsntxt
+            description: "WMS exprsntxt attribute."
+          - name: pack_code
+            description: "WMS pack_code attribute."
+          - name: pln_cmpl_flg
+            description: "Flag (0/1): pln_cmpl_flg."
+          - name: dispatch_code
+            description: "WMS dispatch_code attribute."
+          - name: moddte
+            description: "Last-modified timestamp in the source WMS."
+          - name: mod_usr_id
+            description: "User/process that last modified the row in the WMS."
+          - name: book_num
+            description: "Code/identifier: book_num."
+          - name: dst_mov_zone_id
+            description: "Code/identifier: dst_mov_zone_id."
+          - name: bola_num
+            description: "Code/identifier: bola_num."
+          - name: dlv_dte
+            description: "Actual delivery date."
+          - name: pod_conf_flg
+            description: "Flag (0/1): pod_conf_flg."
+          - name: dlvseq_load_order
+            description: "WMS dlvseq_load_order attribute."
+          - name: wa_rule_reference
+            description: "WMS wa_rule_reference attribute."
+          - name: _rescued_data
+            description: "Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+      - name: shipment_line
+        description: "Shipment line — order line allocated to a shipment: planned/picked/shipped quantities and order linkage."
+        config:
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: ship_line_id
+            description: "Shipment line identifier."
+          - name: ship_id
+            description: "Shipment identifier."
+          - name: wh_id
+            description: "Warehouse (facility) identifier."
+          - name: client_id
+            description: "Client/owner id for the record (multi-client warehouse partitioning)."
+          - name: ordnum
+            description: "Order number."
+          - name: ordlin
+            description: "Order line number."
+          - name: ordsln
+            description: "Order sub-line number."
+          - name: cons_batch
+            description: "WMS cons_batch attribute."
+          - name: shpwth
+            description: "WMS shpwth attribute."
+          - name: linsts
+            description: "Shipment line status code."
+          - name: prcpri
+            description: "WMS prcpri attribute."
+          - name: pckgr1
+            description: "WMS pckgr1 attribute."
+          - name: pckgr2
+            description: "WMS pckgr2 attribute."
+          - name: pckgr3
+            description: "WMS pckgr3 attribute."
+          - name: pckgr4
+            description: "WMS pckgr4 attribute."
+          - name: schbat
+            description: "Scheduled batch / wave identifier."
+          - name: pckqty
+            description: "Picked quantity (planned to pick)."
+          - name: inpqty
+            description: "In-process quantity."
+          - name: stgqty
+            description: "Staged quantity."
+          - name: shpqty
+            description: "Shipped quantity."
+          - name: oviqty
+            description: "Over/short/damaged variance quantity."
+          - name: ovramt
+            description: "WMS ovramt attribute."
+          - name: ovrcod
+            description: "Code/identifier: ovrcod."
+          - name: edtflg
+            description: "Flag (0/1): edtflg."
+          - name: tot_pln_cas_qty
+            description: "Quantity field: tot_pln_cas_qty."
+          - name: tot_pln_misc2_qty
+            description: "Quantity field: tot_pln_misc2_qty."
+          - name: tot_pln_wgt
+            description: "Total planned weight for the line."
+          - name: tot_pln_cube
+            description: "Total planned cube (volume) for the line."
+          - name: tot_pln_misc_qty
+            description: "Quantity field: tot_pln_misc_qty."
+          - name: tot_pln_pal_qty
+            description: "Quantity field: tot_pln_pal_qty."
+          - name: tot_pln_qty
+            description: "Total planned quantity for the line."
+          - name: unt_ins_val
+            description: "WMS unt_ins_val attribute."
+          - name: rel_val
+            description: "WMS rel_val attribute."
+          - name: rel_val_unt_typ
+            description: "WMS rel_val_unt_typ attribute."
+          - name: wkonum
+            description: "Code/identifier: wkonum."
+          - name: wkorev
+            description: "WMS wkorev attribute."
+          - name: moddte
+            description: "Last-modified timestamp in the source WMS."
+          - name: mod_usr_id
+            description: "User/process that last modified the row in the WMS."
+          - name: dstr_qty
+            description: "Quantity field: dstr_qty."
+          - name: prtnum
+            description: "Part (item) number — the SKU identifier."
+          - name: prt_client_id
+            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+          - name: est_time
+            description: "Estimated task time (system-computed)."
+          - name: picked_qty
+            description: "Quantity actually picked for the line."
+          - name: instgqty
+            description: "Quantity field: instgqty."
+          - name: inloadqty
+            description: "Quantity field: inloadqty."
+          - name: ftpcod
+            description: "Fetch/pack-type code — packaging configuration key for the part."
+          - name: untpal
+            description: "Units per pallet."
+          - name: _rescued_data
+            description: "Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null."
+          - name: loaddate
+            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."

@@ -1,0 +1,207 @@
+version: 2
+
+# Staging models for the JDA/Blue Yonder WMS (jdawms) source.
+# Each model is a 1:1 lossless view over the raw replica (all source columns
+# preserved). Databricks-only (enabled via dbt_project.yml).
+#
+# DQ note: several source tables are append-ingested and may hold more than one
+# `loaddate` version per natural key. Because these staging views do NOT dedupe
+# (lossless passthrough), uniqueness tests are set to severity: warn until the
+# ingestion grain is confirmed and latest-per-key dedupe is added in the int layer.
+# not_null on keys is kept as a hard (error) check.
+
+models:
+  - name: stg_jdawms__dlytrn
+    description: 1:1 staging view over jdawms.dlytrn — daily inventory transaction ledger.
+    columns:
+      - name: dlytrn_id
+        description: Primary key — unique id of the daily transaction.
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+
+  - name: stg_jdawms__inv_snap
+    description: 1:1 staging view over jdawms.inv_snap — point-in-time inventory snapshot per part.
+    columns:
+      - name: inv_snap_id
+        description: Primary key — snapshot row id.
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+
+  - name: stg_jdawms__invdtl
+    description: 1:1 staging view over jdawms.invdtl — inventory detail (innermost unit).
+    columns:
+      - name: dtlnum
+        description: Inventory detail number (natural key).
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+      - name: subnum
+        description: Parent sub (carton) number.
+        tests:
+          - relationships:
+              arguments: {to: ref('stg_jdawms__invsub'), field: subnum}
+              config: {severity: warn}
+
+  - name: stg_jdawms__invlod
+    description: 1:1 staging view over jdawms.invlod — inventory load (LPN/pallet).
+    columns:
+      - name: lodnum
+        description: License-plate / load number (natural key).
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+
+  - name: stg_jdawms__invsub
+    description: 1:1 staging view over jdawms.invsub — inventory sub (carton/case).
+    columns:
+      - name: subnum
+        description: Sub (carton) number (natural key).
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+      - name: lodnum
+        description: Parent load number.
+        tests:
+          - relationships:
+              arguments: {to: ref('stg_jdawms__invlod'), field: lodnum}
+              config: {severity: warn}
+
+  - name: stg_jdawms__invsum
+    description: 1:1 staging view over jdawms.invsum — on-hand inventory summary per location/part/status.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [wh_id, stoloc, prtnum, prt_client_id, invsts]
+          config: {severity: warn}
+    columns:
+      - name: stoloc
+        description: Storage location code.
+        tests: [not_null]
+      - name: prtnum
+        description: Part number.
+        tests: [not_null]
+
+  - name: stg_jdawms__locmst
+    description: 1:1 staging view over jdawms.locmst — warehouse location master.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [wh_id, stoloc]
+          config: {severity: warn}
+    columns:
+      - name: stoloc
+        description: Storage location (slot) code.
+        tests: [not_null]
+
+  - name: stg_jdawms__pckwrk_dtl
+    description: 1:1 staging view over jdawms.pckwrk_dtl — pick-work detail (task lines).
+    columns:
+      - name: wrkref_dtl
+        description: Pick-work detail identifier (natural key).
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+      - name: wrkref
+        description: Parent pick-work reference.
+        tests:
+          - relationships:
+              arguments: {to: ref('stg_jdawms__pckwrk_hdr'), field: wrkref}
+              config: {severity: warn}
+
+  - name: stg_jdawms__pckwrk_hdr
+    description: 1:1 staging view over jdawms.pckwrk_hdr — pick-work header (directives).
+    columns:
+      - name: wrkref
+        description: Pick-work reference (task) identifier (natural key).
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+
+  - name: stg_jdawms__prtdsc
+    description: 1:1 staging view over jdawms.prtdsc — localized part attribute descriptions.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [colnam, colval, locale_id]
+          config: {severity: warn}
+
+  - name: stg_jdawms__prtftp
+    description: 1:1 staging view over jdawms.prtftp — part pack-type header (packaging config).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [prtnum, ftpcod, prt_client_id, wh_id]
+          config: {severity: warn}
+    columns:
+      - name: prtnum
+        description: Part number.
+        tests: [not_null]
+
+  - name: stg_jdawms__prtftp_dtl
+    description: 1:1 staging view over jdawms.prtftp_dtl — part pack-type detail per UOM.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [prtnum, ftpcod, prt_client_id, wh_id, uomcod, uomlvl]
+          config: {severity: warn}
+
+  - name: stg_jdawms__prtmst
+    description: 1:1 staging view over jdawms.prtmst — part (item) master.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [prtnum, prt_client_id, wh_id_tmpl]
+          config: {severity: warn}
+    columns:
+      - name: prtnum
+        description: Part number.
+        tests: [not_null]
+
+  - name: stg_jdawms__rplcfg
+    description: 1:1 staging view over jdawms.rplcfg — replenishment configuration rules.
+    columns:
+      - name: rplnum
+        description: Replenishment rule number (natural key).
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+
+  - name: stg_jdawms__shipment
+    description: 1:1 staging view over jdawms.shipment — outbound shipment header.
+    columns:
+      - name: ship_id
+        description: Shipment identifier (natural key).
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+      - name: shpsts
+        description: Shipment status code.
+
+  - name: stg_jdawms__shipment_line
+    description: 1:1 staging view over jdawms.shipment_line — order line allocated to a shipment.
+    columns:
+      - name: ship_line_id
+        description: Shipment line identifier (natural key).
+        tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+      - name: ship_id
+        description: Parent shipment identifier.
+        tests:
+          - relationships:
+              arguments: {to: ref('stg_jdawms__shipment'), field: ship_id}
+              config: {severity: warn}
+      - name: linsts
+        description: Shipment line status code.

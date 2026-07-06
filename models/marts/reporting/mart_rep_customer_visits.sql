@@ -1,3 +1,10 @@
+{{ config(materialized='table') }}
+
+-- NOT incremental by design: this is a lifetime aggregate at (rep, customer) grain
+-- with no date partition — first_visit_at, last_visit_at, visit_days and the counts
+-- span all history, so any new event can mutate an existing row. There's no clean
+-- "new rows only" slice; full-refresh table is the correct choice.
+
 with events as (
 
     select * from {{ ref('int_rep_activity_events') }}

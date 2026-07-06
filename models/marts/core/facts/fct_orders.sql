@@ -1,4 +1,13 @@
-{{ config(materialized='table') }}
+-- incremental_strategy switches by engine: Databricks can't do `delete+insert`
+-- and DuckDB (dev) can't do `merge`. Both do the same thing — update the row if
+-- the unique_key already exists, insert it if not — so this one line keeps the
+-- model working on both targets.
+{{ config(
+    materialized='incremental',
+    unique_key='increment_id',
+    incremental_strategy=('merge' if target.type == 'databricks' else 'delete+insert'),
+    on_schema_change='append_new_columns'
+) }}
 
 -- fct_orders — one row per SUBMITTED order (Group 04 success). The submit
 -- payload is KV: "increment_id:M…, order_source:WEB, grand_total:…,
@@ -24,6 +33,16 @@ with submits as (
     select * from {{ ref('int_events_enriched') }}
     where l1_code = '04'
       and response like '%increment_id:%'
+
+    {% if is_incremental() %}
+    -- Reprocess a trailing window so late submits / resubmits are re-evaluated;
+    -- merge on increment_id keeps the latest resubmit and stays idempotent.
+    -- A resubmit older than this window won't overwrite the stored row — widen if needed.
+      and event_at_utc >= (
+          select {{ dbt.dateadd('day', -3, "coalesce(max(submitted_at), cast('1900-01-01' as timestamp))") }}
+          from {{ this }}
+      )
+    {% endif %}
 
 ),
 

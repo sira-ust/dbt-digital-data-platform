@@ -1,6 +1,28 @@
+-- incremental_strategy switches by engine: Databricks can't do `delete+insert`
+-- and DuckDB (dev) can't do `merge`. Both do the same thing — update the row if
+-- the unique_key already exists, insert it if not — so this one line keeps the
+-- model working on both targets.
+{{ config(
+    materialized='incremental',
+    unique_key=['username', 'sales_code', 'activity_date'],
+    incremental_strategy=('merge' if target.type == 'databricks' else 'delete+insert'),
+    on_schema_change='append_new_columns'
+) }}
+
+-- One row per rep per day. Incremental: reprocess a trailing window of days
+-- (late events change a day's aggregates) and merge on (username, sales_code,
+-- activity_date) so recomputed day-rows replace their prior versions.
+
 with events as (
 
     select * from {{ ref('int_rep_activity_events') }}
+
+    {% if is_incremental() %}
+    where activity_date >= (
+        select {{ dbt.dateadd('day', -3, "coalesce(max(activity_date), cast('1900-01-01' as date))") }}
+        from {{ this }}
+    )
+    {% endif %}
 
 ),
 
