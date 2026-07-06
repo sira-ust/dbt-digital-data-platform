@@ -14,7 +14,7 @@
 -- subtotal:…, total_item_count:…". This fact is EXACT and self-contained —
 -- it does NOT join to Create Order (09): submit ids are M-prefixed while
 -- create ids are 032-prefixed and the two ID spaces never match (verified:
--- 0/10,939 overlap — see docs/event-log-dashboard-build-spec.md §0). Order
+-- 0/10,939 overlap). Order
 -- shopping-cycle / days-to-close is therefore not reconstructable from this
 -- source; this fact carries the submitted-order value + channel only.
 --

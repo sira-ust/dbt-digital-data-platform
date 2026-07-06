@@ -8,7 +8,7 @@ models:
       resubmit). EXACT and self-contained: it does NOT join to Create Order (09)
       because submit ids (M…) and create ids (032-…) are different ID spaces with
       zero overlap, so order shopping-cycle / days-to-close is not reconstructable
-      from this source (see docs/event-log-dashboard-build-spec.md §0). Carries
+      from this source. Carries
       order value + channel. Powers #1 Revenue/AOV and P1 order-volume.
     columns:
       - name: increment_id

@@ -109,5 +109,3 @@ int_*  →  fct_*  (thin incremental, same grain)  →  mart_*  (daily × agent,
 |---|---|
 | **Phase 1 (now)** | Source mapping + DQ checks |
 | **Phase 2 (future)** | Analytics marts + BI; Replication table / ERP data |
-
-Details: [followup.md](followup.md).

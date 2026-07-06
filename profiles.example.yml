@@ -16,7 +16,7 @@ ust_digital_platform:
       path: dev.duckdb
       threads: 4
 
-    # ── Production engine TBD — pick ONE later, see followup.md ──
+    # ── Production engine TBD — pick ONE later ──
     #
     # databricks:
     #   type: databricks
