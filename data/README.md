@@ -60,3 +60,32 @@ Then use `analyses/profile_mysql_logs.sql` to sanity-check the sample against
 the event dictionary (`seeds/seed_event_codes.csv`) — including the known
 doc-vs-reality payload mismatches (e.g. code 01020200 carrying `response: "1"`
 despite the doc saying no payload).
+
+## Mock data for jdawms (WMS) — zero Unity Catalog cost in dev
+
+The jdawms source has no API export. Local DuckDB dev instead uses **generated
+mock parquet** that matches the real Unity Catalog schema exactly:
+
+```
+data/
+  uc_schema_snapshot.csv      <- git-tracked; landed UC schema (16 jdawmsrep +
+                                 7 mysql ust_* tables). Refresh with
+                                 scripts/snapshot_uc_schema.py only when the
+                                 replica schema changes (the ONLY UC touch).
+  mock/
+    jdawms/<table>.parquet    <- 16 WMS tables, constraint-aware mock rows
+    mysql/ust_admin_users.parquet   (usernames match the activity sample)
+    mysql/ust_category.parquet      (ids/names from seed_categories)
+```
+
+Regenerate any time (deterministic, seeded RNG):
+
+```bash
+python scripts/generate_jdawms_mock.py
+```
+
+Mock rows satisfy the YAML tests: unique PKs, valid FK chains
+(invlod→invsub→invdtl, shipment→shipment_line, pckwrk_hdr→pckwrk_dtl),
+unique-combination grains, and fresh `loaddate` values. On the databricks
+target the same models read the real replica — `external_location` is ignored
+there.

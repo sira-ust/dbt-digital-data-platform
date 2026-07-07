@@ -1,6 +1,6 @@
 -- Staging for jdawms.shipment — 1:1 lossless view over the raw WMS replica.
 -- All 75 source columns preserved as-is (types already clean in Delta).
--- Databricks-only (no local sample); materialized as a view (see dbt_project.yml).
+-- Databricks reads the real replica; DuckDB reads mock parquet (see data/README.md).
 
 with source as (
     select * from {{ source('jdawms', 'shipment') }}

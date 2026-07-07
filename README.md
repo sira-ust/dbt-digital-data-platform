@@ -24,6 +24,11 @@ dbt deps
 # Flatten raw API JSON -> parquet
 duckdb -c ".read scripts/flatten_api_json.sql"
 
+# Generate mock parquet for the jdawms (WMS) source + the two sample-less
+# mysql tables — schema-exact, from the git-tracked UC snapshot; no
+# Databricks/Unity Catalog access or cost (see data/README.md)
+python scripts/generate_jdawms_mock.py
+
 dbt build
 ```
 
@@ -127,7 +132,9 @@ the same inline-vs-shared rule.
 ├── scripts/
 │   ├── flatten_api_json.sql
 │   ├── generate_event_glossary.py
-│   └── generate_jdawms_glossary.py
+│   ├── generate_jdawms_glossary.py
+│   ├── snapshot_uc_schema.py        # one-time UC schema pull (git-tracked CSV)
+│   └── generate_jdawms_mock.py      # mock parquet for local dev (no UC cost)
 ├── analyses/profile_mysql_logs.sql
 ├── seeds/
 ├── macros/
@@ -135,7 +142,7 @@ the same inline-vs-shared rule.
 └── models/
     ├── docs/
     ├── staging/mysql/
-    ├── staging/jdawms/           # WMS replica staging (databricks-only)
+    ├── staging/jdawms/           # WMS replica staging (databricks: real tables; duckdb: mock parquet)
     ├── intermediate/
     ├── marts/reporting/
     ├── exposures.yml
