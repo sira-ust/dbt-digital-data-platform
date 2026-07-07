@@ -5,6 +5,21 @@ rewrites:
 
   models/docs/_jdawms_glossary.md            -- {% docs %} blocks for shared defs
   models/staging/jdawms/_jdawms__sources.yml -- column descriptions
+  models/staging/jdawms/_jdawms__models.yml  -- adds a description for every
+                                                 column not already documented
+                                                 there, reusing the exact text
+                                                 just written to sources.yml
+
+Why models.yml too: dbt's `persist_docs` (which pushes descriptions into
+Databricks as real column comments) only ever reads from a model's OWN yaml
+-- it never inherits from the source, even for a byte-identical 1:1 passthrough
+column. Previously models.yml only listed tested columns, so only those had
+comments in Unity Catalog; everything else showed blank in Catalog Explorer
+despite being fully documented in sources.yml. This step closes that gap by
+copying each column's already-resolved description (dictionary text or a
+{{ doc(...) }} ref, whichever sources.yml ended up with) into models.yml too,
+appended after any existing tested-column entries. Existing entries are never
+touched, so hand-tuned descriptions (e.g. dlytrn_id's) are preserved as-is.
 
 Rules
 -----
@@ -33,6 +48,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SEED = ROOT / "seeds" / "seed_jdawms_data_dictionary.csv"
 GLOSSARY = ROOT / "models" / "docs" / "_jdawms_glossary.md"
 SOURCES = ROOT / "models" / "staging" / "jdawms" / "_jdawms__sources.yml"
+MODELS = ROOT / "models" / "staging" / "jdawms" / "_jdawms__models.yml"
 REVIEW = ROOT / "models" / "docs" / "_jdawms_glossary_review.md"
 
 GLOSSARY_HEADER = """\
@@ -79,6 +95,65 @@ def build_text(lngdsc: str, comment: str) -> str | None:
     if text[-1] not in ".!?":
         text += "."
     return text
+
+
+def backfill_models_yml(sources_out_lines: list[str]) -> int:
+    """Add a description for every column not yet documented in models.yml,
+    reusing the exact rendered text/doc-ref just written to sources.yml.
+    Never touches existing entries. Returns the number of entries added.
+    """
+    # (table, column) -> rendered RHS of "description: ..." from sources.yml,
+    # and the natural (source) column order per table.
+    src_desc: dict[tuple[str, str], str] = {}
+    src_order: dict[str, list[str]] = defaultdict(list)
+    table = column = None
+    for line in sources_out_lines:
+        m = re.match(r"^      - name: (\S+)\s*$", line)
+        if m:
+            table, column = m.group(1), None
+        m = re.match(r"^          - name: (\S+)\s*$", line)
+        if m and table:
+            column = m.group(1)
+            src_order[table].append(column)
+        m = re.match(r"^            description: (.*)$", line)
+        if m and table and column:
+            src_desc[(table, column)] = m.group(1)
+
+    lines = MODELS.read_text(encoding="utf-8").splitlines()
+    models_idx = next(i for i, l in enumerate(lines) if l.strip() == "models:")
+    header, body = lines[: models_idx + 1], lines[models_idx + 1 :]
+
+    starts = [i for i, l in enumerate(body) if re.match(r"^  - name: stg_jdawms__", l)]
+    n_added = 0
+    new_body: list[str] = []
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else len(body)
+        block = body[start:end]
+        while block and block[-1].strip() == "":
+            block = block[:-1]
+
+        table = re.match(r"^  - name: stg_jdawms__(\S+)\s*$", block[0]).group(1)
+        existing = {
+            re.match(r"^      - name: (\S+)\s*$", l).group(1)
+            for l in block
+            if re.match(r"^      - name: (\S+)\s*$", l)
+        }
+        missing = [c for c in src_order.get(table, []) if c not in existing]
+
+        insert: list[str] = []
+        if missing and not any(l.strip() == "columns:" for l in block):
+            insert.append("    columns:")
+        for col in missing:
+            insert.append(f"      - name: {col}")
+            insert.append(f"        description: {src_desc[(table, col)]}")
+            n_added += 1
+
+        new_body.extend(block + insert + [""])
+
+    while new_body and new_body[-1] == "":
+        new_body.pop()
+    MODELS.write_text("\n".join(header + new_body) + "\n", encoding="utf-8")
+    return n_added
 
 
 def main() -> None:
@@ -171,6 +246,9 @@ def main() -> None:
         out.append(line)
     SOURCES.write_text("\n".join(out) + "\n", encoding="utf-8")
 
+    # ---- 4b. backfill models.yml so persist_docs covers every column ------
+    n_backfilled = backfill_models_yml(out)
+
     # ---- 5. glossary = dict-derived shared blocks + carried-over refs -----
     new_yaml = "\n".join(out)
     referenced = set(re.findall(r"doc\('(jdawms__[a-z0-9_]+)'\)", new_yaml))
@@ -194,6 +272,7 @@ def main() -> None:
     print(f"dictionary definitions: {len(defs)} across {len({t for t, _ in defs})} tables")
     print(f"shared blocks: {len(dict_slugs)} (+{len(carried)} carried over: {', '.join(carried)})")
     print(f"YAML descriptions written: {n_ref} doc refs + {n_inline} inline")
+    print(f"models.yml backfilled: {n_backfilled} new column entries (for persist_docs / Databricks comments)")
 
     # columns whose dictionary text differs between tables (shared OR inline)
     multi = {col: sorted(vs, key=lambda v: (-len(v[1]), v[1][0]))
