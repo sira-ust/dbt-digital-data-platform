@@ -1,232 +1,165 @@
 {# ---------------------------------------------------------------------------
-   Shared RAW column definitions for the jdawms (JDA/Blue Yonder WMS) source.
+   Shared column definitions for the jdawms (JDA/Blue Yonder WMS) source.
 
-   Edit a definition HERE and every column that references it via
-   {{ doc('...') }} in _jdawms__sources.yml updates at once.
+   AUTO-GENERATED from seeds/seed_jdawms_data_dictionary.csv by
+   scripts/generate_jdawms_glossary.py -- do not edit by hand. To change a
+   definition, edit the seed (or the WMS data dictionary it came from) and
+   re-run the script.
 
-   Rule: a definition lives here only when the SAME text is used by 2+ columns
-   (nearly always the same column name repeated across tables). One-off or
-   column-specific text stays inline in the YAML.
+   Definitions are deduplicated by MEANING: a (column, text) pair used by 2+
+   tables becomes one block here; table-specific meanings stay inline in
+   _jdawms__sources.yml. Variant blocks are suffixed with a table name, e.g.
+   jdawms__ins_dt__pckwrk_dtl.
 
-   Slug convention: jdawms__<column_name>. Block names are project-global.
+   Blocks under "pipeline / carried-over" are not in the data dictionary
+   (ingestion columns etc.) and are preserved from the previous glossary.
 --------------------------------------------------------------------------- #}
 
-{% docs jdawms__loaddate %}Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field).{% enddocs %}
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__app_catch_qty %}Applied Catch Quantity — The catch quantity already applied.{% enddocs %}
 
-{% docs jdawms__wh_id %}Warehouse (facility) identifier.{% enddocs %}
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__appqty %}Applied Quantity — The amount of product applied against this pick.{% enddocs %}
 
-{% docs jdawms__prt_client_id %}Client/owner id for the part (multi-client warehouse partitioning).{% enddocs %}
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__client_id %}Client ID.{% enddocs %}
 
-{% docs jdawms__prtnum %}Part (item) number — the SKU identifier.{% enddocs %}
+{# dlytrn, pckwrk_hdr #}
+{% docs jdawms__devcod %}Device Code — The device code that should be used when printing labels for this pick.{% enddocs %}
 
-{% docs jdawms__ins_dt %}Row insert timestamp in the source WMS.{% enddocs %}
+{# invlod, pckwrk_hdr #}
+{% docs jdawms__est_time %}Estimated Goal Time — Labor Estimate (Seconds).{% enddocs %}
 
-{% docs jdawms__ins_user_id %}User/process that inserted the row in the WMS.{% enddocs %}
+{# pckwrk_hdr, prtftp #}
+{% docs jdawms__ftpcod %}Footprint Code — This is footprint code associate with the item.{% enddocs %}
 
-{% docs jdawms__last_upd_dt %}Row last-update timestamp in the source WMS.{% enddocs %}
+{# dlytrn, inv_snap, invlod, invsub, invsum, locmst, prtftp, prtftp_dtl #}
+{% docs jdawms__ins_dt %}Inserted Date — The date the row was inserted.{% enddocs %}
 
-{% docs jdawms__last_upd_user_id %}User/process that last updated the row in the WMS.{% enddocs %}
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__ins_dt__pckwrk_dtl %}Inserted Date — Date the row was inserted.{% enddocs %}
 
-{% docs jdawms__ftpcod %}Fetch/pack-type code — packaging configuration key for the part.{% enddocs %}
+{# dlytrn, inv_snap, invlod, invsub, invsum, locmst, prtftp, prtftp_dtl #}
+{% docs jdawms__ins_user_id %}Inserted User — The user id of the person who created the row.{% enddocs %}
 
-{% docs jdawms__u_version %}Optimistic-lock version counter maintained by the WMS.{% enddocs %}
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__ins_user_id__pckwrk_dtl %}Inserted User — User id of the person who created the row.{% enddocs %}
 
-{% docs jdawms__adddte %}Timestamp the record was created/added.{% enddocs %}
+{# dlytrn, inv_snap, invlod, invsub, invsum, locmst #}
+{% docs jdawms__last_upd_dt %}Last Updated Date — The date the row was last updated.{% enddocs %}
 
-{% docs jdawms__mod_usr_id %}User/process that last modified the row in the WMS.{% enddocs %}
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__last_upd_dt__pckwrk_dtl %}Last Updated Date — Date the row was last updated.{% enddocs %}
 
-{% docs jdawms__rowid %}Source database internal row identifier.{% enddocs %}
+{# prtftp, prtftp_dtl #}
+{% docs jdawms__last_upd_dt__prtftp %}Last Updated Date — The date the row as was last updated.{% enddocs %}
+
+{# dlytrn, inv_snap, invlod, invsub, invsum, locmst, pckwrk_dtl, pckwrk_hdr, prtftp, prtftp_dtl #}
+{% docs jdawms__last_upd_user_id %}Last Updated User — The user id of the person who updated the row most recently.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__lm_assign_num %}Labor Assignment Number.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__lm_assign_seqnum %}Labor Assignment Sequence Number.{% enddocs %}
+
+{# dlytrn, invlod #}
+{% docs jdawms__load_attr1_flg %}Wrapped — The first load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.{% enddocs %}
+
+{# dlytrn, invlod #}
+{% docs jdawms__load_attr2_flg %}Load Attribute 2 — The second load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.{% enddocs %}
+
+{# dlytrn, invlod #}
+{% docs jdawms__load_attr3_flg %}Load Attribute 3 — The third load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.{% enddocs %}
+
+{# dlytrn, invlod #}
+{% docs jdawms__load_attr4_flg %}Load Attribute 4 — The fourth load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.{% enddocs %}
+
+{# dlytrn, invlod #}
+{% docs jdawms__load_attr5_flg %}Load Attribute 5 — The fifth load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__lodlvl %}LPN Level — The type of pick: L = Pallet pick, S = case pick, D = piece pick.{% enddocs %}
+
+{# dlytrn, invlod #}
+{% docs jdawms__lodnum %}LPN — Uniquely identifies invlod record. In many systems, this value is the same as the label on a pallet.{% enddocs %}
+
+{# shipment, shipment_line #}
+{% docs jdawms__mod_usr_id %}Modified by — Last Modified By.{% enddocs %}
+
+{# shipment, shipment_line #}
+{% docs jdawms__moddte %}Date Last Modified.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__pck_catch_qty %}Pick Catch Quantity — The catch quantity to pick.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__pckqty %}Pick Quantity — The amount of product to pick.{% enddocs %}
+
+{# invlod, invsub #}
+{% docs jdawms__prmflg %}Permanent Load/Sub — Set if this is a 'permanent' subload. Permanent subloads are used throughout the system when it is necessary to provide a container to attach details to. Additionally, in systems utilizing totes, they are represented as 'perm subloads'.{% enddocs %}
+
+{# dlytrn, invsum, prtmst #}
+{% docs jdawms__prt_client_id %}Item Client ID — The client which owns the item number.{% enddocs %}
+
+{# inv_snap, prtftp_dtl #}
+{% docs jdawms__prt_client_id__inv_snap %}Item Client ID.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__prt_client_id__pckwrk_dtl %}Item Client ID — Client id of item number. In non-3PL systems, this will be set to a default of '----'.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__prtdte %}Print Date — Date pick was printed.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr, shipment_line #}
+{% docs jdawms__prtnum %}Item Number - Identifier for the item, or SKU that is ordered.{% enddocs %}
+
+{# dlytrn, prtmst #}
+{% docs jdawms__prtnum__dlytrn %}Item Number — Also referred to as item number or SKU.{% enddocs %}
+
+{# inv_snap, prtftp_dtl #}
+{% docs jdawms__prtnum__inv_snap %}Item Number.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__schbat %}Schedule Batch Number — Schedule batch. This uniquely identifies the record and represents a group of picks.{% enddocs %}
+
+{# dlytrn, invsub #}
+{% docs jdawms__subnum %}Sub-LPN — Uniquely identified invsub record.{% enddocs %}
+
+{# dlytrn, inv_snap, invlod, invsub, invsum, locmst #}
+{% docs jdawms__u_version %}Version — The version number.{% enddocs %}
+
+{# invlod, invsub #}
+{% docs jdawms__uccdte %}UCC Date — The date/time the UCC128 shipping label was applied.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__untcas %}Units per case.{% enddocs %}
+
+{# invlod, pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__wh_id %}Warehouse ID - the warehouse in which the inventory is to be received.{% enddocs %}
+
+{# inv_snap, prtftp_dtl #}
+{% docs jdawms__wh_id__inv_snap %}Warehouse ID.{% enddocs %}
+
+{# invsum, shipment #}
+{% docs jdawms__wh_id__invsum %}Warehouse Id.{% enddocs %}
+
+{# pckwrk_dtl, shipment_line #}
+{% docs jdawms__wkorev %}Work Order Revision.{% enddocs %}
+
+{# pckwrk_dtl, pckwrk_hdr #}
+{% docs jdawms__wrktyp %}Work type.{% enddocs %}
+
+{# ---- pipeline / carried-over (not in the data dictionary) ---- #}
 
 {% docs jdawms___rescued_data %}Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null.{% enddocs %}
 
-{% docs jdawms__asset_typ %}Material-handling asset type (e.g. pallet, tote).{% enddocs %}
-
-{% docs jdawms__client_id %}Client/owner id for the record (multi-client warehouse partitioning).{% enddocs %}
-
-{% docs jdawms__invsts %}Inventory status code (e.g. available, hold, damaged).{% enddocs %}
-
-{% docs jdawms__lodnum %}License-plate / load (LPN) number.{% enddocs %}
-
-{% docs jdawms__lst_usr_id %}User associated with the last activity.{% enddocs %}
-
-{% docs jdawms__lstcod %}Code describing the last activity/movement type.{% enddocs %}
-
-{% docs jdawms__lstdte %}Timestamp of the last activity against this record.{% enddocs %}
-
-{% docs jdawms__moddte %}Last-modified timestamp in the source WMS.{% enddocs %}
-
-{% docs jdawms__ship_id %}Shipment identifier.{% enddocs %}
-
-{% docs jdawms__stoloc %}Storage location (slot) code.{% enddocs %}
-
-{% docs jdawms__subnum %}Sub (carton/case) number nested within a load.{% enddocs %}
-
-{% docs jdawms__untcas %}Units per case.{% enddocs %}
-
-{% docs jdawms__wrkref %}Pick-work reference (task) identifier.{% enddocs %}
-
-{% docs jdawms__catch_qty %}Catch weight/quantity (variable-weight items).{% enddocs %}
-
-{% docs jdawms__devcod %}Device code that performed/recorded the activity.{% enddocs %}
+{% docs jdawms__adddte %}Timestamp the record was created/added.{% enddocs %}
 
 {% docs jdawms__dtlnum %}Inventory detail number (innermost unit).{% enddocs %}
 
-{% docs jdawms__est_time %}Estimated task time (system-computed).{% enddocs %}
+{% docs jdawms__loaddate %}Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field).{% enddocs %}
 
-{% docs jdawms__lodlvl %}Load level indicator.{% enddocs %}
-
-{% docs jdawms__lstmov %}Timestamp of the last movement of this unit.{% enddocs %}
-
-{% docs jdawms__ordnum %}Order number.{% enddocs %}
-
-{% docs jdawms__pckqty %}Picked quantity (planned to pick).{% enddocs %}
-
-{% docs jdawms__schbat %}Scheduled batch / wave identifier.{% enddocs %}
-
-{% docs jdawms__ship_line_id %}Shipment line identifier.{% enddocs %}
-
-{% docs jdawms__untpak %}Units per pack/inner.{% enddocs %}
-
-{% docs jdawms__untqty %}Quantity in stock/base units.{% enddocs %}
-
-{% docs jdawms__abccod %}ABC velocity classification code.{% enddocs %}
-
-{% docs jdawms__app_catch_qty %}Quantity field: app_catch_qty.{% enddocs %}
-
-{% docs jdawms__appqty %}Applied/confirmed quantity.{% enddocs %}
-
-{% docs jdawms__arc_src %}WMS arc_src attribute.{% enddocs %}
-
-{% docs jdawms__arcdte %}Date/time field: arcdte.{% enddocs %}
-
-{% docs jdawms__arecod %}Area code — logical warehouse area/zone the location belongs to.{% enddocs %}
-
-{% docs jdawms__carcod %}Carrier code.{% enddocs %}
-
-{% docs jdawms__dst_mov_zone_id %}Code/identifier: dst_mov_zone_id.{% enddocs %}
-
-{% docs jdawms__expire_dte %}Expiration date of the stock.{% enddocs %}
-
-{% docs jdawms__inv_attr_dte1 %}User-defined inventory attribute: inv_attr_dte1.{% enddocs %}
-
-{% docs jdawms__inv_attr_dte2 %}User-defined inventory attribute: inv_attr_dte2.{% enddocs %}
-
-{% docs jdawms__inv_attr_flt1 %}User-defined inventory attribute: inv_attr_flt1.{% enddocs %}
-
-{% docs jdawms__inv_attr_flt2 %}User-defined inventory attribute: inv_attr_flt2.{% enddocs %}
-
-{% docs jdawms__inv_attr_flt3 %}User-defined inventory attribute: inv_attr_flt3.{% enddocs %}
-
-{% docs jdawms__inv_attr_int1 %}User-defined inventory attribute: inv_attr_int1.{% enddocs %}
-
-{% docs jdawms__inv_attr_int2 %}User-defined inventory attribute: inv_attr_int2.{% enddocs %}
-
-{% docs jdawms__inv_attr_int3 %}User-defined inventory attribute: inv_attr_int3.{% enddocs %}
-
-{% docs jdawms__inv_attr_int4 %}User-defined inventory attribute: inv_attr_int4.{% enddocs %}
-
-{% docs jdawms__inv_attr_int5 %}User-defined inventory attribute: inv_attr_int5.{% enddocs %}
-
-{% docs jdawms__inv_attr_str1 %}User-defined inventory string attribute 1 (inv_attr_str1).{% enddocs %}
-
-{% docs jdawms__inv_attr_str10 %}User-defined inventory string attribute 0 (inv_attr_str10).{% enddocs %}
-
-{% docs jdawms__inv_attr_str11 %}User-defined inventory string attribute 1 (inv_attr_str11).{% enddocs %}
-
-{% docs jdawms__inv_attr_str12 %}User-defined inventory string attribute 2 (inv_attr_str12).{% enddocs %}
-
-{% docs jdawms__inv_attr_str13 %}User-defined inventory string attribute 3 (inv_attr_str13).{% enddocs %}
-
-{% docs jdawms__inv_attr_str14 %}User-defined inventory string attribute 4 (inv_attr_str14).{% enddocs %}
-
-{% docs jdawms__inv_attr_str15 %}User-defined inventory string attribute 5 (inv_attr_str15).{% enddocs %}
-
-{% docs jdawms__inv_attr_str16 %}User-defined inventory string attribute 6 (inv_attr_str16).{% enddocs %}
-
-{% docs jdawms__inv_attr_str17 %}User-defined inventory string attribute 7 (inv_attr_str17).{% enddocs %}
-
-{% docs jdawms__inv_attr_str18 %}User-defined inventory string attribute 8 (inv_attr_str18).{% enddocs %}
-
-{% docs jdawms__inv_attr_str2 %}User-defined inventory string attribute 2 (inv_attr_str2).{% enddocs %}
-
-{% docs jdawms__inv_attr_str3 %}User-defined inventory string attribute 3 (inv_attr_str3).{% enddocs %}
-
-{% docs jdawms__inv_attr_str4 %}User-defined inventory string attribute 4 (inv_attr_str4).{% enddocs %}
-
-{% docs jdawms__inv_attr_str5 %}User-defined inventory string attribute 5 (inv_attr_str5).{% enddocs %}
-
-{% docs jdawms__inv_attr_str6 %}User-defined inventory string attribute 6 (inv_attr_str6).{% enddocs %}
-
-{% docs jdawms__inv_attr_str7 %}User-defined inventory string attribute 7 (inv_attr_str7).{% enddocs %}
-
-{% docs jdawms__inv_attr_str8 %}User-defined inventory string attribute 8 (inv_attr_str8).{% enddocs %}
-
-{% docs jdawms__inv_attr_str9 %}User-defined inventory string attribute 9 (inv_attr_str9).{% enddocs %}
-
-{% docs jdawms__lm_assign_num %}Code/identifier: lm_assign_num.{% enddocs %}
-
-{% docs jdawms__lm_assign_seqnum %}Code/identifier: lm_assign_seqnum.{% enddocs %}
-
-{% docs jdawms__load_attr1_flg %}Flag (0/1): load_attr1_flg.{% enddocs %}
-
-{% docs jdawms__load_attr2_flg %}Flag (0/1): load_attr2_flg.{% enddocs %}
-
-{% docs jdawms__load_attr3_flg %}Flag (0/1): load_attr3_flg.{% enddocs %}
-
-{% docs jdawms__load_attr4_flg %}Flag (0/1): load_attr4_flg.{% enddocs %}
-
-{% docs jdawms__load_attr5_flg %}Flag (0/1): load_attr5_flg.{% enddocs %}
-
-{% docs jdawms__lodtag %}WMS lodtag attribute.{% enddocs %}
-
-{% docs jdawms__loducc %}WMS loducc attribute.{% enddocs %}
-
-{% docs jdawms__lotflg %}Flag (0/1): lotflg.{% enddocs %}
-
-{% docs jdawms__lotnum %}Lot/batch number.{% enddocs %}
-
-{% docs jdawms__mov_zone_id %}Movement zone identifier.{% enddocs %}
-
-{% docs jdawms__ordlin %}Order line number.{% enddocs %}
-
-{% docs jdawms__ordsln %}Order sub-line number.{% enddocs %}
-
-{% docs jdawms__orgcod %}Country/origin code of the goods.{% enddocs %}
-
-{% docs jdawms__orgflg %}Flag (0/1): orgflg.{% enddocs %}
-
-{% docs jdawms__prmflg %}Flag (0/1): prmflg.{% enddocs %}
-
-{% docs jdawms__prtdte %}Date/time field: prtdte.{% enddocs %}
-
-{% docs jdawms__revflg %}Flag (0/1): revflg.{% enddocs %}
-
-{% docs jdawms__revlvl %}Revision level of the part.{% enddocs %}
-
-{% docs jdawms__srvlvl %}Carrier service level.{% enddocs %}
-
-{% docs jdawms__subtag %}WMS subtag attribute.{% enddocs %}
-
-{% docs jdawms__subucc %}WMS subucc attribute.{% enddocs %}
-
-{% docs jdawms__sup_lot_flg %}Flag (0/1): sup_lot_flg.{% enddocs %}
-
-{% docs jdawms__sup_lotnum %}Supplier lot number.{% enddocs %}
-
-{% docs jdawms__supnum %}Supplier number.{% enddocs %}
-
-{% docs jdawms__uccdte %}Date/time field: uccdte.{% enddocs %}
+{% docs jdawms__rowid %}Source database internal row identifier.{% enddocs %}
 
 {% docs jdawms__untpal %}Units per pallet.{% enddocs %}
-
-{% docs jdawms__uomcod %}Unit-of-measure code.{% enddocs %}
-
-{% docs jdawms__velzon %}Velocity zone.{% enddocs %}
-
-{% docs jdawms__wkonum %}Code/identifier: wkonum.{% enddocs %}
-
-{% docs jdawms__wkorev %}WMS wkorev attribute.{% enddocs %}
-
-{% docs jdawms__wrkref_dtl %}Pick-work detail (task line) identifier.{% enddocs %}
-
-{% docs jdawms__wrktyp %}Work type code.{% enddocs %}

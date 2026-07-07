@@ -1,0 +1,945 @@
+table_name,column_name,lngdsc,comtyp,length,null_flg,pk_flg,ident_flg,column_comment
+dlytrn,dlytrn_id,Daily Transaction ID,S,10,False,True,False,Daily trnsaction ID
+dlytrn,trndte,Transaction Date,D,14,True,False,False,The date and time the activity occurred.
+dlytrn,oprcod,Operation Code,S,9,True,False,False,The operation code of the transaction.
+dlytrn,actcod,Activity Code,S,40,True,False,False,The activity code of the transaction.
+dlytrn,lodnum,LPN,S,30,True,False,False,"Uniquely identifies invlod record.  In many systems, this value is the same as the label on a pallet."
+dlytrn,subnum,Sub-LPN,S,30,True,False,False,Uniquely identified invsub record.
+dlytrn,dtlnum,Detail LPN,S,30,True,False,False,Uniquely identified invdtl record.
+dlytrn,to_lodnum,To Load Number,S,30,True,False,False,"Uniquely identifies destination invlod record.  In many systems, this value is the same as the label on a pallet."
+dlytrn,to_subnum,To Case Identifier,S,30,True,False,False,Uniquely identified destination invsub record.
+dlytrn,to_dtlnum,To Piece Identifier,S,30,True,False,False,Uniquely identified destination invdtl record.
+dlytrn,prtnum,Item Number,S,50,True,False,False,Also referred to as item number or SKU.
+dlytrn,prt_client_id,Item Client ID,S,32,True,False,False,The client which owns the item number.
+dlytrn,orgcod,Origin Code,S,25,True,False,False,"Origin Code of the inventory tracked by this detail. If this item is not origin code tracked, then this field will take on a default value of '----'."
+dlytrn,revlvl,Revision Level,S,25,True,False,False,"Revision level of the inventory tracked by this detail.  If this item is not revision level tracked, then this field will take on a default value of '----'."
+dlytrn,lotnum,Lot Number,S,25,True,False,False,"Lot number of the inventory tracked by this detail.  If this item is not lot number tracked, then this field will take on a default value of '----'."
+dlytrn,sup_lotnum,Supplier Lot Number,S,25,True,False,False,Lot number supplied by the supplier for tracking purposes.
+dlytrn,supnum,Supplier Number,S,32,True,False,False,Supplier Number : The supplier number of the inventory tracked by this detail
+dlytrn,inv_attr_str1,Inventory Attribute Text 1,S,100,True,False,False,Inventory Attribute Text 1 of the inventory tracked by this detail.
+dlytrn,inv_attr_str2,Inventory Attribute Text 2,S,100,True,False,False,Inventory Attribute Text 2 of the inventory tracked by this detail.
+dlytrn,inv_attr_str3,Inventory Attribute Text 3,S,100,True,False,False,Inventory Attribute Text 3 of the inventory tracked by this detail.
+dlytrn,inv_attr_str4,Inventory Attribute Text 4,S,100,True,False,False,Inventory Attribute Text 4 of the inventory tracked by this detail.
+dlytrn,inv_attr_str5,Inventory Attribute Text 5,S,100,True,False,False,Inventory Attribute Text 5 of the inventory tracked by this detail.
+dlytrn,inv_attr_str6,Inventory Attribute Text 6,S,100,True,False,False,Inventory Attribute Text 6 of the inventory tracked by this detail.
+dlytrn,inv_attr_str7,Inventory Attribute Text 7,S,100,True,False,False,Inventory Attribute Text 7 of the inventory tracked by this detail.
+dlytrn,inv_attr_str8,Inventory Attribute Text 8,S,100,True,False,False,Inventory Attribute Text 8 of the inventory tracked by this detail.
+dlytrn,inv_attr_str9,Inventory Attribute Text 9,S,100,True,False,False,Inventory Attribute Text 9 of the inventory tracked by this detail.
+dlytrn,inv_attr_str10,Inventory Attribute Text 10,S,100,True,False,False,Inventory Attribute Text 10 of the inventory tracked by this detail.
+dlytrn,inv_attr_str11,Inventory Attribute Text 11,S,100,True,False,False,Inventory Attribute Text 11 of the inventory tracked by this detail.
+dlytrn,inv_attr_str12,Inventory Attribute Text 12,S,100,True,False,False,Inventory Attribute Text 12 of the inventory tracked by this detail.
+dlytrn,inv_attr_str13,Inventory Attribute Text 13,S,100,True,False,False,Inventory Attribute Text 13 of the inventory tracked by this detail.
+dlytrn,inv_attr_str14,Inventory Attribute Text 14,S,100,True,False,False,Inventory Attribute Text 14 of the inventory tracked by this detail.
+dlytrn,inv_attr_str15,Inventory Attribute Text 15,S,100,True,False,False,Inventory Attribute Text 15 of the inventory tracked by this detail.
+dlytrn,inv_attr_str16,Inventory Attribute Text 16,S,100,True,False,False,Inventory Attribute Text 16 of the inventory tracked by this detail.
+dlytrn,inv_attr_str17,Inventory Attribute Text 17,S,100,True,False,False,Inventory Attribute Text 17 of the inventory tracked by this detail.
+dlytrn,inv_attr_str18,Inventory Attribute Text 18,S,100,True,False,False,Inventory Attribute Text 18 of the inventory tracked by this detail.
+dlytrn,inv_attr_int1,Inventory Attribute Number 1,I,4,True,False,False,Inventory Attribute Number 1 of the inventory tracked by this detail.
+dlytrn,inv_attr_int2,Inventory Attribute Number 2,I,4,True,False,False,Inventory Attribute Number 2 of the inventory tracked by this detail.
+dlytrn,inv_attr_int3,Inventory Attribute Number 3,I,4,True,False,False,Inventory Attribute Number 3 of the inventory tracked by this detail.
+dlytrn,inv_attr_int4,Inventory Attribute Number 4,I,4,True,False,False,Inventory Attribute Number 4 of the inventory tracked by this detail.
+dlytrn,inv_attr_int5,Inventory Attribute Number 5,I,4,True,False,False,Inventory Attribute Number 5 of the inventory tracked by this detail.
+dlytrn,inv_attr_flt1,Unit Cost,F,8,True,False,False,Inventory Attribute Decimal 1 of the inventory tracked by this detail.
+dlytrn,inv_attr_flt2,Inventory Attribute Decimal 2,F,8,True,False,False,Inventory Attribute Decimal 2 of the inventory tracked by this detail.
+dlytrn,inv_attr_flt3,Inventory Attribute Decimal 3,F,8,True,False,False,Inventory Attribute Decimal 3 of the inventory tracked by this detail.
+dlytrn,inv_attr_dte1,Inventory Attribute Date 1,D,14,True,False,False,Inventory Attribute Date 1 of the inventory tracked by this detail.
+dlytrn,inv_attr_dte2,Inventory Attribute Date 2,D,14,True,False,False,Inventory Attribute Date 2 of the inventory tracked by this detail.
+dlytrn,movref,Move Reference,S,20,True,False,False,The move reference of the transaction.  This reference is used internally by the system to show what type of inventory move occurred.
+dlytrn,reacod,Reason Code,S,20,True,False,False,The reason code assigned to the transaction.
+dlytrn,trnqty,Quantity,I,4,True,False,False,The unit quantity affected by this transaction.
+dlytrn,catch_qty,Catch Quantity,F,8,True,False,False,The catch qty a user may enter per stocking unit of measure.
+dlytrn,traknm,Tracking Number,S,60,True,False,False,Tracking Number : The number which is generated by the parcel manifesting system and is used by parcel carriers to track the package.
+dlytrn,catch_unttyp,Catch Unit Type,S,30,True,False,False,The metric that catch units are captured in.
+dlytrn,fr_arecod,From Area,S,10,True,False,False,The source area code of the transaction.
+dlytrn,frstol,From Location,S,20,True,False,False,The source location of the transaction.
+dlytrn,frinvs,From Inv Status,S,4,True,False,False,The original inventory status of the inventory affected by this transaction.
+dlytrn,fr_age_pflnam,From Aging Profile,S,30,True,False,False,The original aging profile of the inventory affected by this transaction.
+dlytrn,to_arecod,To Area,S,10,True,False,False,The destination area code of the transaction.
+dlytrn,tostol,To Location,S,20,True,False,False,The destination location of the transaction.
+dlytrn,toinvs,To Inv Status,S,4,True,False,False,The final inventory status of the inventory affected by this transaction.
+dlytrn,to_age_pflnam,To Aging Profile,S,30,True,False,False,The final aging profile of the inventory affected by this transaction.
+dlytrn,trlr_num,Transport Equipment Number,S,20,True,False,False,The trailer number of the trailer.
+dlytrn,trct_num,,S,20,True,False,False,The tractor number of the trailer.
+dlytrn,carcod,Carrier,S,10,True,False,False,The carrier code of the trailer.
+dlytrn,ship_id,Shipment ID,S,30,True,False,False,The shipment ID the order was on.
+dlytrn,client_id,Client ID,S,32,True,False,False,The client which owns the order.
+dlytrn,ordnum,Outbound Order Number,S,35,True,False,False,The order number the activity record is for.
+dlytrn,trndtl_id,Transaction Detail ID,S,10,True,False,False,A link to antoher transaction Id for another table to show detailed information about the transaction.
+dlytrn,trndtl_table,Transaction Detail Table,S,30,True,False,False,The table containing the detail information about the transaction.
+dlytrn,adj_ref1,Adjustment Reference One,S,20,True,False,False,Reference number for sending information to the host.
+dlytrn,adj_ref2,Adjustment Reference Two,S,20,True,False,False,Reference number for sending information to the host.
+dlytrn,usr_id,User ID,S,40,True,False,False,The user the did the action that the activity is being captured for.
+dlytrn,devcod,Device Code,S,20,True,False,False,The device code that should be used when printing labels for this pick.
+dlytrn,arcdte,Archive Date,D,14,True,False,False,The archive date if this transaction was archived.
+dlytrn,arc_src,Archive Source,S,30,True,False,False,"The archival source of this table, if this table is created as an archiving table."
+dlytrn,cmnt,Comments,S,2000,True,False,False,Comment - Comment used for supervisor approval of adjustments.
+dlytrn,asset_typ,Handling Unit Type,S,30,True,False,False,Asset Type : Asset type of the asset
+dlytrn,asset_id,Handling Unit ID,S,30,True,False,False,Asset ID : Unique identifier for the asset.
+dlytrn,asset_stat,Handling Unit Status,S,15,True,False,False,Asset Status : Status of the asset.
+dlytrn,load_attr1_flg,Wrapped,I,4,False,False,False,The first load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+dlytrn,load_attr2_flg,Load Attribute 2,I,4,False,False,False,The second load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+dlytrn,load_attr3_flg,Load Attribute 3,I,4,False,False,False,The third load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+dlytrn,load_attr4_flg,Load Attribute 4,I,4,False,False,False,The fourth load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+dlytrn,load_attr5_flg,Load Attribute 5,I,4,False,False,False,The fifth load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+dlytrn,var_nam,Variable Name,S,200,True,False,False,Variable Name - Name of the attribute that was changed.
+dlytrn,fr_value,From Value,S,200,True,False,False,From value - Original value of the attribute.
+dlytrn,to_value,To Value,S,200,True,False,False,To value - Changed value of the attribute.
+dlytrn,wh_id,Warehouse ID,S,32,True,False,False,Warehouse ID - the warehouse in which the building exists.
+dlytrn,uomcod,Unit Of Measure,S,2,True,False,False,Unit of measure used in the activity.
+dlytrn,ftpcod,Footprint Code,S,30,True,False,False,Footprint code used in the activity.
+dlytrn,distro_excp_id,Distribution Exception ID,S,35,True,False,False,Unique Id to identify the distribution exception.
+dlytrn,excp_code,Exception,S,200,True,False,False,Exception Code for this distribution exception.
+dlytrn,expqty,Expected Quantity,I,4,True,False,False,The quantity expected to be distributed.
+dlytrn,rptqty,Reported Quantity,I,4,True,False,False,The quantity actually distributed.
+dlytrn,u_version,Version,I,4,True,False,False,The version number
+dlytrn,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+dlytrn,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row was last updated
+dlytrn,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+dlytrn,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+dlytrn,to_trct_num,,S,20,True,False,False,The final tractor number of the tractor affected by this transaction
+dlytrn,to_trlr_num,To Transport Equipment Number,S,20,True,False,False,The final trailer number of the trailer affected by this transaction
+dlytrn,to_carcod,To Carrier,S,10,True,False,False,The final carrier of the trailer affected by this transaction
+dlytrn,srvlvl,Service Level,S,10,True,False,False,Service level of the record
+dlytrn,to_srvlvl,To Service Level,S,10,True,False,False,The final srvlvl of the shipment/carrier move affected by this transaction
+dlytrn,rowid,Row ID,I,4,False,False,True,
+inv_snap,inv_snap_id,Inventory Snapshot ID,S,10,False,True,False,Inventory Snap ID - PK value for this table.
+inv_snap,prtnum,Item Number,S,50,False,False,False,Item Number
+inv_snap,prt_client_id,Item Client ID,S,32,False,False,False,Item Client ID
+inv_snap,gendte,Generation Date,D,14,False,False,False,Generation Date: Date and time the inventory snapshot was generated.
+inv_snap,rcvqty,Receive Quantity,I,4,False,False,False,Received Quantity: Number of units received between the last time a snapshot was generated and the Generation Date.
+inv_snap,shpqty,Shipped Quantity,I,4,False,False,False,Shipped Quantity: Number of units shipped between the last time a snapshot was generated and the Generation Date.
+inv_snap,adjqty,Adjusted Quantity,I,4,False,False,False,"No of units adjusted between the last time a snapshot was generated and Generation Date. An adjustment includes adding, modifying or deleting inventory through invadjopr and cntaudopr, as well as inventory moved to WIP supply areas."
+inv_snap,wko_cnsqty,Work Order Consumed Quantity,I,4,False,False,False,Work Order Consumed Quantity: Number of units delivered to a work order processing location between the last time a snapshot was generated and the Generation Date.
+inv_snap,wko_rcvqty,Work Order Received Quantity,I,4,False,False,False,Number of units received through a WO between the last time a snapshot was generated and Generation Date. This includes inventory received from a WO either through production of a top level item or the return to stock of components.
+inv_snap,on_hand_qty,On-Hand Qty,I,4,False,False,False,The results here will be dictated by a policy. It will either be: the qty of this item number/item client id within four-wall locations or  specified inventory status progression and is within four-wall locations.
+inv_snap,shippable_qty,Shippable Qty,I,4,False,False,False,Shippable Quantity: A subset of the On-Hand Inventory Quantity that only includes on-hand inventory with an inventory status that is shippable.
+inv_snap,ordered_qty,Ordered Qty,I,4,False,False,False,Ordered Quantity: The quantity of the item required for outstanding order lines.
+inv_snap,planned_qty,Planned Quantity,I,4,False,False,False,Shipment Planned Quantity: The quantity of the item number/item client id that has already been assigned to a shipment that is not closed or cancelled.
+inv_snap,wko_ordered_qty,Work Order Ordered Qty,I,4,False,False,False,
+inv_snap,pnd_rcvqty,Pending Receipt Qty,I,4,False,False,False,"The total qty of this item number/item client id that is expected, but has not yet been putaway and received into inventory. The results here will be dictated by a policy"
+inv_snap,wh_id,Warehouse ID,S,32,False,False,False,Warehouse ID
+inv_snap,snap_gen_num,Snapshot Generation Number,S,10,True,False,False,Maps to snap_gen_num on the Inventory Activity table. This indicates that all rows in the Inventory Activity table with a snap_gen_num that matches this value were included in the rcvqty and shpqty sum totals for this snapshot.
+inv_snap,moddte,Date Last Modified,D,14,True,False,False,Last date this inventory snapshot was modified.
+inv_snap,mod_usr_id,Modified by,S,40,True,False,False,Last user to modify this inventory snapshot.
+inv_snap,u_version,Version,I,4,True,False,False,The version number
+inv_snap,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+inv_snap,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row was last updated
+inv_snap,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+inv_snap,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+inv_snap,rowid,Row ID,I,4,False,False,True,
+invdtl,dtlnum,Detail LPN,S,30,False,True,False,
+invdtl,subnum,Sub-LPN,S,30,False,False,False,Identifies which inventory sub (invsub) record this detail is attached to.
+invdtl,phdflg,Physical Piece,I,4,True,False,False,"This flag is set to 1 in the event that this invdtl maps to a physical piece.  In that case, the dtlnum represents the labeled piece."
+invdtl,prtnum,Item Number,S,50,False,False,False,Item number of the inventory tracked by this detail.
+invdtl,prt_client_id,Item Client ID,S,32,False,False,False,Client ownership for item number.
+invdtl,orgcod,Origin Code,S,25,False,False,False,"Origin Code of the inventory tracked by this detail. If this item is not origin code tracked, then this field will take on a default value of '----'."
+invdtl,revlvl,Revision Level,S,25,False,False,False,"Revision level of the inventory tracked by this detail.  If this item is not revision level tracked, then this field will take on a default value of '----'."
+invdtl,lotnum,Lot Number,S,25,False,False,False,"Lot number of the inventory tracked by this detail.  If this item is not lot number tracked, then this field will take on a default value of '----'."
+invdtl,sup_lotnum,Supplier Lot Number,S,25,True,False,False,Lot number supplied by the supplier for tracking purposes.
+invdtl,invsts,Inventory Status,S,4,False,False,False,Inventory status of the inventory tracked by this detail.
+invdtl,supnum,Supplier Number,S,32,True,False,False,Supplier Number of the Inventory tracked by this detail.
+invdtl,cnsg_flg,Consigned,I,4,True,False,False,"Consigned Flag: The status indicates ownership of the inventory (1=ownership is with the supplier, 0=ownership is not with supplier)"
+invdtl,age_pflnam,Aging Profile Name,S,30,True,False,False,Aging profile for this inventory.  This only applies to items that are date controlled.
+invdtl,fifdte,FIFO Date,D,14,False,False,False,The date to be used for FIFO calculations with this inventory.
+invdtl,mandte,Manufactured Date,D,14,True,False,False,The date this product was manufactured.  It is calculated by calling the command 'get manufacturing date'.
+invdtl,expire_dte,Expiration Date,D,14,True,False,False,The date this product will expire.  This is only used for date controlled product and is calculated based on the product's aging profile.
+invdtl,untqty,Unit Quantity,I,4,False,False,False,The amount of inventory (in stock keeping units) this detail tracks.
+invdtl,untcas,Units Per Case,I,4,False,False,False,The number of units in a case of the inventory tracked by this detail.
+invdtl,untpak,Units Per Pack,I,4,False,False,False,The number of units in an inner pack carton of the inventory tracked by this detail.
+invdtl,ftpcod,Footprint Code,S,30,True,False,False,The footprint code of the inventory tracked by this invdtl.
+invdtl,rcvkey,Receive Key,S,15,True,False,False,"If this detail was received, then the receive key will be filled in indicating which rcvlin this detail was received against."
+invdtl,ship_line_id,Shipment Line ID,S,10,True,False,False,"If this detail was picked for a shipment, then the ship_line_id field will be filled in mapping it to the particular shipment line which this detail satisfied."
+invdtl,wrkref,Work Task,S,12,True,False,False,"If this detail was picked for a shipment or a work order, the wrkref field will be filled in which provides a mapping into the pckwrk_hdr/pckwrk_dtl tables for the pick which this detail satisfied."
+invdtl,wrkref_dtl,Work Task Detail,S,15,True,False,False,Pick Work Detail ID - The unique identifier of the pick work detail record.
+invdtl,adddte,Date Added,D,14,True,False,False,The date this detail was added to the system.
+invdtl,rcvdte,Received Date,D,14,True,False,False,This indicates the date and time that the detail was received.
+invdtl,lstmov,Last Move Date,D,14,True,False,False,Last date/time detail was moved.
+invdtl,lstdte,Last Activity Date/Time,D,14,True,False,False,Last date/time activity occurred for this detail.
+invdtl,lstcod,Last Activity Code,S,20,True,False,False,Last activity code on this detail.
+invdtl,lst_usr_id,Last User,S,40,True,False,False,Last user which performed an activity on this detail.
+invdtl,cmpkey,Component Key,S,20,True,False,False,"If this detail was produced as a result of production, this field will be filled in to provide a mapping in to the cmphdr table which will indicate which work order this detail was produced against."
+invdtl,alcflg,Allow Allocation,I,4,True,False,False,Allow Allocation Flag.  Is this detail allowed for use in allocation?
+invdtl,catch_qty,Catch Quantity,F,8,True,False,False,Catch Quantity
+invdtl,lst_mov_zone_id,Last Movement Zone ID,I,4,True,False,False,Last Movement Zone ID. Displays the last movement zone id of the inventory. Moves to the RF device will NOT be updated with the rdt device as the last movement zone.
+invdtl,bill_through_dte,Bill Through Date,D,14,True,False,False,Refers to the ending date of the anniversary storage period.  This is usually one day less than the sum of the received date and the billing period length.
+invdtl,condcod,Condition Code,S,1,True,False,False,The condition code of inventory returned to the warehouse.
+invdtl,distro_id,Distribution Identifier,S,35,True,False,False,Distribution Identifer - the distribution inventory reserved for
+invdtl,distro_flg,Distribution Candidate,I,4,False,False,False,Indicates if the inventory is candidate for distribution.
+invdtl,hld_flg,On Hold,I,4,False,False,False,This flag indicates that the inventory is put on hold if it has a value of 1 .
+invdtl,inv_attr_str1,Inventory Attribute Text 1,S,100,True,False,False,Inventory Attribute Text 1.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str2,Inventory Attribute Text 2,S,100,True,False,False,Inventory Attribute Text 2.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str3,Inventory Attribute Text 3,S,100,True,False,False,Inventory Attribute Text 3.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str4,Inventory Attribute Text 4,S,100,True,False,False,Inventory Attribute Text 4.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str5,Inventory Attribute Text 5,S,100,True,False,False,Inventory Attribute Text 5.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str6,Inventory Attribute Text 6,S,100,True,False,False,Inventory Attribute Text 6.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str7,Inventory Attribute Text 7,S,100,True,False,False,Inventory Attribute Text 7.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str8,Inventory Attribute Text 8,S,100,True,False,False,Inventory Attribute Text 8.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str9,Inventory Attribute Text 9,S,100,True,False,False,Inventory Attribute Text 9.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str10,Inventory Attribute Text 10,S,100,True,False,False,Inventory Attribute Text 10.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str11,Inventory Attribute Text 11,S,100,True,False,False,Inventory Attribute Text 11.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str12,Inventory Attribute Text 12,S,100,True,False,False,Inventory Attribute Text 12.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str13,Inventory Attribute Text 13,S,100,True,False,False,Inventory Attribute Text 13.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str14,Inventory Attribute Text 14,S,100,True,False,False,Inventory Attribute Text 14.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str15,Inventory Attribute Text 15,S,100,True,False,False,Inventory Attribute Text 15.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str16,Inventory Attribute Text 16,S,100,True,False,False,Inventory Attribute Text 16.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str17,Inventory Attribute Text 17,S,100,True,False,False,Inventory Attribute Text 17.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_str18,Inventory Attribute Text 18,S,100,True,False,False,Inventory Attribute Text 18.This field can be enabled to track and use custom text data during standard inventory-related operations.
+invdtl,inv_attr_int1,Inventory Attribute Number 1,I,4,True,False,False,Inventory Attribute Number 1.This field can be enabled to track and use custom number data during standard inventory-related operations.
+invdtl,inv_attr_int2,Inventory Attribute Number 2,I,4,True,False,False,Inventory Attribute Number 2.This field can be enabled to track and use custom number data during standard inventory-related operations.
+invdtl,inv_attr_int3,Inventory Attribute Number 3,I,4,True,False,False,Inventory Attribute Number 3.This field can be enabled to track and use custom number data during standard inventory-related operations.
+invdtl,inv_attr_int4,Inventory Attribute Number 4,I,4,True,False,False,Inventory Attribute Number 4.This field can be enabled to track and use custom number data during standard inventory-related operations.
+invdtl,inv_attr_int5,Inventory Attribute Number 5,I,4,True,False,False,Inventory Attribute Number 5.This field can be enabled to track and use custom number data during standard inventory-related operations.
+invdtl,inv_attr_flt1,Unit Cost,F,8,True,False,False,Inventory Attribute Decimal 1.This field can be enabled to track and use custom decimal data during standard inventory-related operations.
+invdtl,inv_attr_flt2,Inventory Attribute Decimal 2,F,8,True,False,False,Inventory Attribute Decimal 2.This field can be enabled to track and use custom decimal data during standard inventory-related operations.
+invdtl,inv_attr_flt3,Inventory Attribute Decimal 3,F,8,True,False,False,Inventory Attribute Decimal 3.This field can be enabled to track and use custom decimal data during standard inventory-related operations.
+invdtl,inv_attr_dte1,Inventory Attribute Date 1,D,14,True,False,False,Inventory Attribute Date 1.This field can be enabled to track and use custom date data during standard inventory-related operations.
+invdtl,inv_attr_dte2,Inventory Attribute Date 2,D,14,True,False,False,Inventory Attribute Date 2.This field can be enabled to track and use custom date data during standard inventory-related operations.
+invdtl,cstms_cnsgnmnt_id,Customs Consignment ID,S,18,True,False,False,Customs Consignment ID uniquely identify a consignment of bonded inventory on a per receipt basis.
+invdtl,rttn_id,Rotation ID,S,10,True,False,False,Rotation ID used for tracking bonded inventory.
+invdtl,cstms_bond_flg,Under Bond,I,4,False,False,False,Flag used to indicate whether or not the inventory is bonded. '1' means under bond and '0' means not under bond.
+invdtl,dty_stmp_flg,Excise Duty Stamp,I,4,False,False,False,Flag used to indicate whether or not the inventory has a duty stamp applied. '1' means yes and '0' means no.
+invdtl,u_version,Version,I,4,True,False,False,The version number
+invdtl,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+invdtl,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row was last updated
+invdtl,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+invdtl,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+invdtl,asnflg,ASN,I,4,True,False,False,This flag is set to 1 when inventory is downloaded from the HOST as an ASN
+invdtl,cstms_typ,Customs Type,S,8,True,False,False,Customs Type. This field indicates what customs type does this inventory received from.
+invdtl,cstms_crncy,Customs Currency,S,20,True,False,False,The currency customs needs paid in.
+invdtl,dflt_orgcod,Default Origin Code,S,3,True,False,False,Country where the goods were manufactured.
+invdtl,cstms_vat_cod,Customs VAT Code,S,10,True,False,False,Customs Value Added Tax Code which can have a value of 'S' for Standard VAT or a 'Z' for Zero Vat (VAT not required).
+invdtl,dty_stmp_trk_flg,Duty Stamp Tracked,I,4,False,False,False,This must be enabled ('1') for all excise products over 30% alcohol by volume in containers 35cl or larger.
+invdtl,cstms_cst,Customs Cost,I,4,True,False,False,The customs cost of the item used by Duty Management
+invdtl,cstms_cmmdty_cod,Customs Commodity Code,S,150,True,False,False,Customs commodity code used by Duty Management to determine the type of duty to be paid. No validation in WM.
+invlod,lodnum,LPN,S,30,False,True,False,"Uniquely identifies invlod record.  In many systems, this value is the same as the label on a pallet."
+invlod,wh_id,Warehouse ID,S,32,False,False,False,Warehouse ID - the warehouse in which the inventory is to be received.
+invlod,stoloc,Location,S,20,False,False,False,Indicates the storage location for this pallet.
+invlod,lodwgt,Load Weight,F,8,True,False,False,"In systems where scales are available, this field may be used to store the physical weight of the pallet that this entry represents."
+invlod,prmflg,Permanent Load/Sub,I,4,True,False,False,"Set if this is a 'permanent' subload.  Permanent subloads are used throughout the system when it is necessary to provide a container to attach details to.  Additionally, in systems utilizing totes, they are represented as 'perm subloads'"
+invlod,unkflg,Unknown,I,4,True,False,False,"This will be set to 1 if this invsub record represents a physical case in the system.  In this case, the subnum will be set to the external labeling on the physical case."
+invlod,mvlflg,Movable Load,I,4,True,False,False,"This is used to indicate if this subload entry may be moved.  In the case where permanent subloads are used to provide places to attach inventory, it is seldom desired that those permanent subs be allowed to move."
+invlod,adddte,Date Added,D,14,False,False,False,The date/time this load was added to the system.
+invlod,lstmov,Last Move Date,D,14,True,False,False,The last date/time this load was moved.
+invlod,lstdte,Last Activity Date/Time,D,14,True,False,False,The last date/time an activity happened against this load.
+invlod,lstcod,Last Activity Code,S,20,True,False,False,Last activity code on this load
+invlod,lst_usr_id,Last User,S,40,True,False,False,Last user which performed an activity on this load.
+invlod,loducc,LPN UCC,S,20,True,False,False,"If UCC128 processing is installed and this load receives a UCC128 shipping label, then this field will be filled in with the value of that label."
+invlod,uccdte,UCC Date,D,14,True,False,False,The date/time the UCC128 shipping label was applied.
+invlod,palpos,Pallet Position,S,20,True,False,False,Indicates what position the load's pallet occupies.
+invlod,asset_typ,Handling Unit Type,S,30,True,False,False,Asset Type - Identifies the asset type for this load
+invlod,avg_unt_catch_qty,Average Unit Catch Quantity,F,8,True,False,False,Catch Quantity.  Used by the Average Catch Quantity functionality to store an average catch value for a load's units.
+invlod,u_version,Version,I,4,True,False,False,The version number
+invlod,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+invlod,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row was last updated
+invlod,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+invlod,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+invlod,lodtag,Load Tag,S,40,True,False,False,The RFID tag associated to pallet
+invlod,lod_tagsts,Load Tag Status,S,40,True,False,False,Pallet RFID Tag Status
+invlod,lodhgt,Load Height,F,8,True,False,False,The Load Height.
+invlod,bundled_flg,Bundled,I,4,True,False,False,Bundled Flag - Indicate if the load was created by bundling multiple cases for parcel manifesting.
+invlod,distro_palopn_flg,Distribution Pallet Open Flag,I,4,True,False,False,Distribution Pallet Open Flag - Indicate whether the shipping pallet is open or not.
+invlod,load_attr1_flg,Wrapped,I,4,False,False,False,The first load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+invlod,load_attr2_flg,Load Attribute 2,I,4,False,False,False,The second load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+invlod,load_attr3_flg,Load Attribute 3,I,4,False,False,False,The third load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+invlod,load_attr4_flg,Load Attribute 4,I,4,False,False,False,The fourth load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+invlod,load_attr5_flg,Load Attribute 5,I,4,False,False,False,The fifth load attribute. A load attribute is a configurable flag field to indicate attributes of a load such as the load being wrapped.
+invlod,no_loc_putaway,No Location Putaway Flag,I,4,False,False,False,This column is a flag that denotes if this pallet failed to find a location when doing putaway.
+invlod,completed_receiving_date,Receipt Confirmation Date,D,14,True,False,False,Date the receiving of this load was completed.
+invlod,est_time,Estimated Goal Time,I,4,True,False,False,Labor Estimate (Seconds).
+invlod,lodlen,Load Length,F,8,True,False,False,The Load length.
+invlod,lodwdt,Load Width,F,8,True,False,False,The Load width.
+invlod,no_of_boxes,Number of Cases,I,4,True,False,False,No of cases on the load.
+invlod,est_lodwgt,Estimated Load Weight,F,8,True,False,False,This field is used to store the system estimated weight of the pallet that this entry represents.
+invsub,subnum,Sub-LPN,S,30,False,True,False,Uniquely identified invsub record.
+invsub,lodnum,LPN,S,30,False,False,False,Identifies which inventory load (invlod) record this subload is attached to.
+invsub,subwgt,Sub-Load Weight,F,8,True,False,False,"In systems where scales are available, this field may be used to store the physical weight of the case that this invsub entry represents."
+invsub,prmflg,Permanent Load/Sub,I,4,True,False,False,"Set if this is a 'permanent' subload.  Permanent subloads are used throughout the system when it is necessary to provide a container to attach details to.  Additionally, in systems utilizing totes, they are represented as 'perm subloads'"
+invsub,phyflg,Physical Case,I,4,True,False,False,"This will be set to 1 if this invsub record represents a physical case in the system.  In this case, the subnum will be set to the external labeling on the physical case."
+invsub,mvsflg,Movable Sub-Load,I,4,True,False,False,"This is used to indicate if this subload entry may be moved.  In the case where permanent subloads are used to provide places to attach inventory, it is seldom desired that those permanent subs be allowed to move."
+invsub,ctnflg,Cartonized,I,4,True,False,False,This will be set if this sub was created as a result of a cartonization or overpack operation.
+invsub,idmflg,Inhibit Detail Move,I,4,True,False,False,"This flag will be set if details are not allowed to move out from under this subload.  When serialized product is tracked in a facility, it is sometimes desired to disable details from moving out of a serialized, physical case."
+invsub,distro_ctnopn_flg,Put To Store Carton Open,I,4,True,False,False,The flag to show whether the put to store Carton is open or not.
+invsub,wrkref,Work Task,S,12,True,False,False,"If this subload represents a cartonized or overpacked case,  and the case was picked against a work reference, the wrkref field will map back to the pckwrk_hdr/pckwrk_dtl tables  to indicate which KIT pick this subload was picked against."
+invsub,tagdev,Tagged Device,S,20,True,False,False,Used so that RF can tag cases for later operations.
+invsub,adddte,Date Added,D,14,True,False,False,Set to the date and time this invsub entry was added to the system.
+invsub,lstmov,Last Move Date,D,14,True,False,False,The last date/time this subload was moved.
+invsub,lstdte,Last Activity Date/Time,D,14,True,False,False,Last date/time activity occurred on this subload.
+invsub,lstcod,Last Activity Code,S,20,True,False,False,Last activity code on this subload.
+invsub,lst_usr_id,Last User,S,40,True,False,False,Last user which performed an activity on this subload.
+invsub,subucc,Sub-Load UCC Code,S,20,True,False,False,"If UCC128 processing is installed and this case receives a UCC128 shipping label, then this field will be filled in with the value of that label."
+invsub,uccdte,UCC Date,D,14,True,False,False,The date/time the UCC128 shipping label was applied.
+invsub,subtag,Case Tag,S,40,True,False,False,The RFID tag associated to carton
+invsub,sub_tagsts,Case Tag Status,S,40,True,False,False,Carton RFID Tag Status
+invsub,asset_typ,Handling Unit Type,S,30,True,False,False,Asset Type - Identifies the asset type for this sub
+invsub,est_subwgt,Estimated Sub-Load Weight,F,8,True,False,False,This field is used to store the system estimated weight of the case that this invsub entry represents.
+invsub,u_version,Version,I,4,True,False,False,The version number
+invsub,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+invsub,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row was last updated
+invsub,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+invsub,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+invsum,stoloc,Location,S,20,False,True,False,Storage Location.  Used when specifying product criteria for future holds.
+invsum,prtnum,Item Number,S,50,False,True,False,Item Number.  Used when specifying product criteria for future holds.
+invsum,prt_client_id,Item Client ID,S,32,False,True,False,The client which owns the item number.
+invsum,wh_id,Warehouse ID,S,32,False,True,False,Warehouse Id.
+invsum,arecod,Area,S,10,False,False,False,Area Code.  Used when specifying product criteria for future holds.
+invsum,invsts,Inventory Status,S,4,True,False,False,Inventory Status.  Used when specifying product criteria for future holds.
+invsum,untpak,Units Per Pack,I,4,False,False,False,"Units per pack of the component to be consumed.  If set to 0, there is no restriction."
+invsum,untcas,Units Per Case,I,4,False,False,False,"Units per case of the component to be consumed.  If set to 0, there is no restriction."
+invsum,untpal,Units Per Pallet,I,4,False,False,False,Unit Per Pallet
+invsum,untqty,Unit Quantity,I,4,False,False,False,Unit quantity of finished good produced.
+invsum,comqty,Committed Quantity,I,4,False,False,False,Committed Quantity
+invsum,pndqty,Pending Quantity,I,4,False,False,False,Pending quantity to locaton
+invsum,com_catch_qty,Committed Catch Quantity,F,8,True,False,False,Committed catch quantity.
+invsum,catch_qty,Catch Quantity,F,8,True,False,False,Current catch quantity.
+invsum,olddte,Old Date,D,14,False,False,False,Date of old inventory
+invsum,newdte,New Date,D,14,False,False,False,Date of new inventory
+invsum,old_expire_dte,Old Expiration Date,D,14,True,False,False,Expiration date of the old inventory
+invsum,new_expire_dte,New Expiration Date,D,14,True,False,False,Expiration date of the new inventory
+invsum,old_inv_attr_dte1,Oldest Inventory Attribute Date 1,D,14,True,False,False,Inventory atttribute Date1 date of the old inventory
+invsum,new_inv_attr_dte1,Newest Inventory Attribute Date 1,D,14,True,False,False,Inventory atttribute Date1 date of the new inventory
+invsum,old_inv_attr_dte2,Oldest Inventory Attribute Date 2,D,14,True,False,False,Inventory atttribute Date2 date of the old inventory
+invsum,new_inv_attr_dte2,Newest Inventory Attribute Date 2,D,14,True,False,False,Inventory atttribute Date2 date of the new inventory
+invsum,u_version,Version,I,4,True,False,False,The version number
+invsum,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+invsum,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row was last updated
+invsum,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+invsum,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+invsum,rowid,Row ID,I,4,False,False,True,
+locmst,stoloc,Location,S,20,False,True,False,Uniquely identifies the storage location.
+locmst,wh_id,Warehouse ID,S,32,False,True,False,Warehouse ID - The warehouse where the aisle is located.
+locmst,arecod,Area,S,10,False,False,False,Defines the area to which this location belongs.
+locmst,loccod,Location Capacity Code,S,1,True,False,False,"Specifies if locations are tracked at a unit quantity (Q), volume(V), length (L), case dimension(C) or pallet footprint(P) level."
+locmst,locsts,Location Status,S,1,False,False,False,"Current disposition of the location.  One of:  Full (F), Partial (P), Empty (E) or Inventory Error (I)."
+locmst,velzon,Velocity,S,1,False,False,False,The velocity zone of the location.
+locmst,aisle_id,Aisle,S,20,True,False,False,Aisle ID - A collection of locations in a row.
+locmst,trvseq,Travel Sequence,S,20,True,False,False,"The relative distance between locations, the travel sequence is during work management to find the closest location to an idle user."
+locmst,sto_seq,Storage Sequence,S,20,True,False,False,Storage Sequence is used to influence how locations are ordered when they are considered for inbound inventory during Putaway.
+locmst,rescod,Shipping Resource Code,S,200,True,False,False,"Used to path inventory through processing locations.  The resource code is a mechanism by which that location is reserved for product matching the rescod.  For example, in a shipment staging lane, the rescod is often set to the carcod."
+locmst,bay,Bay,S,30,True,False,False,The bay the location belongs to.
+locmst,lvl,Level,S,20,True,False,False,The level in the rack the location is on.
+locmst,locpos,Location Position,S,30,True,False,False,The position of the location respective to it's level.
+locmst,lochgt,Location Height,F,8,True,False,False,"This represents the hgt (in the same units as used on the ftpmst table) of product that the loc will tolerate.  This is evaluated on a per storage request.  For example, in a pallet racking example, the lochgt may be set to 90 (inches)."
+locmst,loclen,Location Length,F,8,True,False,False,This field is currently NOT used for storage selection or volume calculation purposes and is only used during 3PL Billing operations.
+locmst,locwid,Location Width,F,8,True,False,False,This field is currently NOT used for storage selection or volume calculation purposes and is only used during 3PL Billing operations.
+locmst,dck_acc_cod,Dock access code,S,30,True,False,False,Dock access code.
+locmst,locvrc,Verification Code,S,20,True,False,False,"A 'checksum' or alternate identifier which may be used to identify the location.  This is often used in facilities where locations may not be able to be labeled and it is desired to provide an alternate, easy to type, name for the loc."
+locmst,maxqvl,Maximum Capacity,F,8,False,False,False,"The loccod will indicate what this number actually means (in terms of volume, pallets, etc...).  This represents the maximum storage capacity of the location."
+locmst,curqvl,Used Capacity,F,8,False,False,False,"Much the same as maxqvl, this field is used to indicate the currently used capacity in a location."
+locmst,pndqvl,Pending Capacity,F,8,False,False,False,"Much the same as the other 'qvl' numbers, this field is used to indicate how much capacity is pending storage to the location."
+locmst,trfpct,Top-Off Replenishment Percent,I,4,True,False,False,Indicates what percentage of the maxqvl should be used when performing top-off replenishments.  A value of 0 will indicate 100%.  50 will indicate half full.  This can be useful if it is desired to 'overfill' a loc during repl process
+locmst,erfpct,Emergency Replenishment Percent,I,4,True,False,False,"Much the same as trfpct, this field indicates the percentage of maxqvl which should be used during emergency replenishment operations."
+locmst,esc_type,Escalation Type,S,40,True,False,False,Escalation Type - Location capacity escalation type.
+locmst,esc_thr,Escalation Threshold,F,8,True,False,False,Escalation Threshold - Escalation Threshold
+locmst,useflg,Location Usable,I,4,True,False,False,"This flag indicates that the location is usable.  If set to false, future allocations and stores are disabled at this location."
+locmst,stoflg,Storable,I,4,True,False,False,This flag indicates that the location is available for storage operations.
+locmst,pckflg,Pickable,I,4,True,False,False,This flag indicates that the location is available for picking (allocation) operations.
+locmst,repflg,Replenishment,I,4,True,False,False,This flag indicates that the location may be replenished.
+locmst,asgflg,Assignment,I,4,True,False,False,"This flag indicates that this loc is permanently assigned. In processing area, it applies to rescod value that is set. In normal sto. areas, it indicates itmnum is assigned to loc. STORE-ASG-LOC policies tells the item that is assigned"
+locmst,cipflg,Count In Progress,I,4,True,False,False,This flag indicates that there is a count in-progress at this location.
+locmst,cntseq,Count Sequence,S,20,True,False,False,"Much like travel sequence, this field is used to sequence counting activities."
+locmst,numcnt,Number of Counts,I,4,False,False,False,Operational column used to track the number of counts performed during a particular cycle.  Used when location based cycle counting is in effect.
+locmst,abccod,ABC Code,S,1,True,False,False,Used to schedule location based cycle counts much in the same was as the itmmst.abccod is used.
+locmst,cntdte,Count Date,D,14,True,False,False,Date location was last counted.
+locmst,devcod,Device Code,S,20,True,False,False,Label device which is closest to this location.
+locmst,lokcod,Location Lock Code,S,20,True,False,False,Used to indicate that this loc is locked for processing.  Often used by operational programs such as order overpack operations to indicate that a work station is processing a particular lane - this prevents collisions during processing.
+locmst,locacc,Location Access,S,30,True,False,False,Used to indicate that special vehicle access is necessary to get to this location.  This is used by the work manangement system to ensure that work is only sent to devices if the device can access the location.
+locmst,voc_chkdgt,Voice Check Digit,S,5,True,False,False,Voice Check Digit - This will be a short code that will be used in voice to identify a location.
+locmst,voc_chkdgt_2,Voice Check Digit 2,S,5,True,False,False,"Voice Check Digit 2 - This will be a short code that will be used in voice to identify a location in addition to the standard Check Digit, used when the check digit rotation policy is configured."
+locmst,voc_chkdgt_3,Voice Check Digit 3,S,5,True,False,False,"Voice Check Digit 3 - This will be a short code that will be used in voice to identify a location in addition to the standard Check Digit, used when the check digit rotation policy is configured."
+locmst,lstdte,Last Activity Date/Time,D,14,True,False,False,Last date/time activity occurred at this location.
+locmst,lstcod,Last Activity Code,S,20,True,False,False,Last activity code at this location.
+locmst,lst_usr_id,Last User,S,40,True,False,False,Last user which performed an activity at this location.
+locmst,slotseq,Slotting Sequence,S,20,True,False,False,"Much like travel sequence, this field is used to sequence locations for slotting purposes."
+locmst,perm_asgflg,Permanently Assigned,I,4,True,False,False,Permanent Assignment - indicates whether or not the asgflg will get toggled on/off when a storage assignment policy is removed
+locmst,cnt_zone_id,Count Zone,I,4,True,False,False,Unique identifier for the count zone.
+locmst,pck_zone_id,Picking Zone,I,4,True,False,False,Unique identifier for picking zone.
+locmst,sto_zone_id,Storage Zone,I,4,True,False,False,Unique identifier for storage zone.
+locmst,mov_zone_id,Movement Zone,I,4,True,False,False,Unique identifier for movement zone.
+locmst,wrk_zone_id,Work Zone,I,4,True,False,False,Unique identifier for work zone.
+locmst,loc_typ_id,Location Type,I,4,False,False,False,Unique identifier for location type.
+locmst,of_lvl_unit,,I,4,False,False,False,"Overflowed Level Unit - The number of level units overflowed by previous location, for example, if a location contains 3 level units then the range of this column will be from 0 to 3."
+locmst,section,Section,S,50,True,False,False,MRM field - The section of the warehouse where this location is located.
+locmst,x,X,S,20,True,False,False,MRM field - The X coordinate of the location.
+locmst,y,Y,S,20,True,False,False,MRM field - The Y coordinate of the location.
+locmst,z,Z,S,20,True,False,False,MRM field - The Z coordinate of the location.
+locmst,attr1,Attribute 1,S,50,True,False,False,MRM field - Generic attribute.
+locmst,attr2,Attribute 2,S,50,True,False,False,MRM field - Generic attribute.
+locmst,attr3,Attribute 3,S,50,True,False,False,MRM field - Generic attribute.
+locmst,attr4,Attribute 4,S,50,True,False,False,MRM field - Generic attribute.
+locmst,attr5,Attribute 5,S,50,True,False,False,MRM field - Generic attribute.
+locmst,basepoint_id,Base Point ID,S,32,True,False,False,The base point used for mapping the RFID location coordinates.
+locmst,top_left_x,Top Left X,F,8,True,False,False,The top left x coordinate of the RFID location relative to it's the base point.
+locmst,top_left_y,Top Left Y,F,8,True,False,False,The top left y coordinate of the RFID location relative to it's the base point.
+locmst,top_right_x,Top Right X,F,8,True,False,False,The top right x coordinate of the RFID location relative to it's the base point.
+locmst,top_right_y,Top Right Y,F,8,True,False,False,The top right y coordinate of the RFID location relative to it's the base point.
+locmst,bottom_left_x,Bottom Left X,F,8,True,False,False,The bottom left x coordinate of the RFID location relative to it's the base point.
+locmst,bottom_left_y,Bottom Left Y,F,8,True,False,False,The bottom left y coordinate of the RFID location relative to it's the base point.
+locmst,bottom_right_x,Bottom Right X,F,8,True,False,False,The bottom right x coordinate of the RFID location relative to it's the base point.
+locmst,bottom_right_y,Bottom Right Y,F,8,True,False,False,The bottom right y coordinate of the RFID location relative to it's the base point.
+locmst,border_pad,Border Padding,F,8,True,False,False,The value by which the four sides of the location will be extended to define an alternate border.
+locmst,auto_mov_flg,Auto-Move,I,4,False,False,False,Location is configured to allow auto move by RFID processing.
+locmst,slot_id,Slot Id,S,20,True,False,False,Slot ID represents a grouping of dock doors in a dock. A dock can contain multiple slots and a slot can contain multiple doors. This is used to support appointments being added by the TM system.
+locmst,def_maxqvl,Default Maximum Capacity,F,8,False,False,False,Default Max QVL
+locmst,u_version,Version,I,4,True,False,False,The version number
+locmst,ateseq,Allocate to Empty Sequence,I,4,False,False,False,Allocate to Empty Sequence is used to sort locations having ATEflg set for their respective area while allocating inventory .Lesser the value higher the priority.
+locmst,atedte,Allocate to Empty Date,D,14,True,False,False,Date when the inventory in location having the ATEflg set for its respective area was first Allocated.
+locmst,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+locmst,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row was last updated
+locmst,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+locmst,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+locmst,cntbck_ena_flg,Count Back Flag,I,4,True,False,False,"If this flag is set, the location supports countback."
+locmst,prdlin,Production Line,S,20,True,False,False,The Production Line that the production station belongs to.
+locmst,stgloc,Staging Location,S,20,True,False,False,Staging Location assigned to the production station. This is only useful if prdlin is set.
+locmst,rcv_rescod,Receiving Resource Code,S,200,True,False,False,This will reserve the location for inbound product matching the value(trknum or invnum).
+locmst,pal_stck_rst,Pallet Stack Restriction,S,40,False,False,False,Pallet Stack Restriction.
+locmst,maxwgt,,F,8,False,False,False,Maximum Weight - The maximum weight allowed in location before planned and actual inventory movement is restricted.
+locmst,lvl_typ_id,,S,15,True,False,False,The level type that the location is on.
+locmst,billing_flg,,I,4,True,False,False,Indicates whether the location is to be included in Billing Storage calculations
+locmst,prtadr,Printer Address,S,10,True,False,False,Printer Address
+locmst,lbl_prtadr,Label Printer Address,S,10,True,False,False,Label Printer Address
+locmst,min_lvl_unit,,I,4,False,False,False,Minimum Level Unit - The minimum level units of inventory which can fit in at that moment for allocate location
+locmst,max_lvl_unit,,I,4,False,False,False,Maximum Level Unit - The maximum level units of inventory which can fit in at that moment for allocate location
+pckwrk_dtl,wrkref_dtl,Work Task Detail,S,15,False,True,False,This uniquely identifies a single record on the pick work detail table.
+pckwrk_dtl,wrkref,Work Task,S,12,False,False,False,This uniquely parent identifies of record.
+pckwrk_dtl,cmbcod,Combination Code,S,10,False,False,False,Multiple picks may be tied together via a single combination code.
+pckwrk_dtl,wh_id,Warehouse ID,S,32,False,False,False,Warehouse ID - the warehouse in which the inventory is to be received.
+pckwrk_dtl,client_id,Client ID,S,32,True,False,False,Client ID
+pckwrk_dtl,dstloc,Destination Location,S,20,True,False,False,"The destination location for depositing the inventory, trailer or whatever entity the work is designed to accomplish."
+pckwrk_dtl,dst_mov_zone_id,Movement Zone,I,4,True,False,False,Destination Movement Zone ID - Movement Zone to which the inventory for this order line will be staged.
+pckwrk_dtl,ship_line_id,Shipment Line ID,S,10,True,False,False,"If pick is associated to an order, this will have the value of the shipment line ID that is satisfied by this pick."
+pckwrk_dtl,ship_id,Shipment ID,S,30,True,False,False,"If pick is associated to an order, this is the shipment ID which requires this pick."
+pckwrk_dtl,ordnum,Outbound Order Number,S,35,True,False,False,"If associated to an order, this is the order number which requires this pick."
+pckwrk_dtl,ordlin,Outbound Order Line,S,10,True,False,False,"If associated to an order, this is the order line which requires this pick."
+pckwrk_dtl,ordsln,Outbound Order Sub-Line,S,10,True,False,False,"If associated to an order, this is the order sub-line which requires this pick."
+pckwrk_dtl,stcust,Ship-To Customer,S,20,True,False,False,Ship-To Customer - The customer to which this order will be ultimately be shipped.
+pckwrk_dtl,rtcust,Route-To Customer,S,20,True,False,False,Route-To Customer - The customer to which this order will be shipped.
+pckwrk_dtl,concod,Consolidation Code,S,10,False,False,False,Consolidation Code
+pckwrk_dtl,pckqty,Pick Quantity,I,4,False,False,False,The amount of product to pick.
+pckwrk_dtl,pck_catch_qty,Pick Catch Quantity,F,8,True,False,False,The catch quantity to pick.
+pckwrk_dtl,appqty,Applied Quantity,I,4,False,False,False,The amount of product applied against this pick.
+pckwrk_dtl,app_catch_qty,Applied Catch Quantity,F,8,True,False,False,The catch quantity already applied.
+pckwrk_dtl,lodlvl,LPN Level,S,1,False,False,False,"The type of pick: L = Pallet pick, S = case pick, D = piece pick"
+pckwrk_dtl,ship_ctncod,Shipping Carton Type,S,10,True,False,False,Shipping Carton Code
+pckwrk_dtl,ship_ctnnum,Shipping Carton Number,S,30,True,False,False,Shipping Carton Number
+pckwrk_dtl,wkonum,Work Order Number,S,20,True,False,False,"If for a work order, this will indicate which work order number."
+pckwrk_dtl,wkorev,Work Order Revision,S,10,True,False,False,Work Order Revision
+pckwrk_dtl,wkolin,Work Order Line,S,10,True,False,False,Work Order Line
+pckwrk_dtl,seqnum,Sequence Number,I,4,True,False,False,Work Order Line Sequence Number
+pckwrk_dtl,subnum,Sub-LPN,S,30,True,False,False,"For a cartonized kit, this field will indicate the label that will be applied to the completed kit."
+pckwrk_dtl,dtlnum,Detail LPN,S,30,True,False,False,This field is not currently utilized by standard processing.
+pckwrk_dtl,subucc,Sub-Load UCC Code,S,20,True,False,False,Subload UCC code number.
+pckwrk_dtl,subtag,Case Tag,S,40,True,False,False,Sub-Load Tag - used to define the RFID tag value for case pick
+pckwrk_dtl,cur_cas,Current Case,I,4,True,False,False,Current case number to use in 1-of labeling
+pckwrk_dtl,tot_cas_cnt,Total Case Count,I,4,True,False,False,Total case count for use in 1-of labeling
+pckwrk_dtl,prtdte,Print Date,D,14,True,False,False,Date pick was printed
+pckwrk_dtl,bto_seqnum,BTO Sequence,S,20,True,False,False,This field represents the sequence that the line will be picked as determined by the Build to Order system.
+pckwrk_dtl,slot,Slot,S,10,True,False,False,"When using BTO, the user is directed to place the inventory for this order line into this slot. The slot is determined by the Build to Order system."
+pckwrk_dtl,bto_dlv_seq,Delivery Sequence,S,30,True,False,False,The delivery sequence will be used for sorting the list and comes from the order line.
+pckwrk_dtl,lm_assign_num,Labor Assignment Number,S,15,True,False,False,Labor Assignment Number
+pckwrk_dtl,lm_assign_seqnum,Labor Assignment Sequence Number,I,4,True,False,False,Labor Assignment Sequence Number
+pckwrk_dtl,pm_err_cod,Error Code,I,4,True,False,False,Contains the error code if pre-manifesting was performed for the pick and failed.
+pckwrk_dtl,pm_err_desc,Error Description,S,2000,True,False,False,Contains the error description if pre-manifesting was performed for the pick and failed.
+pckwrk_dtl,ctnerr_flg,Cartonization Error,I,4,False,False,False,Cartonization Error Flag - specifies whether the picks are failed to cartonize or not. Picks that fail to cartonize will have error flag as true.
+pckwrk_dtl,res_uom,Detail UOM,S,2,True,False,False,Detail UOM
+pckwrk_dtl,ins_dt,Inserted Date,D,14,True,False,False,Date the row was inserted.
+pckwrk_dtl,last_upd_dt,Last Updated Date,D,14,True,False,False,Date the row was last updated.
+pckwrk_dtl,ins_user_id,Inserted User,S,40,True,False,False,User id of the person who created the row.
+pckwrk_dtl,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently.
+pckwrk_dtl,rowid,Row ID,I,4,False,False,True,
+pckwrk_dtl,schbat,Schedule Batch Number,S,32,True,False,False,Schedule batch. This uniquely identifies the record and represents a group of picks.
+pckwrk_dtl,untcas,Units Per Case,I,4,True,False,False,Units per case
+pckwrk_dtl,wrktyp,Work Type,S,1,True,False,False,Work type
+pckwrk_dtl,prtnum,Item Number,S,50,True,False,False,"Item Number - Identifier for the item, or SKU that is ordered."
+pckwrk_dtl,prt_client_id,Item Client ID,S,32,True,False,False,"Client id of item number.  In non-3PL systems, this will be set to a default of '----'."
+pckwrk_hdr,wrkref,Work Task,S,12,False,True,False,This uniquely identifies the record.
+pckwrk_hdr,wrktyp,Work Type,S,1,False,False,False,Work type
+pckwrk_hdr,schbat,Schedule Batch Number,S,32,True,False,False,Schedule batch. This uniquely identifies the record and represents a group of picks.
+pckwrk_hdr,srcloc,Source Location,S,20,False,False,False,The source location for beginning the work.
+pckwrk_hdr,srcare,Source Area,S,10,False,False,False,Source Area - Area code to which the inventory for this order line will be picked.
+pckwrk_hdr,client_id,Client ID,S,32,True,False,False,Client ID
+pckwrk_hdr,wh_id,Warehouse ID,S,32,False,False,False,Warehouse ID - the warehouse in which the inventory is to be received.
+pckwrk_hdr,lblbat,Label Batch,S,6,True,False,False,Pick works grouped in the same label batch will all share the same lblbat value.
+pckwrk_hdr,lblseq,Label Sequence,S,50,True,False,False,Sequence used to order label printing.
+pckwrk_hdr,devcod,Device Code,S,20,True,False,False,The device code that should be used when printing labels for this pick.
+pckwrk_hdr,oprcod,Operation Code,S,9,True,False,False,Operation Code applied to the Pick
+pckwrk_hdr,pck_mthd_id,Pick Method ID,I,4,False,False,False,Pick Method Id - Identifier of a pick method.
+pckwrk_hdr,pckqty,Pick Quantity,I,4,False,False,False,The amount of product to pick.
+pckwrk_hdr,pck_catch_qty,Pick Catch Quantity,F,8,True,False,False,The catch quantity to pick.
+pckwrk_hdr,appqty,Applied Quantity,I,4,False,False,False,The amount of product applied against this pick.
+pckwrk_hdr,app_catch_qty,Applied Catch Quantity,F,8,True,False,False,The catch quantity already applied.
+pckwrk_hdr,pcksts,Pick Status,S,1,False,False,False,Pick Status
+pckwrk_hdr,prtnum,Item Number,S,50,False,False,False,"Item Number - Identifier for the item, or SKU that is ordered."
+pckwrk_hdr,prt_client_id,Item Client ID,S,32,False,False,False,"Client id of item number.  In non-3PL systems, this will be set to a default of '----'."
+pckwrk_hdr,orgcod,Origin Code,S,25,True,False,False,"If this pick requires a specific origin code, this value will be filled in."
+pckwrk_hdr,revlvl,Revision Level,S,25,True,False,False,"If this pick requires a specific revision level, this value will be filled in."
+pckwrk_hdr,lotnum,Lot Number,S,25,True,False,False,"If this pick requires a specific lot number, this value will be filled in."
+pckwrk_hdr,asset_slot,Slot Number,S,10,True,False,False,Slot Number - The slot number assigned during list pick generation based on pick list rule.
+pckwrk_hdr,sup_lotnum,Supplier Lot Number,S,25,True,False,False,"If this pick requires a specific supplier lot number, this value will be filled in."
+pckwrk_hdr,invsts,Inventory Status,S,4,True,False,False,Inventory Status
+pckwrk_hdr,invsts_prg,Inventory Status Progression,S,4,True,False,False,Inventory Status Progression
+pckwrk_hdr,lodlvl,LPN Level,S,1,False,False,False,"The type of pick: L = Pallet pick, S = case pick, D = piece pick"
+pckwrk_hdr,loducc,LPN UCC,S,20,True,False,False,Load UCC code number.
+pckwrk_hdr,lodtag,Load Tag,S,40,True,False,False,Load Tag - used to define the RFID tag value for pallet pick
+pckwrk_hdr,lodnum,LPN,S,30,True,False,False,This field is not currently utilized by standard processing.
+pckwrk_hdr,untcas,Units Per Case,I,4,False,False,False,Units per case
+pckwrk_hdr,untpak,Units Per Pack,I,4,False,False,False,Units per pack
+pckwrk_hdr,ftpcod,Footprint Code,S,30,True,False,False,This is footprint code associate with the item.
+pckwrk_hdr,ctncod,Carton Type,S,10,True,False,False,The code for the carton being used.
+pckwrk_hdr,ctnnum,Carton Number,S,30,True,False,False,Carton Number
+pckwrk_hdr,ctnseg,Carton Segment,S,10,True,False,False,Carton Segment
+pckwrk_hdr,pos_id,Pos ID,S,10,True,False,False,Position ID to track position of the List/Carton in the group of Lists.
+pckwrk_hdr,visflg,Visible,I,4,True,False,False,This field is not used by standard system processing.
+pckwrk_hdr,splflg,Split,I,4,True,False,False,Split Case Flag - Determines whether or not the system can allocate partial case quantities.
+pckwrk_hdr,locflg,Confirm Location,I,4,True,False,False,Confirm location on pickup.
+pckwrk_hdr,lodflg,Load Pick,I,4,True,False,False,Confirm load number on pickup.
+pckwrk_hdr,subflg,Sub-Load Pick,I,4,True,False,False,Confirm case identifier on pickup.
+pckwrk_hdr,dtlflg,Detail Pick,I,4,True,False,False,Confirm piece identifier on pickup.
+pckwrk_hdr,prtflg,Confirm Item Number,I,4,True,False,False,Confirm item number on pickup.
+pckwrk_hdr,orgflg,Origin Code,I,4,True,False,False,Confirm origin code on pickup.
+pckwrk_hdr,revflg,Revision,I,4,True,False,False,Confirm revision level on pickup.
+pckwrk_hdr,lotflg,Lot Tracking,I,4,True,False,False,Confirm lot number on pickup.
+pckwrk_hdr,sup_lot_flg,Supplier Lot Tracking,I,4,True,False,False,Confirm supplier lot number on pickup.
+pckwrk_hdr,qtyflg,Confirm Quantity,I,4,True,False,False,Confirm pick quantity on pickup.
+pckwrk_hdr,catch_qty_flg,Confirm Catch Quantity,I,4,True,False,False,Confirm catch quantity on pickup.
+pckwrk_hdr,adddte,Date Added,D,14,True,False,False,Added date - Date/time when pick work was added.
+pckwrk_hdr,pckdte,Date Picked,D,14,True,False,False,Date/time that pick was confirmed.
+pckwrk_hdr,cmpdte,Date Completed,D,14,True,False,False,Completed date - Date/time when pick work was completed.
+pckwrk_hdr,refloc,Reference Location,S,20,True,False,False,The source location identifier that will be displayed to the RF operator. This may not be the same as the srcloc value.
+pckwrk_hdr,ackdevcod,Acknowledged Device,S,20,True,False,False,Used during cluster picking to tag which pick works will be processed by a device.
+pckwrk_hdr,pipflg,Pre-Inventory Allocation,I,4,True,False,False,Indicates if the pick is a pre-inventory pick where the pick work exists before the inventory is delivered to the location.
+pckwrk_hdr,frsflg,Process By Freshness,I,4,True,False,False,"Freshness Process Flag - This flag is set if this order line requires freshness processing - that is, that the oldest product shipped is newer than the newest product previously shipped."
+pckwrk_hdr,clst_seq,Cluster Sequence,I,4,True,False,False,Cluster Sequence - Indicates in what order a carton will be filled in a bulk cluster pick
+pckwrk_hdr,min_shelf_hrs,Minimum Shelf Life (Hours),I,4,True,False,False,"Minimum Shelf Hours - If set, only inventory with an expiration date that is at least this many hours away from expiring will be allocated for this order line."
+pckwrk_hdr,prtdte,Print Date,D,14,True,False,False,Date pick was printed
+pckwrk_hdr,list_grp_id,List Group ID,S,15,True,False,False,List Group ID - The List Group Id assigned by scanning several list_id's
+pckwrk_hdr,list_id,List ID,S,15,True,False,False,List ID- Identifies the list_id to which the pick had been assigned.
+pckwrk_hdr,list_seqnum,List Sequence,I,4,True,False,False,List Sequence - The sequence the pick fell in the list.
+pckwrk_hdr,est_time,Estimated Goal Time,I,4,True,False,False,Labor Estimate (Seconds)
+pckwrk_hdr,lm_assign_num,Labor Assignment Number,S,15,True,False,False,Labor Assignment Number
+pckwrk_hdr,lm_assign_seqnum,Labor Assignment Sequence Number,I,4,True,False,False,Labor Assignment Sequence Number
+pckwrk_hdr,skip_cnt,Skip Count,I,4,True,False,False,The number of times this pick has been skipped.
+pckwrk_hdr,pallet_pos,Pallet Position,S,8,True,False,False,Concatenated Pallet Position/Pallet Number as sent from PalletCtl.
+pckwrk_hdr,pallet_id,Pallet,S,30,True,False,False,Pallet identifier as sent from PalletCtl.
+pckwrk_hdr,pallet_load_seq,Pallet Load Sequence,I,4,True,False,False,Sequence in which the pallet is to be loaded onto the truck.
+pckwrk_hdr,rttn_id,Rotation ID,S,10,True,False,False,Rotation ID used for tracking bonded inventory.
+pckwrk_hdr,rttn_id_flg,Confirm Rotation ID,I,4,True,False,False,Rotation ID verification flag - used to indicate whether or not pick verification is turned on for rotation id. '1' means yes and '0' means no.
+pckwrk_hdr,unassign_flg,Manually Replan To List,I,4,True,False,False,"When Un-Assign Flag is checked, the pick has been un-assigned."
+pckwrk_hdr,asset_typ,Handling Unit Type,S,30,True,False,False,Asset Type - Asset Type to be picked. But system will NOT force user to Pick the particular Asset type on the table.
+pckwrk_hdr,supnum,Supplier Number,S,32,True,False,False,Supplier Number: Supplier number specific to the pick.
+pckwrk_hdr,supflg,Confirm Supplier,I,4,True,False,False,Supplier Flag: Confirm supplier number on pickup.
+pckwrk_hdr,unique_pallet_id,Unique Pallet ID,S,30,True,False,False,Pallet ID that uniquely identifies the pallet to the PalletCtl system
+pckwrk_hdr,palctlsts,PalletCtl status,S,4,True,False,False,"PalletCtl status. DONE(PalletCtl finished),WPPP(Waiting PalletCtl,pcksts=P),WPPH(Waiting PalletCtl,pcksts=H),WSTP(Waiting Shorts,pcksts=P),WSTH(Waiting Shorts,pcksts=H),WXDP(Waiting XDCK,pcksts=P),WXDH(Waiting XDCK,pcksts=H)"
+pckwrk_hdr,start_pal_flg,Starter Pallet,I,4,False,False,False,Used with PalletCTL to indicate this pick is a starter pallet.
+pckwrk_hdr,list_conf_flg,List Confirm Flag,I,4,False,False,False,"Mark records which need to have the inventory moved from a temporary load to the main pick to load. After the pick is confirmed, the flag will be unset."
+pckwrk_hdr,pck_uom,Picking UOM,S,2,True,False,False,UOM set according to pckqty when created in allocating inventory. Represents at which UOM level shoud user pick the inventory.
+pckwrk_hdr,assign_grp,Assignment Group,S,15,True,False,False,Assignment group number used to group together a set of picks.
+pckwrk_hdr,lock_flg,Lock Flag,I,4,False,False,False,This flag indicates whether work should be created in LOCK or PEND status.
+pckwrk_hdr,abs_ordinv_dte,Absolute Order Inventory Allocation Date,D,14,True,False,False,"Picking validation - used to store the absolute date for inventory at time of allocation, Date is Julian."
+pckwrk_hdr,thresh_pck_flg,Threshold Pick,I,4,True,False,False,Setting this flag makes the pckwrk record a threshold pick.
+pckwrk_hdr,pck_to_id,Pick to ID,S,30,True,False,False,"This indicates the asset to which the list will be picked to. If it is a serialized asset, then this will hold the asset id or serial number of the asset id. In case of non serialized asset, this will hold the scanned load number."
+pckwrk_hdr,last_pck_usr_id,Last Pick User ID,S,40,True,False,False,"The Last Picker columns is updated when a user picks a work reference. This column will contain the user's id. Since, multiple user can pick a work reference the column will always contain the last user to pick it."
+pckwrk_hdr,sp_hand_flg,Special Handling,I,4,False,False,False,Indicates if the pick is for special handling.
+pckwrk_hdr,rule_nam,Rule Name,S,20,True,False,False,This will be an unique rule name which will have to exists in alloc_rule table. Allocation logic will get the inventory attributes from alloc_rule table.
+pckwrk_hdr,mandte,Manufactured Date,D,14,True,False,False,This will be used to hold the allocated inventory's man_dte.
+pckwrk_hdr,expire_dte,Expiration Date,D,14,True,False,False,This will be used to hold the allocated inventory's expire_dte.
+pckwrk_hdr,mandte_flg,Manufactured Date Tracking,I,4,True,False,False,This will be used to determine whether or not to prompt the user to verify the man_dte while picking.
+pckwrk_hdr,expire_dte_flg,Expiration Date Flag,I,4,True,False,False,This will be used to determine whether or not to prompt the user to verify the expire_dte while picking.
+pckwrk_hdr,palctl_split_flg,Pallet Control Split Flag,I,4,False,False,False,This will be used to denote that the pick has been split by pallet control. When a replan is sent to pallet control for a pick whose palctl_split_flg is TRUE the status will be 3.  Any other picks that are on that UID will also have status 3.
+pckwrk_hdr,attr_str1_flg,Confirm Inventory Attribute Text 1,I,4,True,False,False,Confirm Inventory Attribute Text 1 Flag.Indicates whether user needs to confirm the Text Inventory Attribute1 on pickup.
+pckwrk_hdr,attr_str2_flg,Confirm Inventory Attribute Text 2,I,4,True,False,False,Confirm Inventory Attribute Text 2 Flag.Indicates whether user needs to confirm the Text Inventory Attribute2 on pickup.
+pckwrk_hdr,attr_str3_flg,Confirm Inventory Attribute Text 3,I,4,True,False,False,Confirm Inventory Attribute Text 3 Flag.Indicates whether user needs to confirm the Text Inventory Attribute3 on pickup.
+pckwrk_hdr,attr_str4_flg,Confirm Inventory Attribute Text 4,I,4,True,False,False,Confirm Inventory Attribute Text 4 Flag.Indicates whether user needs to confirm the Text Inventory Attribute4 on pickup.
+pckwrk_hdr,attr_str5_flg,Confirm Inventory Attribute Text 5,I,4,True,False,False,Confirm Inventory Attribute Text 5 Flag.Indicates whether user needs to confirm the Text Inventory Attribute5 on pickup.
+pckwrk_hdr,attr_str6_flg,Confirm Inventory Attribute Text 6,I,4,True,False,False,Confirm Inventory Attribute Text 6 Flag.Indicates whether user needs to confirm the Text Inventory Attribute6 on pickup.
+pckwrk_hdr,attr_str7_flg,Confirm Inventory Attribute Text 7,I,4,True,False,False,Confirm Inventory Attribute Text 7 Flag.Indicates whether user needs to confirm the Text Inventory Attribute7 on pickup.
+pckwrk_hdr,attr_str8_flg,Confirm Inventory Attribute Text 8,I,4,True,False,False,Confirm Inventory Attribute Text 8 Flag.Indicates whether user needs to confirm the Text Inventory Attribute8 on pickup.
+pckwrk_hdr,attr_str9_flg,Confirm Inventory Attribute Text 9,I,4,True,False,False,Confirm Inventory Attribute Text 9 Flag.Indicates whether user needs to confirm the Text Inventory Attribute9 on pickup.
+pckwrk_hdr,attr_str10_flg,Confirm Inventory Attribute Text 10,I,4,True,False,False,Confirm Inventory Attribute Text 10 Flag.Indicates whether user needs to confirm the Text Inventory Attribute10 on pickup.
+pckwrk_hdr,attr_str11_flg,Confirm Inventory Attribute Text 11,I,4,True,False,False,Confirm Inventory Attribute Text 11 Flag.Indicates whether user needs to confirm the Text Inventory Attribute11 on pickup.
+pckwrk_hdr,attr_str12_flg,Confirm Inventory Attribute Text 12,I,4,True,False,False,Confirm Inventory Attribute Text 12 Flag.Indicates whether user needs to confirm the Text Inventory Attribute12 on pickup.
+pckwrk_hdr,attr_str13_flg,Confirm Inventory Attribute Text 13,I,4,True,False,False,Confirm Inventory Attribute Text 13 Flag.Indicates whether user needs to confirm the Text Inventory Attribute13 on pickup.
+pckwrk_hdr,attr_str14_flg,Confirm Inventory Attribute Text 14,I,4,True,False,False,Confirm Inventory Attribute Text 14 Flag.Indicates whether user needs to confirm the Text Inventory Attribute14 on pickup.
+pckwrk_hdr,attr_str15_flg,Confirm Inventory Attribute Text 15,I,4,True,False,False,Confirm Inventory Attribute Text 15 Flag.Indicates whether user needs to confirm the Text Inventory Attribute15 on pickup.
+pckwrk_hdr,attr_str16_flg,Confirm Inventory Attribute Text 16,I,4,True,False,False,Confirm Inventory Attribute Text 16 Flag.Indicates whether user needs to confirm the Text Inventory Attribute16 on pickup.
+pckwrk_hdr,attr_str17_flg,Confirm Inventory Attribute Text 17,I,4,True,False,False,Confirm Inventory Attribute Text 17 Flag.Indicates whether user needs to confirm the Text Inventory Attribute17 on pickup.
+pckwrk_hdr,attr_str18_flg,Confirm Inventory Attribute Text 18,I,4,True,False,False,Confirm Inventory Attribute Text 18 Flag.Indicates whether user needs to confirm the Text Inventory Attribute18 on pickup.
+pckwrk_hdr,attr_int1_flg,Confirm Inventory Attribute Number 1,I,4,True,False,False,Confirm Inventory Attribute Number 1 Flag.Indicates whether user needs to confirm the Number Inventory Attribute1 on pickup.
+pckwrk_hdr,attr_int2_flg,Confirm Inventory Attribute Number 2,I,4,True,False,False,Confirm Inventory Attribute Number 2 Flag.Indicates whether user needs to confirm the Number Inventory Attribute2 on pickup.
+pckwrk_hdr,attr_int3_flg,Confirm Inventory Attribute Number 3,I,4,True,False,False,Confirm Inventory Attribute Number 3 Flag.Indicates whether user needs to confirm the Number Inventory Attribute3 on pickup.
+pckwrk_hdr,attr_int4_flg,Confirm Inventory Attribute Number 4,I,4,True,False,False,Confirm Inventory Attribute Number 4 Flag.Indicates whether user needs to confirm the Number Inventory Attribute4 on pickup.
+pckwrk_hdr,attr_int5_flg,Confirm Inventory Attribute Number 5,I,4,True,False,False,Confirm Inventory Attribute Number 5 Flag.Indicates whether user needs to confirm the Number Inventory Attribute5 on pickup.
+pckwrk_hdr,attr_flt1_flg,Confirm Inventory Attribute Decimal 1,I,4,True,False,False,Confirm Inventory Attribute Decimal 1 Flag.Indicates whether user needs to confirm the Decimal Inventory Attribute1 on pickup.
+pckwrk_hdr,attr_flt2_flg,Confirm Inventory Attribute Decimal 2,I,4,True,False,False,Confirm Inventory Attribute Decimal 2 Flag.Indicates whether user needs to confirm the Decimal Inventory Attribute2 on pickup.
+pckwrk_hdr,attr_flt3_flg,Confirm Inventory Attribute Decimal 3,I,4,True,False,False,Confirm Inventory Attribute Decimal 3 Flag.Indicates whether user needs to confirm the Decimal Inventory Attribute3 on pickup.
+pckwrk_hdr,attr_dte1_flg,Confirm Inventory Attribute Date 1,I,4,True,False,False,Confirm Inventory Attribute Date 1 Flag.Indicates whether user needs to confirm the Date Inventory Attribute1 on pickup.
+pckwrk_hdr,attr_dte2_flg,Confirm Inventory Attribute Date 2,I,4,True,False,False,Confirm Inventory Attribute Date 2 Flag.Indicates whether user needs to confirm the Date Inventory Attribute2 on pickup.
+pckwrk_hdr,inv_attr_str1,Inventory Attribute Text 1,S,100,True,False,False,Inventory Attribute Text 1. Confirm Inventory Attribute Text 1 for the pickup.
+pckwrk_hdr,inv_attr_str2,Inventory Attribute Text 2,S,100,True,False,False,Inventory Attribute Text 2. Confirm Inventory Attribute Text 2 for the pickup.
+pckwrk_hdr,inv_attr_str3,Inventory Attribute Text 3,S,100,True,False,False,Inventory Attribute Text 3. Confirm Inventory Attribute Text 3 for the pickup.
+pckwrk_hdr,inv_attr_str4,Inventory Attribute Text 4,S,100,True,False,False,Inventory Attribute Text 4. Confirm Inventory Attribute Text 4 for the pickup.
+pckwrk_hdr,inv_attr_str5,Inventory Attribute Text 5,S,100,True,False,False,Inventory Attribute Text 5. Confirm Inventory Attribute Text 5 for the pickup.
+pckwrk_hdr,inv_attr_str6,Inventory Attribute Text 6,S,100,True,False,False,Inventory Attribute Text 6. Confirm Inventory Attribute Text 6 for the pickup.
+pckwrk_hdr,inv_attr_str7,Inventory Attribute Text 7,S,100,True,False,False,Inventory Attribute Text 7. Confirm Inventory Attribute Text 7 for the pickup.
+pckwrk_hdr,inv_attr_str8,Inventory Attribute Text 8,S,100,True,False,False,Inventory Attribute Text 8. Confirm Inventory Attribute Text 8 for the pickup.
+pckwrk_hdr,inv_attr_str9,Inventory Attribute Text 9,S,100,True,False,False,Inventory Attribute Text 9. Confirm Inventory Attribute Text 9 for the pickup.
+pckwrk_hdr,inv_attr_str10,Inventory Attribute Text 10,S,100,True,False,False,Inventory Attribute Text 10. Confirm Inventory Attribute Text 10 for the pickup.
+pckwrk_hdr,inv_attr_str11,Inventory Attribute Text 11,S,100,True,False,False,Inventory Attribute Text 11. Confirm Inventory Attribute Text 11 for the pickup.
+pckwrk_hdr,inv_attr_str12,Inventory Attribute Text 12,S,100,True,False,False,Inventory Attribute Text 12. Confirm Inventory Attribute Text 12 for the pickup.
+pckwrk_hdr,inv_attr_str13,Inventory Attribute Text 13,S,100,True,False,False,Inventory Attribute Text 13. Confirm Inventory Attribute Text 13 for the pickup.
+pckwrk_hdr,inv_attr_str14,Inventory Attribute Text 14,S,100,True,False,False,Inventory Attribute Text 14. Confirm Inventory Attribute Text 14 for the pickup.
+pckwrk_hdr,inv_attr_str15,Inventory Attribute Text 15,S,100,True,False,False,Inventory Attribute Text 15. Confirm Inventory Attribute Text 15 for the pickup.
+pckwrk_hdr,inv_attr_str16,Inventory Attribute Text 16,S,100,True,False,False,Inventory Attribute Text 16. Confirm Inventory Attribute Text 16 for the pickup.
+pckwrk_hdr,inv_attr_str17,Inventory Attribute Text 17,S,100,True,False,False,Inventory Attribute Text 17. Confirm Inventory Attribute Text 17 for the pickup.
+pckwrk_hdr,inv_attr_str18,Inventory Attribute Text 18,S,100,True,False,False,Inventory Attribute Text 18. Confirm Inventory Attribute Text 18 for the pickup.
+pckwrk_hdr,inv_attr_int1,Inventory Attribute Number 1,I,4,True,False,False,Inventory Attribute Number 1. Confirm Inventory Attribute Number 1 for the pickup.
+pckwrk_hdr,inv_attr_int2,Inventory Attribute Number 2,I,4,True,False,False,Inventory Attribute Number 2. Confirm Inventory Attribute Number 2 for the pickup.
+pckwrk_hdr,inv_attr_int3,Inventory Attribute Number 3,I,4,True,False,False,Inventory Attribute Number 3. Confirm Inventory Attribute Number 3 for the pickup.
+pckwrk_hdr,inv_attr_int4,Inventory Attribute Number 4,I,4,True,False,False,Inventory Attribute Number 4. Confirm Inventory Attribute Number 4 for the pickup.
+pckwrk_hdr,inv_attr_int5,Inventory Attribute Number 5,I,4,True,False,False,Inventory Attribute Number 5. Confirm Inventory Attribute Number 5 for the pickup.
+pckwrk_hdr,inv_attr_flt1,Unit Cost,F,8,True,False,False,Inventory Attribute Decimal 1 . Confirm Inventory Attribute Decimal 1 for the pickup.
+pckwrk_hdr,inv_attr_flt2,Inventory Attribute Decimal 2,F,8,True,False,False,Inventory Attribute Decimal 2 . Confirm Inventory Attribute Decimal 2 for the pickup.
+pckwrk_hdr,inv_attr_flt3,Inventory Attribute Decimal 3,F,8,True,False,False,Inventory Attribute Decimal 3 . Confirm Inventory Attribute Decimal 3 for the pickup.
+pckwrk_hdr,inv_attr_dte1,Inventory Attribute Date 1,D,14,True,False,False,Inventory Attribute Date 1 . Confirm Inventory Attribute Date 1 for the pickup.
+pckwrk_hdr,inv_attr_dte2,Inventory Attribute Date 2,D,14,True,False,False,Inventory Attribute Date 2 . Confirm Inventory Attribute Date 2 for the pickup.
+pckwrk_hdr,wcs_pck_grp,WCS Pick Group,S,12,True,False,False,pick group determined by command 'log pick request'.
+pckwrk_hdr,wcs_reported_dt,WCS Reported Date,D,14,True,False,False,timestamp of when 'log pick request' was successfully completed.
+pckwrk_hdr,wcs_can_pcksts,WCS Cancel Pick Status,S,1,True,False,False,pick status when 'process cancel pick' was called.
+pckwrk_hdr,wcs_can_req_dt,WCS Cancel Request Date,D,14,True,False,False,timestamp of when 'process cancel pick' was called.
+pckwrk_hdr,cstms_typ,Customs Type,S,8,True,False,False,"Customs Type, This will be used to hold the value of allocated inventory, and validated when picking."
+pckwrk_hdr,cstms_typ_flg,Confirm Customs Type,I,4,True,False,False,Flag used to indicate whether or not pick verification is turned on for customs type. '1' means yes and '0' means no.
+pckwrk_hdr,pip_counter,Pre-Inventory Allocation Counter,I,4,False,False,False,Counter for the number of times this pick was processed as a PIP pick.  If the counter exceeds a set policy value it will remove the pip pick and create the rplwrk.
+pckwrk_hdr,ins_dt,Inserted Date,D,14,True,False,False,Date the row was inserted.
+pckwrk_hdr,last_upd_dt,Last Updated Date,D,14,True,False,False,Date the row was last updated.
+pckwrk_hdr,ins_user_id,Inserted User,S,40,True,False,False,User id of the person who created the row.
+pckwrk_hdr,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently.
+pckwrk_hdr,rowid,Row ID,I,4,False,False,True,Row ID
+pckwrk_hdr,uc_inch_volume,,S,20,True,False,False,Volume in inches of each pick
+pckwrk_hdr,uc_aisle_volume,,S,20,True,False,False,Volume in inches of the total picks on an order within an aisle
+pckwrk_hdr,uc_layers,,F,8,True,False,False,Layers of each pick
+pckwrk_hdr,uc_picks,,F,8,True,False,False,If there are multiple picks of the same part on an order return 2
+prtdsc,colnam,Column,S,100,False,True,False,
+prtdsc,colval,Value,S,200,False,True,False,
+prtdsc,locale_id,Locale ID,S,20,False,True,False,
+prtdsc,lngdsc,Description,S,250,False,False,False,
+prtdsc,short_dsc,Short Description,S,20,True,False,False,
+prtftp,prtnum,Item Number,S,50,False,True,False,The item number to which a footprint is associated.
+prtftp,ftpcod,Footprint Code,S,30,False,True,False,This is footprint code associate with the item.
+prtftp,prt_client_id,Item Client ID,S,32,False,True,False,"In non-3PL systems, this will be set to a default of '----'."
+prtftp,wh_id,Warehouse ID,S,32,False,True,False,Warehouse ID - the warehouse in which the item number and footprint code are to be associated.
+prtftp,caslvl,Cases per Tier,I,4,True,False,False,Case per tier
+prtftp,nstlen,Nesting Length,F,8,True,False,False,Nested Length
+prtftp,nstwid,Nesting Width,F,8,True,False,False,Nested Width
+prtftp,nsthgt,Nesting Height,F,8,True,False,False,Nested Height
+prtftp,pal_stck_hgt,Pallet Stack Height,I,4,False,False,False,Pallet Stack Height
+prtftp,def_asset_typ,Default Handling Unit Type,S,30,True,False,False,Default Asset Type: The default asset type identifier
+prtftp,defftp_flg,Default Item Footprint,I,4,False,False,False,Default Flag which indicates current ftpcod is default ftpcod for the item
+prtftp,stkmtd,Stack Method,S,20,True,False,False,Stack Method
+prtftp,load_attr1_cfg,Wrapped,S,1,True,False,False,The first load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped.
+prtftp,load_attr2_cfg,LPN Attribute 2,S,1,True,False,False,The second load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped.
+prtftp,load_attr3_cfg,LPN Attribute 3,S,1,True,False,False,The third load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped.
+prtftp,load_attr4_cfg,LPN Attribute 4,S,1,True,False,False,The fourth load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped.
+prtftp,load_attr5_cfg,LPN Attribute 5,S,1,True,False,False,The fifth load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped.
+prtftp,rcvftp_flg,Receiving Item Footprint,I,4,False,False,False,Receiving Item Footprint flag which indicates current ftpcod was created during receiving
+prtftp,level_units,Level Units,I,4,True,False,False,Number of level units that the footprint occupies when on a level.
+prtftp,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+prtftp,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row as was last updated
+prtftp,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+prtftp,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+prtftp_dtl,prtnum,Item Number,S,50,False,True,False,Item Number.
+prtftp_dtl,ftpcod,Footprint Code,S,30,False,True,False,Footprint Code.
+prtftp_dtl,prt_client_id,Item Client ID,S,32,False,True,False,Item Client ID.
+prtftp_dtl,wh_id,Warehouse ID,S,32,False,True,False,Warehouse ID.
+prtftp_dtl,uomcod,Unit Of Measure,S,2,False,True,False,UOM Code.
+prtftp_dtl,uomlvl,UOM Level,I,4,False,False,False,"UOM level, a number which is manipulated by system. Upper UOM level has greater uomlvl."
+prtftp_dtl,len,Length,F,8,False,False,False,UOM Length.
+prtftp_dtl,wid,Width,F,8,False,False,False,UOM Width.
+prtftp_dtl,hgt,Height,F,8,False,False,False,UOM Height.
+prtftp_dtl,grswgt,Gross Weight,F,8,False,False,False,UOM gross weight which is weight with package.
+prtftp_dtl,netwgt,Net Weight,F,8,False,False,False,UOM net weight which weight without package.
+prtftp_dtl,pal_flg,Pallet Flag,I,4,False,False,False,"Pallet UOM flag, which indicates if current UOM is a pallet UOM."
+prtftp_dtl,layer_flg,Layer Flag,I,4,False,False,False,"Layer UOM flag, which indicates if current UOM is a layer UOM."
+prtftp_dtl,cas_flg,Case Flag,I,4,False,False,False,"Case UOM flag, which indicates if current UOM is case UOM."
+prtftp_dtl,pak_flg,Pack Flag,I,4,False,False,False,"Package UOM flag, which indicates if current UOM is package uom."
+prtftp_dtl,stk_flg,Unit UOM flag,I,4,False,False,False,"Unit UOM flag, which indicates if current UOM is unit UOM."
+prtftp_dtl,rcv_flg,Receive Flag,I,4,False,False,False,Receive UOM Flag. This indicates if current uom is the default UOM when receiving.
+prtftp_dtl,untqty,Unit Quantity,I,4,False,False,False,Unit per UOM.
+prtftp_dtl,ctn_flg,Cartonization Flag,I,4,False,False,False,"Allow Cartonization Flag, which indicates if this UOM can be cartonized."
+prtftp_dtl,thresh_pct,Threshold Percentage,F,8,False,False,False,Minimum percentage value of platform capacity a partial platform must contain to qualify as a Threshold Pick. The value in this field can be greater than 0.000% and no more than 100.000%.
+prtftp_dtl,ctn_dstr_flg,Carton Distribution,I,4,False,False,False,This flag determines if the carton will be utilized in the distribution process. These carton types will not be used for cartonization.
+prtftp_dtl,bulk_pck_flg,Bulk Picking,I,4,False,False,False,"Bulk Picking Flag, which indicates if current UOM is supported Bulk Picking."
+prtftp_dtl,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted.
+prtftp_dtl,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row as was last updated.
+prtftp_dtl,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row.
+prtftp_dtl,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently.
+prtmst,prtnum,Item Number,S,50,False,True,False,Also referred to as item number or SKU.
+prtmst,prt_client_id,Item Client ID,S,32,False,True,False,The client which owns the item number.
+prtmst,wh_id_tmpl,Warehouse ID Template,S,32,False,True,False,Warehouse ID Template - The wh_id_tmpl= '----' will represent a default item that will be shared by all warehouses. An entry with a wh_id_tmpl != '----' is an override for that warehouse.
+prtmst,comcod,Commodity Code,S,32,True,False,False,
+prtmst,subcfg,Sub-LPN Configuration,S,6,True,False,False,Used optionally when using serialized case tracking.  Indicates that valid subnum identifier for this item will contain this string (subcfg) starting at position scfpos in the subload number.
+prtmst,scfpos,Sub-LPN Config Position,I,4,True,False,False,The starting position for the subload configuration code.
+prtmst,dtlcfg,Detail Configuration,S,6,True,False,False,This is the same as the subcfg but applies to serialized detail identifiers.
+prtmst,dcfpos,Detail Config Position,I,4,True,False,False,Same as scfpos but applies to dtlcfg.
+prtmst,typcod,Item Type Code,S,32,True,False,False,
+prtmst,prtfam,Item Family,S,10,True,False,False,Item Family Name.
+prtmst,prthrcy,Item Hierarchy,S,50,True,False,False,Item Hierarchy Level Value.
+prtmst,dsp_prtnum,Display Item Number,S,50,True,False,False,Display Item Number.
+prtmst,age_pflnam,Aging Profile Name,S,30,True,False,False,
+prtmst,lodlvl,LPN Level,S,1,False,False,False,"Set to one of L (load), S (Subload), or D (Detail).  For example, if set to Subload, then product is considered serialized at a case level."
+prtmst,orgflg,Origin Code,I,4,False,False,False,"If set, the system will track origin code for this product."
+prtmst,revflg,Revision,I,4,False,False,False,"If set, the system will track revision level for this product."
+prtmst,lotflg,Lot Tracking,I,4,False,False,False,"If set, the system will track lot number for this product."
+prtmst,sup_lot_flg,Supplier Lot Tracking,I,4,False,False,False,"If set, the system will track supplier lot number for this product."
+prtmst,untcst,Unit Cost,F,8,True,False,False,The cost of a single unit of this item.
+prtmst,reoqty,Re-order Quantity,I,4,True,False,False,The amount of product to re-order should inventory levels fall below reopnt levels.  This field is not used for any standard system processing.
+prtmst,reopnt,Re-order Point,I,4,True,False,False,"If inventory levels fall below this level, an order should be generated for more inventory.  This field is not used for any standard system processing."
+prtmst,stkuom,Stocking Unit of Measure,S,2,True,False,False,Provides the UOM code to associate with untqty.
+prtmst,unt_ins_val,Unit Insurance Value,F,8,True,False,False,The insurable value of each release value unit.
+prtmst,rel_val,Release Value,F,8,True,False,False,"The value for a release value basis, this value can be in any currencies."
+prtmst,rel_val_unt_typ,Release Value Unit Type,S,30,True,False,False,The unit basis for the release value.
+prtmst,abccod,ABC Code,S,1,True,False,False,Used to indicate the relative frequency by which this product should be counted.
+prtmst,fifwin,Window,I,4,True,False,False,Used to indicate the time interval in which product should be considered equal for FIFO consideration during product storage.  The unit of measure of the time interval is based on the TIMCOD field.
+prtmst,timcod,Time Code,S,1,True,False,False,"Time Code.  This can be either in MINUTES, HOURS, or DAYS.  It governs how the FIFWIN column will be evaluated in the system."
+prtmst,velzon,Velocity,S,1,True,False,False,Used to indicate the relative velocity of the product and how it should be stored.  I.e. fast moving product should be stored in easy to access fast moving locations.
+prtmst,rcvsts,Receive Status,S,4,True,False,False,The default inventory status that this product should get when identified during receiving.
+prtmst,rsvuom,Reservation Unit of Measure,S,2,True,False,False,The lowest UOM by which inventory will be reserved by in order reservation.
+prtmst,rcvflg,Receivable,I,4,True,False,False,This flag must be set for product to be identified during receiving. Useful if items downloads from host often need addtln info.  New items may be downloaded with rcvflg set to false to prevent rcv'ng until someone manually intervenes.
+prtmst,prdflg,Production Inventory,I,4,True,False,False,"This flag is set if this is inventory that a host system cares about.  When tracking supplies and other non-costed items, this flag should be set to false."
+prtmst,ltlcls,Freight Class,S,8,True,False,False,Freight Class - used by TMS systems to determine freight rate of the item.
+prtmst,wip_prtflg,WIP Supply Item,I,4,True,False,False,This flag will be set if this item is allowed to transfer in to a WIP supply area.
+prtmst,dtcflg,Date Controlled,I,4,True,False,False,
+prtmst,cnzflg,Count Near Zero,I,4,True,False,False,"If set to TRUE, this value will be used to determine if the near zero count will take place rather than the value configured on the aremst table."
+prtmst,cnzamt,Count Near Zero Amount,F,8,True,False,False,The value used to calculate when a Near Zero Count will take place.
+prtmst,catch_cod,Catch Code,S,1,True,False,False,The value used to determine if and when this item will require catch unit processing.
+prtmst,avg_catch,Avg. Catch Capture Enabled,I,4,True,False,False,A flag to determine whether this item will use the average catch quantity functionality.
+prtmst,catch_unttyp,Catch Unit Type,S,30,True,False,False,The metric that catch units are captured in.
+prtmst,catch_untwgt,Catch Unit Weight,F,8,True,False,False,The Weight of 1 unit of metric.
+prtmst,catch_untcst,Catch Unit Cost,F,8,True,False,False,The cost of 1 unit of metric.
+prtmst,min_catch_qty,Minimum Catch Qty,F,8,True,False,False,Minimum catch qty a user may enter per stocking unit of measure.
+prtmst,max_catch_qty,Maximum Catch Qty,F,8,True,False,False,Maximum catch qty a user may enter per stocking unit of measure.
+prtmst,stccod,STCC Code,S,32,True,False,False,Standard Transportation Commodity Code - used for rail transportation.
+prtmst,parcel_flg,Parcel Flag,I,4,True,False,False,Parcel Flag - indicates whether or not a item can be shipped parcel.  This is used for TM shipment planning.
+prtmst,hazmat_flg,Hazardous Material,I,4,True,False,False,Hazardous Material Flag - indicates whether or not a item is considered hazardous material.
+prtmst,insflg,Insurance Required,I,4,True,False,False,Insurance Flag - indicates whether or not a item requires insurance.
+prtmst,nstcls,Nesting Class Code,S,20,True,False,False,Nesting Information Code - indicates how the products cartons can be nested in packaging.
+prtmst,ser_typ,Serialization Type,S,20,True,False,False,
+prtmst,ser_lvl,Serialization Level,S,1,True,False,False,
+prtmst,prt_disp,Item Display,S,100,True,False,False,"Item Display - Item Picture position, it should be a local picture or net picture."
+prtmst,prt_disptn,Item Disposition,S,3,True,False,False,The disposition of the item.
+prtmst,lot_fmt_id,Lot Format ID,S,10,True,False,False,"The Lot Format ID, used for parsing of lot numbers."
+prtmst,wgtcod,Weight Code,S,10,True,False,False,"The weight Code - This is a user defined code for the describing the weight type, usually takes the values HEAVY, MEDIUM or LIGHT."
+prtmst,lod_tag_encode,LPN Tag Encoding,S,40,True,False,False,The Tag Encoding used when encoding a pallet level RFID tag
+prtmst,sub_tag_encode,Sub-LPN Tag Encoding,S,40,True,False,False,The Tag Encoding used when encoding a carton level RFID tag
+prtmst,co_prefix_len,Company Prefix Length,I,4,True,False,False,The Company Prefix Length.  Used for parsing company prefix from GTIN
+prtmst,dept_cod,Department,S,5,True,False,False,Department Code - user-defined code master entry defining the department where this item is expected to be shipped.
+prtmst,time_to_warn_for_exp,Time To Warn For Expiration,I,4,True,False,False,"A number of time (whatever the time code is), that system will give a warning message to user if the the receiving item will expires within this time."
+prtmst,prtadjflg,Supports Inv. Adjustments,I,4,True,False,False,"If this flag is true, it is acceptable to record an inventory adjustment for this item.  If not, no adjustment record may be written."
+prtmst,cntbck_ena_flg,Count Back Flag,I,4,True,False,False,"If this flag is set, the item supports countback."
+prtmst,cnt_thr_cst,Count Threshold Cost,F,8,True,False,False,The threshold of counting. We won't genreate count if the current cost is lower than this value. 0 measn the threshold is disabled.
+prtmst,cnt_thr_unit,Count Threshold Unit,I,4,True,False,False,The Unit threshold of counting. We won't genreate count if the current unit is lower than this value. 0 means the threshold is disabled.
+prtmst,prtstyle,Style,S,30,True,False,False,The style
+prtmst,prtfit,Fit,S,30,True,False,False,The fit
+prtmst,prtcolor,Color,S,30,True,False,False,The color
+prtmst,prtsize,Size,S,30,True,False,False,The size
+prtmst,pck_steal_flg,Supports Cross Dock,I,4,True,False,False,This flag specifies whether the item is enabled for pick stealing
+prtmst,box_pck_flg,Pick to Box,I,4,True,False,False,"If this flag is set, the item will be picked to box during cartonization"
+prtmst,moddte,Date Last Modified,D,14,True,False,False,
+prtmst,mod_usr_id,Modified by,S,40,True,False,False,
+prtmst,crncy_code,Currency Code,S,4,True,False,False,Currency Code - the currency unit of currency sensitive data.
+prtmst,htsnum,HTS Number,S,40,True,False,False,HTS number
+prtmst,schedbnum,Schedule-B Number,S,40,True,False,False,Schedule-B number
+prtmst,u_version,Version,I,4,True,False,False,The version number
+prtmst,ins_dt,Inserted Date,D,14,True,False,False,The date the row was inserted
+prtmst,last_upd_dt,Last Updated Date,D,14,True,False,False,The date the row was last updated
+prtmst,ins_user_id,Inserted User,S,40,True,False,False,The user id of the person who created the row
+prtmst,last_upd_user_id,Last Updated User,S,40,True,False,False,The user id of the person who updated the row most recently
+prtmst,bto_subst_prtnum,BTO Substitute Item Number,S,50,True,False,False,The item which is the BTO substitute for the item
+prtmst,bto_obso_flg,BTO Obsolete Flag,I,4,False,False,False,This flag indicates that BTO will not use this item any more
+prtmst,dspuom,Display UOM,S,2,True,False,False,The uom that this item used to display. It should be UOM defined in itmftp_dtl
+prtmst,rptuom,Report UOM,S,2,True,False,False,The uom that this item used to report. It should be UOM defined in itmftp_dtl
+prtmst,ignore_con_flg,Ignore Pick Consolidation,I,4,False,False,False,"When the flag is set to true,it indicates that picks of this item could not be combined by combination code so that the user performs separate picks."
+prtmst,prc_for_rps_flg,Process for RPS,I,4,False,False,False,Process for RPS flag - This flag will indicate to process the inventory stock transition states to be sent to RPS for the item.
+prtmst,abs_ordinv_win,Date Window,I,4,True,False,False,Used in conjunction with XXFO-ORDER-BY-ABSOLUTE as skip logic
+prtmst,abs_ordinv_code,Date Window Unit,S,4,True,False,False,Time interval for the Absolute Order Inventory Window
+prtmst,thresh_pck_var,Threshold Pick Variance,F,8,False,False,False,Indicates if user should be warned when picking outside of the threshold variance percentage. Can be 0 to 100.
+prtmst,dte_win_typ,Date Window Type,S,5,True,False,False,Date Window Type selected for the part. This can have Manufacture Date Window or Expiration Date Window or FIFO Window.
+prtmst,dte_code,Date Code,S,5,True,False,False,"This will describe whether the part is Manufacture Date (M) or Expiration Date (E) or Both (B) tracked. If the part is not date tracked, its value will be null."
+prtmst,attr_str1,Inventory Attribute Text 1,S,5,False,False,False,This will describe whether the User Defined Attribute Text1 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str2,Inventory Attribute Text 2,S,5,False,False,False,This will describe whether the User Defined Attribute Text2 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str3,Inventory Attribute Text 3,S,5,False,False,False,This will describe whether the User Defined Attribute Text3 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str4,Inventory Attribute Text 4,S,5,False,False,False,This will describe whether the User Defined Attribute Text4 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str5,Inventory Attribute Text 5,S,5,False,False,False,This will describe whether the User Defined Attribute Text5 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str6,Inventory Attribute Text 6,S,5,False,False,False,This will describe whether the User Defined Attribute Text6 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str7,Inventory Attribute Text 7,S,5,False,False,False,This will describe whether the User Defined Attribute Text7 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str8,Inventory Attribute Text 8,S,5,False,False,False,This will describe whether the User Defined Attribute Text8 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str9,Inventory Attribute Text 9,S,5,False,False,False,This will describe whether the User Defined Attribute Text9 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str10,Inventory Attribute Text 10,S,5,False,False,False,This will describe whether the User Defined Attribute Text10 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str11,Inventory Attribute Text 11,S,5,False,False,False,This will describe whether the User Defined Attribute Text11 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str12,Inventory Attribute Text 12,S,5,False,False,False,This will describe whether the User Defined Attribute Text12 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str13,Inventory Attribute Text 13,S,5,False,False,False,This will describe whether the User Defined Attribute Text13 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str14,Inventory Attribute Text 14,S,5,False,False,False,This will describe whether the User Defined Attribute Text14 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str15,Inventory Attribute Text 15,S,5,False,False,False,This will describe whether the User Defined Attribute Text15 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str16,Inventory Attribute Text 16,S,5,False,False,False,This will describe whether the User Defined Attribute Text16 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str17,Inventory Attribute Text 17,S,5,False,False,False,This will describe whether the User Defined Attribute Text17 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_str18,Inventory Attribute Text 18,S,5,False,False,False,This will describe whether the User Defined Attribute Text18 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_int1,Inventory Attribute Number 1,S,5,False,False,False,This will describe whether the User Defined Integer Attribute 1 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_int2,Inventory Attribute Number 2,S,5,False,False,False,This will describe whether the User Defined Integer Attribute 2 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_int3,Inventory Attribute Number 3,S,5,False,False,False,This will describe whether the User Defined Integer Attribute 3 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_int4,Inventory Attribute Number 4,S,5,False,False,False,This will describe whether the User Defined Integer Attribute 4 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_int5,Inventory Attribute Number 5,S,5,False,False,False,This will describe whether the User Defined Integer Attribute 5 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_flt1,Inventory Attribute Decimal 1,S,5,False,False,False,This will describe whether the User Defined Decimal Attribute 1 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_flt2,Inventory Attribute Decimal 2,S,5,False,False,False,This will describe whether the User Defined Decimal Attribute 2 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_flt3,Inventory Attribute Decimal 3,S,5,False,False,False,This will describe whether the User Defined Decimal Attribute 3 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_dte1,Inventory Attribute Date 1,S,5,False,False,False,This will describe whether the User Defined Date-Time Attribute 1 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,attr_dte2,Inventory Attribute Date 2,S,5,False,False,False,This will describe whether the User Defined Date-Time Attribute 2 is Tracked - Optional (T) or Tracked - Required (R) or Not Tracked (N).
+prtmst,cstms_itm_typ,Customs Type,S,8,True,False,False,"Customs Item Type values are customs, excise, neither. If the item type is customs or excise then the item is bonded."
+prtmst,cstms_crncy,Customs Currency,S,20,True,False,False,The currency customs needs paid in.
+prtmst,dflt_orgcod,Default Origin Code,S,3,True,False,False,Country where the goods were manufactured.
+prtmst,cstms_vat_cod,Customs VAT Code,S,10,True,False,False,Customs Value Added Tax Code which can have a value of 'S' for Standard VAT or a 'Z' for Zero Vat (VAT not required).
+prtmst,dty_stmp_trk_flg,Duty Stamp Tracked,I,4,False,False,False,This must be enabled ('1') for all excise products over 30% alcohol by volume in containers 35cl or larger.
+prtmst,cstms_cst,Customs Cost,I,4,True,False,False,The customs cost of the item used by Duty Management
+prtmst,cstms_cmmdty_cod,Customs Commodity Code,S,150,True,False,False,Customs commodity code used by Duty Management to determine the type of duty to be paid. No validation in WM.
+prtmst,alt_prt_typ,Alternate Item Type,S,20,True,False,False,"The alternate item type.for the display item number. If there's no display item number defined for the item, this field will be empty."
+prtmst,velzon_recalc_flg,Recalculate Velocity,I,4,False,False,False,Enable this flag to allow velocity zone recalculation to be done for this item.
+prtmst,ordinv,Inventory Rotation Method,S,30,True,False,False,"Location Order By - This value determines how the system will determine which inventory in an area code to allocate for this order line. Examples of possible values include FEFO-ORDER-BY, FIFO-ORDER-BY"
+prtmst,pakflg,Delay Outbound Serial Capture Until Packing,I,4,False,False,False,Delay OutBound Serial Capture Until Packing.
+prtmst,shelf_life,Shelf Life,I,4,True,False,False,Shelf Life is used to calculate the expiration date in the absence of an aging profile for date controlled items with a date code value set as Both.
+prtmst,shelf_timecode,Time Code,S,1,True,False,False,Time Code for the shelf life
+prtmst,shp_res_lot,Ship Restricted Lot Flag,I,4,False,False,False,"Restricted flag, to determine if the batch status of prtlot should be created as Restricted or Unrestricted, also determine whether we should check batch status in logic of prevent ship/allocate/loading or not."
+prtmst,allow_xdktyp_rpl_flg,Allow Opportunistic Crossdock Flag,I,4,False,False,False,This flag indicates whether item is allowed for opportunistic cross docking.
+rplcfg,rplnum,Replenishment Number,S,10,False,True,False,Identifier for the replenishment.
+rplcfg,wh_id,Warehouse ID,S,32,False,False,False,Warehouse id.
+rplcfg,prtnum,Item Number,S,50,True,False,False,Item number of an Item.
+rplcfg,prt_client_id,Item Client ID,S,32,True,False,False,Client Identifier of an Item.
+rplcfg,stoloc,Location,S,20,True,False,False,Storage Location.
+rplcfg,mov_zone_id,Movement Zone,I,4,True,False,False,The movement zone identifier
+rplcfg,invsts,Inventory Status,S,4,True,False,False,Inventory Status of the Items.
+rplcfg,pctflg,Percentage,I,4,True,False,False,Pecentage flag to check the number of availble items whether by number or by percentage.
+rplcfg,maxunt,Maximum Unit,I,4,False,False,False,Maximum unit for a particular item.
+rplcfg,minunt,Minimum Unit,I,4,False,False,False,Minimum unit for a particular item.
+rplcfg,maxloc,Maximum Locations for Item,I,4,True,False,False,Maximum locations for replenishment.
+rplcfg,cmpflg,Complete,I,4,True,False,False,Flag for Completion of replenishmnt.
+rplcfg,rpldte,Last Attempted Replenishment,D,14,True,False,False,Date of the replenishment.
+rplcfg,inc_pct_flg,Increment Percentage,I,4,False,False,False,Increment Percentage flag to check the number of increment items whether by number or by percentage.
+rplcfg,inc_unt,Increment Unit,I,4,False,False,False,Increment Unit when a location can be over allocated.
+rplcfg,rls_pct,Release Percent,I,4,False,False,False,The perecent will be used to get the max capacity of the location by multipy the maxqvl of the location. System will use this max capacity to check if the emergency/demand replenishment should be released to pending.
+rplcfg,mod_usr_id,Modified by,S,40,True,False,False,Identifier of Last user who modified the replenishment.
+shipment,ship_id,Shipment ID,S,30,False,True,False,Shipment Id
+shipment,wh_id,Warehouse ID,S,32,True,False,False,Warehouse Id
+shipment,host_client_id,Host Client ID,S,32,True,False,False,Host Client Id
+shipment,host_ext_id,Host External ID,S,40,True,False,False,Host External Id
+shipment,shpsts,Shipment Status,S,1,True,False,False,Ship Status
+shipment,stop_id,Stop ID,S,10,True,False,False,Stop Id
+shipment,rt_adr_id,Route-To Address,S,20,False,False,False,Route-to Address Id
+shipment,cargrp,Carrier Group,S,10,True,False,False,Carrier Group
+shipment,carcod,Carrier,S,10,True,False,False,Carrier Code
+shipment,srvlvl,Service Level,S,10,True,False,False,Service Level
+shipment,sddflg,Saturday Delivery,I,4,True,False,False,Saturday Delivery Flag
+shipment,doc_num,Document Number,S,20,True,False,False,Document Number - The document number for any paperwork (bill of lading)
+shipment,track_num,Pro Number,S,30,True,False,False,Tracking Number - The tracking number for any paperwork
+shipment,mst_waybill,Master Waybill Number,S,60,True,False,False,Master waybill number
+shipment,frtchg,Freight Charge,S,1,True,False,False,Freight Charge
+shipment,frtcod,Freight Code,S,6,True,False,False,Freight Code
+shipment,frtrte,Freight Rate,F,8,True,False,False,Freight Rate
+shipment,adddte,Date Added,D,14,False,False,False,
+shipment,alcdte,Allocation Date,D,14,True,False,False,Allocation Date
+shipment,stgdte,Staged Date,D,14,True,False,False,Staged Date
+shipment,loddte,Loaded Date,D,14,True,False,False,Loaded Date
+shipment,entdte,Date Entered,D,14,False,False,False,Date Entered
+shipment,early_shpdte,Early Ship Date,D,14,True,False,False,Early Ship Date
+shipment,late_shpdte,Late Ship Date,D,14,True,False,False,Late Ship Date
+shipment,early_dlvdte,Early Delivery Date,D,14,True,False,False,Early Delivery Date
+shipment,late_dlvdte,Late Delivery Date,D,14,True,False,False,Late Delivery Date
+shipment,dstloc,Destination Location,S,20,True,False,False,Destination Location
+shipment,rrlflg,Release Remaining Lines,I,4,True,False,False,Release Remaining Lines Flag
+shipment,wave_set,Wave Set,S,10,True,False,False,Wave Set
+shipment,tms_group_id,TMS Group ID,S,10,True,False,False,TMS Group Id
+shipment,tms_move_id,TMS Carrier Move ID,S,10,True,False,False,TMS Carrier Move ID for LTL shipments actuals transaction to planned carrier move within TMS
+shipment,tms_move_plan_id,TMS Move Plan ID,S,16,True,False,False,TMS Move Plan ID for LTL shipments actuals transaction to planned carrier move within TMS
+shipment,lst_prtdte,Last Printed Date,D,14,True,False,False,
+shipment,super_ship_id,Super Shipment ID,S,30,True,False,False,"Super Shipment Id - If this shipment was planned into a super shipment, this is the super shipment identifier"
+shipment,super_ship_flg,Super Shipment,I,4,True,False,False,
+shipment,in_transit_flg,In Transit,I,4,True,False,False,In Transit Flag.  Specifies if the shipment is currently enroute to a customer.
+shipment,pln_shpsts,Planning Status,S,40,True,False,False,Planning Status of this shipment (only for use by TM.)
+shipment,ses_grp_nam,Session Group,S,40,True,False,False,Used to indicate the application group that owns this shipment (only for use by TM.)
+shipment,optm_base_cost,Optimization Basis Cost,F,8,True,False,False,The basis cost to ship this shipment regardless.  It could would be lesser of the standard TL and LTL service.
+shipment,rate_serv_nam,Rating Service Name,S,40,True,False,False,Rating service name of the optimization basis cost.
+shipment,arcdte,Archive Date,D,14,True,False,False,Archive Date
+shipment,arc_src,Archive Source,S,30,True,False,False,Archive Source
+shipment,lbl_prtdte,Label Print Date,D,14,True,False,False,Label Print date. It is used in processing super shipment to see if the labels for the child shipment have been printed.
+shipment,ses_tag,Session Tag,S,40,True,False,False,"Used to a shipment within an application group, so that a new session does not need to be made to run the group multiple times (only for use by TM.)"
+shipment,price_sts,Price Status,S,40,True,False,False,This indicates the price status for the shipment.
+shipment,src_sys,Source System,S,40,True,False,False,Used to identify the source system of the shipment
+shipment,par_ship_id,Original Shipment ID,S,30,True,False,False,Original shipment Id for cloned shipment
+shipment,hub_adr_id,Hub Address,S,20,True,False,False,FK (tm_adrmst) Hub Address. Only used for TM
+shipment,hub_arrdte,Hub Arrive Date,D,14,True,False,False,Date that arrives at hub. Only used for TM
+shipment,zs_line_haul_id,Line Haul ID,S,10,True,False,False,Used to indicate which carrier move this shipment belongs to. Only used for TM
+shipment,hub_rate_serv_nam,Hub Rating Service Name,S,40,True,False,False,FK (tm_rate_serv) The rating service name used for this shipment provided by hub. Only used for TM
+shipment,tot_pkg_qty,Total Number of Packages,I,4,True,False,False,(PARCEL related) Total number of packages
+shipment,crncy_code,Currency Code,S,4,True,False,False,The Currency Code for the Currency fields in the table.
+shipment,aesitn,AES Number,S,40,True,False,False,AES Internal Transaction Number
+shipment,aes_typ,AES Type,S,10,True,False,False,AES Type - Typically can be one of PRE(Pre Shipment) or POST(Post Shipment) or DOWN(AES server is down).
+shipment,aes_acpt_dte,AES Accepted Date,D,14,True,False,False,AES Accepted Date - Used for AES Type of PRE where we give the date of AES Acceptance.
+shipment,ftsrnum,FTSR Number,S,40,True,False,False,Foreign Trade Statistics Regulations Number
+shipment,export_typ,Export Type,S,40,True,False,False,International shipment documentation option required for manifesting international packages using some transnational carriers. The valid values are provided by the Parcel system for each carrier.
+shipment,docind,Document Indicator,S,10,True,False,False,"(PARCEL) Document indicator - specifies if the shipment is a letter, document or non-document shipment."
+shipment,descgoods,Description of Goods,S,50,True,False,False,(PARCEL) Description of Goods
+shipment,exprsntxt,Reason for Export,S,50,True,False,False,(PARCEL) Reason for Export
+shipment,pack_code,Packing Code,I,4,True,False,False,The BTO Packing Code determines how a BTO order should be picked and packed into containers.
+shipment,pln_cmpl_flg,Planning Complete,I,4,False,False,False,"This flag is set to true when no additional lines are going to be added to the shipment. However, it does not prevent lines from being added to the shipment."
+shipment,dispatch_code,Dispatch Code,S,30,True,False,False,The code represent the item commodities that are contained in the shipment.
+shipment,moddte,Date Last Modified,D,14,True,False,False,Date Last Modified
+shipment,mod_usr_id,Modified by,S,40,True,False,False,Last Modified By
+shipment,book_num,Booking Number,S,12,True,False,False,"Federal Express Freight Booking Number, typically used when shipping large packages over 150 pounds."
+shipment,dst_mov_zone_id,Movement Zone,I,4,True,False,False,Movement Zone to which the inventory for this order line will be staged.
+shipment,bola_num,Delivery Note Number,S,30,True,False,False,A generated number by client when the shipment's status is changed to staged.
+shipment,dlv_dte,Delivery Date,D,14,True,False,False,Date that the customer site received this shipment
+shipment,pod_conf_flg,Proof of Delivery Confirmed,I,4,True,False,False,Denotes that all inventory on this shipment has been accounted for between the WMS Site and Customer Site
+shipment,dlvseq_load_order,Delivery Sequence Loading Order,S,10,False,False,False,"Order of Delivery Sequence that shipments should be loaded. D = Disabled, ASC = Ascending, DESC = Descending"
+shipment,wa_rule_reference,Work Assignment Rule Reference,S,40,True,False,False,Field for making a reference when creating work assignment rules to provide override capability
+shipment_line,ship_line_id,Shipment Line ID,S,10,False,True,False,Shipment Line ID
+shipment_line,ship_id,Shipment ID,S,30,False,False,False,Shipment ID
+shipment_line,wh_id,Warehouse ID,S,32,True,False,False,Warehouse ID - the warehouse in which the order is to be fulfilled
+shipment_line,client_id,Client ID,S,32,False,False,False,"Client ID - The client code that owns this shipment Line. In a non-3PL system, this value defaults to '----'."
+shipment_line,ordnum,Outbound Order Number,S,35,False,False,False,Order Number
+shipment_line,ordlin,Outbound Order Line,S,10,False,False,False,Order Line
+shipment_line,ordsln,Outbound Order Sub-Line,S,10,False,False,False,Order Sub-Line
+shipment_line,cons_batch,Consolidate Batch,S,10,True,False,False,Consolidate Batch
+shipment_line,shpwth,Ship With,S,10,True,False,False,Ship With
+shipment_line,linsts,Line Status,S,1,False,False,False,Line Status
+shipment_line,prcpri,Processing Priority,S,1,False,False,False,Processing Priority
+shipment_line,pckgr1,Pick Group 1,S,20,True,False,False,Pick Group 1
+shipment_line,pckgr2,Pick Group 2,S,20,True,False,False,Pick Group 2
+shipment_line,pckgr3,Pick Group 3,S,20,True,False,False,Pick Group 3
+shipment_line,pckgr4,Pick Group 4,S,20,True,False,False,Pick Group 4
+shipment_line,schbat,Schedule Batch Number,S,32,True,False,False,Schedule Batch Number
+shipment_line,pckqty,Pick Quantity,I,4,False,False,False,Pick Quantity
+shipment_line,inpqty,Inprocess Quantity,I,4,False,False,False,Inprocess Quantity
+shipment_line,stgqty,Staged Quantity,I,4,False,False,False,Staged Quantity
+shipment_line,shpqty,Shipped Quantity,I,4,False,False,False,Shipped Quantity
+shipment_line,oviqty,Over-Alloc In-Process Qty,I,4,False,False,False,Over-Alloc In-Process Qty
+shipment_line,ovramt,Over-Allocation Amount,I,4,True,False,False,Over-Allocation Amount
+shipment_line,ovrcod,Over-Allocation Code,S,4,True,False,False,Over-Allocation Code
+shipment_line,edtflg,Edited by Host,I,4,True,False,False,Edited by Host
+shipment_line,tot_pln_cas_qty,Total Plan Case Quantity,F,8,True,False,False,(TMS Related) Total number of cases. This value is to be used only for transportation planning purposes.
+shipment_line,tot_pln_misc2_qty,Total Plan Misc Two Quantity,F,8,True,False,False,(TMS Related) Total miscellaneous quantity for the order line. This value is to be used only for transportation planning purposes.
+shipment_line,tot_pln_wgt,Total Plan Weight,F,8,True,False,False,(TMS Related) Holds the total weight of the pieces on the shipment line. This value is to be used only for transportation planning purposes.
+shipment_line,tot_pln_cube,Total Plan Cube,F,8,True,False,False,(TMS Related) Holds the total cube/volume for the pieces on the order line. This value is to be used only for transporation planning purposes.
+shipment_line,tot_pln_misc_qty,Total Plan Misc Quantity,F,8,True,False,False,(TMS Related) Total miscellaneous quantity for the order line. This value is to be used only for transportation planning purposes.
+shipment_line,tot_pln_pal_qty,Total Plan Pallets,F,8,True,False,False,(TMS Related) Total number of pallets. This value is to be used only for transportation planning purposes.
+shipment_line,tot_pln_qty,Total Planned Quantify,F,8,True,False,False,(TMS Related) Total order Quantity.
+shipment_line,unt_ins_val,Unit Insurance Value,F,8,True,False,False,(TM only) The total value of the goods on this shipment that need to be insured by the cargo insurance
+shipment_line,rel_val,Release Value,F,8,True,False,False,"(TM only) The value for a release value basis, this value can be in any currencies"
+shipment_line,rel_val_unt_typ,Release Value Unit Type,S,30,True,False,False,(TM only) The unit basis for the release value
+shipment_line,wkonum,Work Order Number,S,20,True,False,False,Work Order Number
+shipment_line,wkorev,Work Order Revision,S,10,True,False,False,Work Order Revision
+shipment_line,moddte,Date Last Modified,D,14,True,False,False,Date Last Modified
+shipment_line,mod_usr_id,Modified by,S,40,True,False,False,Last Modified By
+shipment_line,dstr_qty,Distribution Quantity,I,4,False,False,False,Distribution Quantity
+shipment_line,prtnum,Item Number,S,50,True,False,False,"Item Number - Identifier for the item, or SKU that is ordered."
+shipment_line,prt_client_id,Item Client ID,S,32,True,False,False,"Item Client ID - The client code for the item that is ordered.  In a non-3PL system, this value defaults to '----'."
+shipment_line,est_time,Estimated Goal Time,I,4,True,False,False,Estimated time to pick the inventory for this order line.
+shipment_line,picked_qty,,I,4,False,False,False,The total number of units that have been picked
+shipment_line,instgqty,,I,4,False,False,False,Quantity currently in a staging lane
+shipment_line,inloadqty,,I,4,False,False,False,Quantity currently loaded in a trailer
+shipment_line,ftpcod,Footprint Code,S,30,True,False,False,
+shipment_line,untpal,Units Per Pallet,I,4,True,False,False,

@@ -34,6 +34,7 @@ data/raw_api/*.json  →  scripts/flatten_api_json.sql  →  data/system_events.
                                                               │
 staging/mysql/ (view)   stg_mysql__system_events — dedup, types, code split, UTC
 seeds/ (CSV)            seed_event_codes · seed_app_sources · seed_categories
+                        seed_jdawms_data_dictionary · seed_jdawms_comtyp (WMS reference)
                               │
 intermediate/ (view)    int_events_enriched (+ dictionary & app registry)
                         int_logins · int_downloads · int_catalog_views
@@ -66,6 +67,42 @@ int_*  →  fct_*  (thin incremental, same grain)  →  mart_*  (daily × agent,
 - **`fct_*`** — persisted copy of an `int_*` family for BI performance (incremental on `entity_id`).
 - **`mart_*`** — aggregated scorecards where grain changes (e.g. daily × agent).
 
+## Column documentation (glossaries)
+
+Column descriptions live in the source/model YAMLs; text shared by 2+ columns
+is deduplicated into `{% docs %}` blocks under `models/docs/` and referenced
+via `{{ doc('...') }}` (rule: inline if unique, doc block if shared).
+
+**jdawms is generated, not hand-written.** The SME-verified WMS data dictionary
+is the source of truth:
+
+```
+seeds/seed_jdawms_data_dictionary.csv       (from wms datadictory_Dbt_2026.xlsx)
+        │  scripts/generate_jdawms_glossary.py
+        ▼
+models/docs/_jdawms_glossary.md             shared {% docs %} blocks
+models/staging/jdawms/_jdawms__sources.yml  column descriptions (inline or doc ref)
+```
+
+To change a jdawms description: edit the seed CSV → re-run the script →
+`dbt parse`. Never hand-edit the generated descriptions. Definitions are
+deduplicated by *meaning* — the same column name can legitimately mean
+different things per table (e.g. `devcod`), so table-specific variants stay
+inline or get a `jdawms__<col>__<table>` block.
+
+**Human-review queue** (the generator prints this on every run):
+
+1. *Variant blocks* — same column, different dictionary text. Confirm each is
+   a real semantic difference vs. dictionary phrasing noise.
+2. *Empty-comment rows* — dictionary has no `column_comment`; the prior
+   AI-inferred text was kept (flagged in the report). Needs SME wording.
+3. *Columns not in the dictionary* — `loaddate` / `_rescued_data` are
+   pipeline-owned (no SME needed); anything else appearing here means the
+   dictionary is out of date.
+
+The mysql glossary (`models/docs/_mysql_glossary.md`) is hand-maintained under
+the same inline-vs-shared rule.
+
 ## Data quality
 
 | Layer | Location | Runs | Purpose |
@@ -89,7 +126,8 @@ int_*  →  fct_*  (thin incremental, same grain)  →  mart_*  (daily × agent,
 ├── data/                        # raw_api/*.json + parquet (git-ignored)
 ├── scripts/
 │   ├── flatten_api_json.sql
-│   └── generate_event_glossary.py
+│   ├── generate_event_glossary.py
+│   └── generate_jdawms_glossary.py
 ├── analyses/profile_mysql_logs.sql
 ├── seeds/
 ├── macros/
@@ -97,6 +135,7 @@ int_*  →  fct_*  (thin incremental, same grain)  →  mart_*  (daily × agent,
 └── models/
     ├── docs/
     ├── staging/mysql/
+    ├── staging/jdawms/           # WMS replica staging (databricks-only)
     ├── intermediate/
     ├── marts/reporting/
     ├── exposures.yml

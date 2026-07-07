@@ -1,8 +1,10 @@
 version: 2
 
-# Column descriptions: inline if unique to this column; shared text (used by 2+
-# columns) lives in models/docs/_jdawms_glossary.md as a {% docs %} block and is
-# referenced here via {{ doc('jdawms__<column>') }}. Edit shared defs there.
+# Column descriptions are GENERATED from seeds/seed_jdawms_data_dictionary.csv
+# by scripts/generate_jdawms_glossary.py: inline if the meaning is unique to
+# this column, or a {{ doc('jdawms__<column>') }} ref into
+# models/docs/_jdawms_glossary.md when 2+ tables share the same meaning.
+# Do not hand-edit descriptions here — update the seed and re-run the script.
 
 sources:
   - name: jdawms
@@ -18,7 +20,7 @@ sources:
       meta:
         access: read_only
         source_system: jdawms
-        doc_status: ai_generated   # column descriptions AI-inferred; pending SME verification
+        doc_status: sme_verified   # from WMS data dictionary (seed_jdawms_data_dictionary); 24 empty-comment + ingestion columns retain prior AI text
     tables:
       - name: dlytrn
         description: "Daily inventory transaction log — one row per stock movement/adjustment (receipt, pick, putaway, transfer). The WMS activity ledger."
@@ -28,159 +30,159 @@ sources:
             warn_after: {count: 48, period: hour}
         columns:
           - name: dlytrn_id
-            description: "Primary key — unique id of the daily transaction."
+            description: "Daily Transaction ID — Daily trnsaction ID."
           - name: trndte
-            description: "Transaction date/time."
+            description: "Transaction Date — The date and time the activity occurred."
           - name: oprcod
-            description: "Operation code — high-level operation (receive, pick, adjust, move)."
+            description: "Operation Code — The operation code of the transaction."
           - name: actcod
-            description: "Activity code — specific activity within the operation."
+            description: "Activity Code — The activity code of the transaction."
           - name: lodnum
             description: "{{ doc('jdawms__lodnum') }}"
           - name: subnum
             description: "{{ doc('jdawms__subnum') }}"
           - name: dtlnum
-            description: "{{ doc('jdawms__dtlnum') }}"
+            description: "Detail LPN — Uniquely identified invdtl record."
           - name: to_lodnum
-            description: "Code/identifier: to_lodnum."
+            description: "To Load Number — Uniquely identifies destination invlod record. In many systems, this value is the same as the label on a pallet."
           - name: to_subnum
-            description: "Code/identifier: to_subnum."
+            description: "To Case Identifier — Uniquely identified destination invsub record."
           - name: to_dtlnum
-            description: "Code/identifier: to_dtlnum."
+            description: "To Piece Identifier — Uniquely identified destination invdtl record."
           - name: prtnum
-            description: "{{ doc('jdawms__prtnum') }}"
+            description: "{{ doc('jdawms__prtnum__dlytrn') }}"
           - name: prt_client_id
             description: "{{ doc('jdawms__prt_client_id') }}"
           - name: orgcod
-            description: "{{ doc('jdawms__orgcod') }}"
+            description: "Origin Code of the inventory tracked by this detail. If this item is not origin code tracked, then this field will take on a default value of '----'."
           - name: revlvl
-            description: "{{ doc('jdawms__revlvl') }}"
+            description: "Revision level of the inventory tracked by this detail. If this item is not revision level tracked, then this field will take on a default value of '----'."
           - name: lotnum
-            description: "{{ doc('jdawms__lotnum') }}"
+            description: "Lot number of the inventory tracked by this detail. If this item is not lot number tracked, then this field will take on a default value of '----'."
           - name: sup_lotnum
-            description: "{{ doc('jdawms__sup_lotnum') }}"
+            description: "Supplier Lot Number — Lot number supplied by the supplier for tracking purposes."
           - name: supnum
-            description: "{{ doc('jdawms__supnum') }}"
+            description: "Supplier Number : The supplier number of the inventory tracked by this detail."
           - name: inv_attr_str1
-            description: "{{ doc('jdawms__inv_attr_str1') }}"
+            description: "Inventory Attribute Text 1 of the inventory tracked by this detail."
           - name: inv_attr_str2
-            description: "{{ doc('jdawms__inv_attr_str2') }}"
+            description: "Inventory Attribute Text 2 of the inventory tracked by this detail."
           - name: inv_attr_str3
-            description: "{{ doc('jdawms__inv_attr_str3') }}"
+            description: "Inventory Attribute Text 3 of the inventory tracked by this detail."
           - name: inv_attr_str4
-            description: "{{ doc('jdawms__inv_attr_str4') }}"
+            description: "Inventory Attribute Text 4 of the inventory tracked by this detail."
           - name: inv_attr_str5
-            description: "{{ doc('jdawms__inv_attr_str5') }}"
+            description: "Inventory Attribute Text 5 of the inventory tracked by this detail."
           - name: inv_attr_str6
-            description: "{{ doc('jdawms__inv_attr_str6') }}"
+            description: "Inventory Attribute Text 6 of the inventory tracked by this detail."
           - name: inv_attr_str7
-            description: "{{ doc('jdawms__inv_attr_str7') }}"
+            description: "Inventory Attribute Text 7 of the inventory tracked by this detail."
           - name: inv_attr_str8
-            description: "{{ doc('jdawms__inv_attr_str8') }}"
+            description: "Inventory Attribute Text 8 of the inventory tracked by this detail."
           - name: inv_attr_str9
-            description: "{{ doc('jdawms__inv_attr_str9') }}"
+            description: "Inventory Attribute Text 9 of the inventory tracked by this detail."
           - name: inv_attr_str10
-            description: "{{ doc('jdawms__inv_attr_str10') }}"
+            description: "Inventory Attribute Text 10 of the inventory tracked by this detail."
           - name: inv_attr_str11
-            description: "{{ doc('jdawms__inv_attr_str11') }}"
+            description: "Inventory Attribute Text 11 of the inventory tracked by this detail."
           - name: inv_attr_str12
-            description: "{{ doc('jdawms__inv_attr_str12') }}"
+            description: "Inventory Attribute Text 12 of the inventory tracked by this detail."
           - name: inv_attr_str13
-            description: "{{ doc('jdawms__inv_attr_str13') }}"
+            description: "Inventory Attribute Text 13 of the inventory tracked by this detail."
           - name: inv_attr_str14
-            description: "{{ doc('jdawms__inv_attr_str14') }}"
+            description: "Inventory Attribute Text 14 of the inventory tracked by this detail."
           - name: inv_attr_str15
-            description: "{{ doc('jdawms__inv_attr_str15') }}"
+            description: "Inventory Attribute Text 15 of the inventory tracked by this detail."
           - name: inv_attr_str16
-            description: "{{ doc('jdawms__inv_attr_str16') }}"
+            description: "Inventory Attribute Text 16 of the inventory tracked by this detail."
           - name: inv_attr_str17
-            description: "{{ doc('jdawms__inv_attr_str17') }}"
+            description: "Inventory Attribute Text 17 of the inventory tracked by this detail."
           - name: inv_attr_str18
-            description: "{{ doc('jdawms__inv_attr_str18') }}"
+            description: "Inventory Attribute Text 18 of the inventory tracked by this detail."
           - name: inv_attr_int1
-            description: "{{ doc('jdawms__inv_attr_int1') }}"
+            description: "Inventory Attribute Number 1 of the inventory tracked by this detail."
           - name: inv_attr_int2
-            description: "{{ doc('jdawms__inv_attr_int2') }}"
+            description: "Inventory Attribute Number 2 of the inventory tracked by this detail."
           - name: inv_attr_int3
-            description: "{{ doc('jdawms__inv_attr_int3') }}"
+            description: "Inventory Attribute Number 3 of the inventory tracked by this detail."
           - name: inv_attr_int4
-            description: "{{ doc('jdawms__inv_attr_int4') }}"
+            description: "Inventory Attribute Number 4 of the inventory tracked by this detail."
           - name: inv_attr_int5
-            description: "{{ doc('jdawms__inv_attr_int5') }}"
+            description: "Inventory Attribute Number 5 of the inventory tracked by this detail."
           - name: inv_attr_flt1
-            description: "{{ doc('jdawms__inv_attr_flt1') }}"
+            description: "Unit Cost — Inventory Attribute Decimal 1 of the inventory tracked by this detail."
           - name: inv_attr_flt2
-            description: "{{ doc('jdawms__inv_attr_flt2') }}"
+            description: "Inventory Attribute Decimal 2 of the inventory tracked by this detail."
           - name: inv_attr_flt3
-            description: "{{ doc('jdawms__inv_attr_flt3') }}"
+            description: "Inventory Attribute Decimal 3 of the inventory tracked by this detail."
           - name: inv_attr_dte1
-            description: "{{ doc('jdawms__inv_attr_dte1') }}"
+            description: "Inventory Attribute Date 1 of the inventory tracked by this detail."
           - name: inv_attr_dte2
-            description: "{{ doc('jdawms__inv_attr_dte2') }}"
+            description: "Inventory Attribute Date 2 of the inventory tracked by this detail."
           - name: movref
-            description: "Movement reference linking related transactions."
+            description: "Move Reference — The move reference of the transaction. This reference is used internally by the system to show what type of inventory move occurred."
           - name: reacod
-            description: "Reason code for the transaction/adjustment."
+            description: "Reason Code — The reason code assigned to the transaction."
           - name: trnqty
-            description: "Transaction quantity (signed by movement direction)."
+            description: "Quantity — The unit quantity affected by this transaction."
           - name: catch_qty
-            description: "{{ doc('jdawms__catch_qty') }}"
+            description: "Catch Quantity — The catch qty a user may enter per stocking unit of measure."
           - name: traknm
-            description: "WMS traknm attribute."
+            description: "Tracking Number : The number which is generated by the parcel manifesting system and is used by parcel carriers to track the package."
           - name: catch_unttyp
-            description: "WMS catch_unttyp attribute."
+            description: "Catch Unit Type — The metric that catch units are captured in."
           - name: fr_arecod
-            description: "From area code (source of the move)."
+            description: "From Area — The source area code of the transaction."
           - name: frstol
-            description: "From storage location."
+            description: "From Location — The source location of the transaction."
           - name: frinvs
-            description: "From inventory status."
+            description: "From Inv Status — The original inventory status of the inventory affected by this transaction."
           - name: fr_age_pflnam
-            description: "WMS fr_age_pflnam attribute."
+            description: "From Aging Profile — The original aging profile of the inventory affected by this transaction."
           - name: to_arecod
-            description: "To area code (destination of the move)."
+            description: "To Area — The destination area code of the transaction."
           - name: tostol
-            description: "To storage location."
+            description: "To Location — The destination location of the transaction."
           - name: toinvs
-            description: "To inventory status."
+            description: "To Inv Status — The final inventory status of the inventory affected by this transaction."
           - name: to_age_pflnam
-            description: "WMS to_age_pflnam attribute."
+            description: "To Aging Profile — The final aging profile of the inventory affected by this transaction."
           - name: trlr_num
-            description: "Code/identifier: trlr_num."
+            description: "Transport Equipment Number — The trailer number of the trailer."
           - name: trct_num
-            description: "Code/identifier: trct_num."
+            description: "The tractor number of the trailer."
           - name: carcod
-            description: "{{ doc('jdawms__carcod') }}"
+            description: "Carrier — The carrier code of the trailer."
           - name: ship_id
-            description: "{{ doc('jdawms__ship_id') }}"
+            description: "Shipment ID — The shipment ID the order was on."
           - name: client_id
-            description: "{{ doc('jdawms__client_id') }}"
+            description: "Client ID — The client which owns the order."
           - name: ordnum
-            description: "{{ doc('jdawms__ordnum') }}"
+            description: "Outbound Order Number — The order number the activity record is for."
           - name: trndtl_id
-            description: "Code/identifier: trndtl_id."
+            description: "Transaction Detail ID — A link to antoher transaction Id for another table to show detailed information about the transaction."
           - name: trndtl_table
-            description: "WMS trndtl_table attribute."
+            description: "Transaction Detail Table — The table containing the detail information about the transaction."
           - name: adj_ref1
-            description: "WMS adj_ref1 attribute."
+            description: "Adjustment Reference One — Reference number for sending information to the host."
           - name: adj_ref2
-            description: "WMS adj_ref2 attribute."
+            description: "Adjustment Reference Two — Reference number for sending information to the host."
           - name: usr_id
-            description: "User who performed the transaction."
+            description: "User ID — The user the did the action that the activity is being captured for."
           - name: devcod
             description: "{{ doc('jdawms__devcod') }}"
           - name: arcdte
-            description: "{{ doc('jdawms__arcdte') }}"
+            description: "Archive Date — The archive date if this transaction was archived."
           - name: arc_src
-            description: "{{ doc('jdawms__arc_src') }}"
+            description: "Archive Source — The archival source of this table, if this table is created as an archiving table."
           - name: cmnt
-            description: "WMS cmnt attribute."
+            description: "Comments — Comment - Comment used for supervisor approval of adjustments."
           - name: asset_typ
-            description: "{{ doc('jdawms__asset_typ') }}"
+            description: "Handling Unit Type — Asset Type : Asset type of the asset."
           - name: asset_id
-            description: "Code/identifier: asset_id."
+            description: "Handling Unit ID — Asset ID : Unique identifier for the asset."
           - name: asset_stat
-            description: "WMS asset_stat attribute."
+            description: "Handling Unit Status — Asset Status : Status of the asset."
           - name: load_attr1_flg
             description: "{{ doc('jdawms__load_attr1_flg') }}"
           - name: load_attr2_flg
@@ -192,25 +194,25 @@ sources:
           - name: load_attr5_flg
             description: "{{ doc('jdawms__load_attr5_flg') }}"
           - name: var_nam
-            description: "WMS var_nam attribute."
+            description: "Variable Name - Name of the attribute that was changed."
           - name: fr_value
-            description: "WMS fr_value attribute."
+            description: "From value - Original value of the attribute."
           - name: to_value
-            description: "WMS to_value attribute."
+            description: "To value - Changed value of the attribute."
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "Warehouse ID - the warehouse in which the building exists."
           - name: uomcod
-            description: "{{ doc('jdawms__uomcod') }}"
+            description: "Unit of measure used in the activity."
           - name: ftpcod
-            description: "{{ doc('jdawms__ftpcod') }}"
+            description: "Footprint code used in the activity."
           - name: distro_excp_id
-            description: "Code/identifier: distro_excp_id."
+            description: "Distribution Exception ID — Unique Id to identify the distribution exception."
           - name: excp_code
-            description: "WMS excp_code attribute."
+            description: "Exception Code for this distribution exception."
           - name: expqty
-            description: "Quantity field: expqty."
+            description: "Expected Quantity — The quantity expected to be distributed."
           - name: rptqty
-            description: "Quantity field: rptqty."
+            description: "Reported Quantity — The quantity actually distributed."
           - name: u_version
             description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
@@ -222,15 +224,15 @@ sources:
           - name: last_upd_user_id
             description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: to_trct_num
-            description: "Code/identifier: to_trct_num."
+            description: "The final tractor number of the tractor affected by this transaction."
           - name: to_trlr_num
-            description: "Code/identifier: to_trlr_num."
+            description: "To Transport Equipment Number — The final trailer number of the trailer affected by this transaction."
           - name: to_carcod
-            description: "Code/identifier: to_carcod."
+            description: "To Carrier — The final carrier of the trailer affected by this transaction."
           - name: srvlvl
-            description: "{{ doc('jdawms__srvlvl') }}"
+            description: "Service level of the record."
           - name: to_srvlvl
-            description: "WMS to_srvlvl attribute."
+            description: "To Service Level — The final srvlvl of the shipment/carrier move affected by this transaction."
           - name: rowid
             description: "{{ doc('jdawms__rowid') }}"
           - name: _rescued_data
@@ -245,43 +247,43 @@ sources:
             warn_after: {count: 48, period: hour}
         columns:
           - name: inv_snap_id
-            description: "Primary key — snapshot row id."
+            description: "Inventory Snapshot ID — Inventory Snap ID - PK value for this table."
           - name: prtnum
-            description: "{{ doc('jdawms__prtnum') }}"
+            description: "{{ doc('jdawms__prtnum__inv_snap') }}"
           - name: prt_client_id
-            description: "{{ doc('jdawms__prt_client_id') }}"
+            description: "{{ doc('jdawms__prt_client_id__inv_snap') }}"
           - name: gendte
-            description: "Generation timestamp of the snapshot/record."
+            description: "Generation Date: Date and time the inventory snapshot was generated."
           - name: rcvqty
-            description: "Received quantity since prior snapshot."
+            description: "Receive Quantity — Received Quantity: Number of units received between the last time a snapshot was generated and the Generation Date."
           - name: shpqty
-            description: "Shipped quantity since prior snapshot."
+            description: "Shipped Quantity: Number of units shipped between the last time a snapshot was generated and the Generation Date."
           - name: adjqty
-            description: "Adjusted quantity since prior snapshot."
+            description: "Adjusted Quantity — No of units adjusted between the last time a snapshot was generated and Generation Date. An adjustment includes adding, modifying or deleting inventory through invadjopr and cntaudopr, as well as inventory moved to WIP supply areas."
           - name: wko_cnsqty
-            description: "Quantity field: wko_cnsqty."
+            description: "Work Order Consumed Quantity: Number of units delivered to a work order processing location between the last time a snapshot was generated and the Generation Date."
           - name: wko_rcvqty
-            description: "Quantity field: wko_rcvqty."
+            description: "Work Order Received Quantity — Number of units received through a WO between the last time a snapshot was generated and Generation Date. This includes inventory received from a WO either through production of a top level item or the return to stock of components."
           - name: on_hand_qty
-            description: "On-hand quantity at snapshot time."
+            description: "On-Hand Qty — The results here will be dictated by a policy. It will either be: the qty of this item number/item client id within four-wall locations or specified inventory status progression and is within four-wall locations."
           - name: shippable_qty
-            description: "Shippable (available) quantity at snapshot time."
+            description: "Shippable Qty — Shippable Quantity: A subset of the On-Hand Inventory Quantity that only includes on-hand inventory with an inventory status that is shippable."
           - name: ordered_qty
-            description: "Ordered quantity outstanding at snapshot time."
+            description: "Ordered Qty — Ordered Quantity: The quantity of the item required for outstanding order lines."
           - name: planned_qty
-            description: "Planned quantity at snapshot time."
+            description: "Planned Quantity — Shipment Planned Quantity: The quantity of the item number/item client id that has already been assigned to a shipment that is not closed or cancelled."
           - name: wko_ordered_qty
             description: "Quantity field: wko_ordered_qty."
           - name: pnd_rcvqty
-            description: "Quantity field: pnd_rcvqty."
+            description: "Pending Receipt Qty — The total qty of this item number/item client id that is expected, but has not yet been putaway and received into inventory. The results here will be dictated by a policy."
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "{{ doc('jdawms__wh_id__inv_snap') }}"
           - name: snap_gen_num
-            description: "Snapshot generation number."
+            description: "Snapshot Generation Number — Maps to snap_gen_num on the Inventory Activity table. This indicates that all rows in the Inventory Activity table with a snap_gen_num that matches this value were included in the rcvqty and shpqty sum totals for this snapshot."
           - name: moddte
-            description: "{{ doc('jdawms__moddte') }}"
+            description: "Date Last Modified — Last date this inventory snapshot was modified."
           - name: mod_usr_id
-            description: "{{ doc('jdawms__mod_usr_id') }}"
+            description: "Modified by — Last user to modify this inventory snapshot."
           - name: u_version
             description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
@@ -308,53 +310,53 @@ sources:
           - name: dtlnum
             description: "{{ doc('jdawms__dtlnum') }}"
           - name: subnum
-            description: "{{ doc('jdawms__subnum') }}"
+            description: "Sub-LPN — Identifies which inventory sub (invsub) record this detail is attached to."
           - name: prtnum
-            description: "{{ doc('jdawms__prtnum') }}"
+            description: "Item number of the inventory tracked by this detail."
           - name: prt_client_id
-            description: "{{ doc('jdawms__prt_client_id') }}"
+            description: "Item Client ID — Client ownership for item number."
           - name: invsts
-            description: "{{ doc('jdawms__invsts') }}"
+            description: "Inventory status of the inventory tracked by this detail."
           - name: fifdte
-            description: "FIFO date used for stock rotation."
+            description: "FIFO Date — The date to be used for FIFO calculations with this inventory."
           - name: expire_dte
-            description: "{{ doc('jdawms__expire_dte') }}"
+            description: "Expiration Date — The date this product will expire. This is only used for date controlled product and is calculated based on the product's aging profile."
           - name: untqty
-            description: "{{ doc('jdawms__untqty') }}"
+            description: "Unit Quantity — The amount of inventory (in stock keeping units) this detail tracks."
           - name: untcas
-            description: "{{ doc('jdawms__untcas') }}"
+            description: "Units Per Case — The number of units in a case of the inventory tracked by this detail."
           - name: untpak
-            description: "{{ doc('jdawms__untpak') }}"
+            description: "Units Per Pack — The number of units in an inner pack carton of the inventory tracked by this detail."
           - name: ftpcod
-            description: "{{ doc('jdawms__ftpcod') }}"
+            description: "Footprint Code — The footprint code of the inventory tracked by this invdtl."
           - name: rcvkey
-            description: "WMS rcvkey attribute."
+            description: "Receive Key — If this detail was received, then the receive key will be filled in indicating which rcvlin this detail was received against."
           - name: ship_line_id
-            description: "{{ doc('jdawms__ship_line_id') }}"
+            description: "Shipment Line ID — If this detail was picked for a shipment, then the ship_line_id field will be filled in mapping it to the particular shipment line which this detail satisfied."
           - name: wrkref
-            description: "{{ doc('jdawms__wrkref') }}"
+            description: "Work Task — If this detail was picked for a shipment or a work order, the wrkref field will be filled in which provides a mapping into the pckwrk_hdr/pckwrk_dtl tables for the pick which this detail satisfied."
           - name: wrkref_dtl
-            description: "{{ doc('jdawms__wrkref_dtl') }}"
+            description: "Work Task Detail — Pick Work Detail ID - The unique identifier of the pick work detail record."
           - name: adddte
-            description: "{{ doc('jdawms__adddte') }}"
+            description: "Date Added — The date this detail was added to the system."
           - name: rcvdte
-            description: "Received date of the detail."
+            description: "Received Date — This indicates the date and time that the detail was received."
           - name: lstmov
-            description: "{{ doc('jdawms__lstmov') }}"
+            description: "Last Move Date — Last date/time detail was moved."
           - name: lstdte
-            description: "{{ doc('jdawms__lstdte') }}"
+            description: "Last Activity Date/Time — Last date/time activity occurred for this detail."
           - name: lstcod
-            description: "{{ doc('jdawms__lstcod') }}"
+            description: "Last activity code on this detail."
           - name: lst_usr_id
-            description: "{{ doc('jdawms__lst_usr_id') }}"
+            description: "Last user which performed an activity on this detail."
           - name: alcflg
-            description: "Allocated flag (1 = allocated to demand)."
+            description: "Allow Allocation Flag. Is this detail allowed for use in allocation?"
           - name: catch_qty
-            description: "{{ doc('jdawms__catch_qty') }}"
+            description: "Catch Quantity."
           - name: lst_mov_zone_id
-            description: "Code/identifier: lst_mov_zone_id."
+            description: "Last Movement Zone ID. Displays the last movement zone id of the inventory. Moves to the RF device will NOT be updated with the rdt device as the last movement zone."
           - name: hld_flg
-            description: "Hold flag (1 = on hold)."
+            description: "On Hold — This flag indicates that the inventory is put on hold if it has a value of 1 ."
           - name: loaddate
             description: "{{ doc('jdawms__loaddate') }}"
       - name: invlod
@@ -369,35 +371,35 @@ sources:
           - name: wh_id
             description: "{{ doc('jdawms__wh_id') }}"
           - name: stoloc
-            description: "{{ doc('jdawms__stoloc') }}"
+            description: "Location — Indicates the storage location for this pallet."
           - name: lodwgt
-            description: "Weight field: lodwgt."
+            description: "Load Weight — In systems where scales are available, this field may be used to store the physical weight of the pallet that this entry represents."
           - name: prmflg
             description: "{{ doc('jdawms__prmflg') }}"
           - name: unkflg
-            description: "Flag (0/1): unkflg."
+            description: "Unknown — This will be set to 1 if this invsub record represents a physical case in the system. In this case, the subnum will be set to the external labeling on the physical case."
           - name: mvlflg
-            description: "Flag (0/1): mvlflg."
+            description: "Movable Load — This is used to indicate if this subload entry may be moved. In the case where permanent subloads are used to provide places to attach inventory, it is seldom desired that those permanent subs be allowed to move."
           - name: adddte
-            description: "{{ doc('jdawms__adddte') }}"
+            description: "Date Added — The date/time this load was added to the system."
           - name: lstmov
-            description: "{{ doc('jdawms__lstmov') }}"
+            description: "Last Move Date — The last date/time this load was moved."
           - name: lstdte
-            description: "{{ doc('jdawms__lstdte') }}"
+            description: "Last Activity Date/Time — The last date/time an activity happened against this load."
           - name: lstcod
-            description: "{{ doc('jdawms__lstcod') }}"
+            description: "Last activity code on this load."
           - name: lst_usr_id
-            description: "{{ doc('jdawms__lst_usr_id') }}"
+            description: "Last user which performed an activity on this load."
           - name: loducc
-            description: "{{ doc('jdawms__loducc') }}"
+            description: "LPN UCC — If UCC128 processing is installed and this load receives a UCC128 shipping label, then this field will be filled in with the value of that label."
           - name: uccdte
             description: "{{ doc('jdawms__uccdte') }}"
           - name: palpos
-            description: "WMS palpos attribute."
+            description: "Pallet Position — Indicates what position the load's pallet occupies."
           - name: asset_typ
-            description: "{{ doc('jdawms__asset_typ') }}"
+            description: "Handling Unit Type — Asset Type - Identifies the asset type for this load."
           - name: avg_unt_catch_qty
-            description: "Quantity field: avg_unt_catch_qty."
+            description: "Average Unit Catch Quantity — Catch Quantity. Used by the Average Catch Quantity functionality to store an average catch value for a load's units."
           - name: u_version
             description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
@@ -409,15 +411,15 @@ sources:
           - name: last_upd_user_id
             description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: lodtag
-            description: "{{ doc('jdawms__lodtag') }}"
+            description: "Load Tag — The RFID tag associated to pallet."
           - name: lod_tagsts
-            description: "WMS lod_tagsts attribute."
+            description: "Load Tag Status — Pallet RFID Tag Status."
           - name: lodhgt
-            description: "WMS lodhgt attribute."
+            description: "Load Height — The Load Height."
           - name: bundled_flg
-            description: "Flag (0/1): bundled_flg."
+            description: "Bundled Flag - Indicate if the load was created by bundling multiple cases for parcel manifesting."
           - name: distro_palopn_flg
-            description: "Flag (0/1): distro_palopn_flg."
+            description: "Distribution Pallet Open Flag - Indicate whether the shipping pallet is open or not."
           - name: load_attr1_flg
             description: "{{ doc('jdawms__load_attr1_flg') }}"
           - name: load_attr2_flg
@@ -429,19 +431,19 @@ sources:
           - name: load_attr5_flg
             description: "{{ doc('jdawms__load_attr5_flg') }}"
           - name: no_loc_putaway
-            description: "WMS no_loc_putaway attribute."
+            description: "No Location Putaway Flag — This column is a flag that denotes if this pallet failed to find a location when doing putaway."
           - name: completed_receiving_date
-            description: "Date/time field: completed_receiving_date."
+            description: "Receipt Confirmation Date — Date the receiving of this load was completed."
           - name: est_time
             description: "{{ doc('jdawms__est_time') }}"
           - name: lodlen
-            description: "WMS lodlen attribute."
+            description: "Load Length — The Load length."
           - name: lodwdt
-            description: "WMS lodwdt attribute."
+            description: "Load Width — The Load width."
           - name: no_of_boxes
-            description: "WMS no_of_boxes attribute."
+            description: "Number of Cases — No of cases on the load."
           - name: est_lodwgt
-            description: "Weight field: est_lodwgt."
+            description: "Estimated Load Weight — This field is used to store the system estimated weight of the pallet that this entry represents."
           - name: loaddate
             description: "{{ doc('jdawms__loaddate') }}"
       - name: invsub
@@ -454,47 +456,47 @@ sources:
           - name: subnum
             description: "{{ doc('jdawms__subnum') }}"
           - name: lodnum
-            description: "{{ doc('jdawms__lodnum') }}"
+            description: "LPN — Identifies which inventory load (invlod) record this subload is attached to."
           - name: subwgt
-            description: "Weight field: subwgt."
+            description: "Sub-Load Weight — In systems where scales are available, this field may be used to store the physical weight of the case that this invsub entry represents."
           - name: prmflg
             description: "{{ doc('jdawms__prmflg') }}"
           - name: phyflg
-            description: "Flag (0/1): phyflg."
+            description: "Physical Case — This will be set to 1 if this invsub record represents a physical case in the system. In this case, the subnum will be set to the external labeling on the physical case."
           - name: mvsflg
-            description: "Flag (0/1): mvsflg."
+            description: "Movable Sub-Load — This is used to indicate if this subload entry may be moved. In the case where permanent subloads are used to provide places to attach inventory, it is seldom desired that those permanent subs be allowed to move."
           - name: ctnflg
-            description: "Flag (0/1): ctnflg."
+            description: "Cartonized — This will be set if this sub was created as a result of a cartonization or overpack operation."
           - name: idmflg
-            description: "Flag (0/1): idmflg."
+            description: "Inhibit Detail Move — This flag will be set if details are not allowed to move out from under this subload. When serialized product is tracked in a facility, it is sometimes desired to disable details from moving out of a serialized, physical case."
           - name: distro_ctnopn_flg
-            description: "Flag (0/1): distro_ctnopn_flg."
+            description: "Put To Store Carton Open — The flag to show whether the put to store Carton is open or not."
           - name: wrkref
-            description: "{{ doc('jdawms__wrkref') }}"
+            description: "Work Task — If this subload represents a cartonized or overpacked case, and the case was picked against a work reference, the wrkref field will map back to the pckwrk_hdr/pckwrk_dtl tables to indicate which KIT pick this subload was picked against."
           - name: tagdev
-            description: "WMS tagdev attribute."
+            description: "Tagged Device — Used so that RF can tag cases for later operations."
           - name: adddte
-            description: "{{ doc('jdawms__adddte') }}"
+            description: "Date Added — Set to the date and time this invsub entry was added to the system."
           - name: lstmov
-            description: "{{ doc('jdawms__lstmov') }}"
+            description: "Last Move Date — The last date/time this subload was moved."
           - name: lstdte
-            description: "{{ doc('jdawms__lstdte') }}"
+            description: "Last Activity Date/Time — Last date/time activity occurred on this subload."
           - name: lstcod
-            description: "{{ doc('jdawms__lstcod') }}"
+            description: "Last activity code on this subload."
           - name: lst_usr_id
-            description: "{{ doc('jdawms__lst_usr_id') }}"
+            description: "Last user which performed an activity on this subload."
           - name: subucc
-            description: "{{ doc('jdawms__subucc') }}"
+            description: "Sub-Load UCC Code — If UCC128 processing is installed and this case receives a UCC128 shipping label, then this field will be filled in with the value of that label."
           - name: uccdte
             description: "{{ doc('jdawms__uccdte') }}"
           - name: subtag
-            description: "{{ doc('jdawms__subtag') }}"
+            description: "Case Tag — The RFID tag associated to carton."
           - name: sub_tagsts
-            description: "WMS sub_tagsts attribute."
+            description: "Case Tag Status — Carton RFID Tag Status."
           - name: asset_typ
-            description: "{{ doc('jdawms__asset_typ') }}"
+            description: "Handling Unit Type — Asset Type - Identifies the asset type for this sub."
           - name: est_subwgt
-            description: "Weight field: est_subwgt."
+            description: "Estimated Sub-Load Weight — This field is used to store the system estimated weight of the case that this invsub entry represents."
           - name: u_version
             description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
@@ -515,49 +517,49 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: stoloc
-            description: "{{ doc('jdawms__stoloc') }}"
+            description: "Location — Storage Location. Used when specifying product criteria for future holds."
           - name: prtnum
-            description: "{{ doc('jdawms__prtnum') }}"
+            description: "Item Number. Used when specifying product criteria for future holds."
           - name: prt_client_id
             description: "{{ doc('jdawms__prt_client_id') }}"
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "{{ doc('jdawms__wh_id__invsum') }}"
           - name: arecod
-            description: "{{ doc('jdawms__arecod') }}"
+            description: "Area Code. Used when specifying product criteria for future holds."
           - name: invsts
-            description: "{{ doc('jdawms__invsts') }}"
+            description: "Inventory Status. Used when specifying product criteria for future holds."
           - name: untpak
-            description: "{{ doc('jdawms__untpak') }}"
+            description: "Units per pack of the component to be consumed. If set to 0, there is no restriction."
           - name: untcas
-            description: "{{ doc('jdawms__untcas') }}"
+            description: "Units per case of the component to be consumed. If set to 0, there is no restriction."
           - name: untpal
-            description: "{{ doc('jdawms__untpal') }}"
+            description: "Units Per Pallet — Unit Per Pallet."
           - name: untqty
-            description: "{{ doc('jdawms__untqty') }}"
+            description: "Unit quantity of finished good produced."
           - name: comqty
-            description: "Committed quantity (allocated)."
+            description: "Committed Quantity."
           - name: pndqty
-            description: "Pending quantity (inbound not yet available)."
+            description: "Pending quantity to locaton."
           - name: com_catch_qty
-            description: "Quantity field: com_catch_qty."
+            description: "Committed catch quantity."
           - name: catch_qty
-            description: "{{ doc('jdawms__catch_qty') }}"
+            description: "Catch Quantity — Current catch quantity."
           - name: olddte
-            description: "Date/time field: olddte."
+            description: "Old Date — Date of old inventory."
           - name: newdte
-            description: "Date/time field: newdte."
+            description: "New Date — Date of new inventory."
           - name: old_expire_dte
-            description: "Date/time field: old_expire_dte."
+            description: "Old Expiration Date — Expiration date of the old inventory."
           - name: new_expire_dte
-            description: "Date/time field: new_expire_dte."
+            description: "New Expiration Date — Expiration date of the new inventory."
           - name: old_inv_attr_dte1
-            description: "WMS old_inv_attr_dte1 attribute."
+            description: "Oldest Inventory Attribute Date 1 — Inventory atttribute Date1 date of the old inventory."
           - name: new_inv_attr_dte1
-            description: "WMS new_inv_attr_dte1 attribute."
+            description: "Newest Inventory Attribute Date 1 — Inventory atttribute Date1 date of the new inventory."
           - name: old_inv_attr_dte2
-            description: "WMS old_inv_attr_dte2 attribute."
+            description: "Oldest Inventory Attribute Date 2 — Inventory atttribute Date2 date of the old inventory."
           - name: new_inv_attr_dte2
-            description: "WMS new_inv_attr_dte2 attribute."
+            description: "Newest Inventory Attribute Date 2 — Inventory atttribute Date2 date of the new inventory."
           - name: u_version
             description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
@@ -580,161 +582,161 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: stoloc
-            description: "{{ doc('jdawms__stoloc') }}"
+            description: "Location — Uniquely identifies the storage location."
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "Warehouse ID - The warehouse where the aisle is located."
           - name: arecod
-            description: "{{ doc('jdawms__arecod') }}"
+            description: "Area — Defines the area to which this location belongs."
           - name: loccod
-            description: "Location type/usage code."
+            description: "Location Capacity Code — Specifies if locations are tracked at a unit quantity (Q), volume(V), length (L), case dimension(C) or pallet footprint(P) level."
           - name: locsts
-            description: "Location status code."
+            description: "Location Status — Current disposition of the location. One of: Full (F), Partial (P), Empty (E) or Inventory Error (I)."
           - name: velzon
-            description: "{{ doc('jdawms__velzon') }}"
+            description: "Velocity — The velocity zone of the location."
           - name: aisle_id
-            description: "Aisle identifier."
+            description: "Aisle ID - A collection of locations in a row."
           - name: trvseq
-            description: "WMS trvseq attribute."
+            description: "Travel Sequence — The relative distance between locations, the travel sequence is during work management to find the closest location to an idle user."
           - name: sto_seq
-            description: "WMS sto_seq attribute."
+            description: "Storage Sequence is used to influence how locations are ordered when they are considered for inbound inventory during Putaway."
           - name: rescod
-            description: "Code/identifier: rescod."
+            description: "Shipping Resource Code — Used to path inventory through processing locations. The resource code is a mechanism by which that location is reserved for product matching the rescod. For example, in a shipment staging lane, the rescod is often set to the carcod."
           - name: bay
-            description: "Bay identifier within the aisle."
+            description: "Bay — The bay the location belongs to."
           - name: lvl
-            description: "Level (shelf height) within the bay."
+            description: "Level — The level in the rack the location is on."
           - name: locpos
-            description: "WMS locpos attribute."
+            description: "Location Position — The position of the location respective to it's level."
           - name: lochgt
-            description: "WMS lochgt attribute."
+            description: "Location Height — This represents the hgt (in the same units as used on the ftpmst table) of product that the loc will tolerate. This is evaluated on a per storage request. For example, in a pallet racking example, the lochgt may be set to 90 (inches)."
           - name: loclen
-            description: "WMS loclen attribute."
+            description: "Location Length — This field is currently NOT used for storage selection or volume calculation purposes and is only used during 3PL Billing operations."
           - name: locwid
-            description: "Code/identifier: locwid."
+            description: "Location Width — This field is currently NOT used for storage selection or volume calculation purposes and is only used during 3PL Billing operations."
           - name: dck_acc_cod
-            description: "Code/identifier: dck_acc_cod."
+            description: "Dock access code."
           - name: locvrc
-            description: "WMS locvrc attribute."
+            description: "Verification Code — A 'checksum' or alternate identifier which may be used to identify the location. This is often used in facilities where locations may not be able to be labeled and it is desired to provide an alternate, easy to type, name for the loc."
           - name: maxqvl
-            description: "Maximum capacity value of the location."
+            description: "Maximum Capacity — The loccod will indicate what this number actually means (in terms of volume, pallets, etc...). This represents the maximum storage capacity of the location."
           - name: curqvl
-            description: "Current occupancy value of the location."
+            description: "Used Capacity — Much the same as maxqvl, this field is used to indicate the currently used capacity in a location."
           - name: pndqvl
-            description: "Pending (inbound) occupancy value."
+            description: "Pending Capacity — Much the same as the other 'qvl' numbers, this field is used to indicate how much capacity is pending storage to the location."
           - name: trfpct
-            description: "WMS trfpct attribute."
+            description: "Top-Off Replenishment Percent — Indicates what percentage of the maxqvl should be used when performing top-off replenishments. A value of 0 will indicate 100%. 50 will indicate half full. This can be useful if it is desired to 'overfill' a loc during repl process."
           - name: erfpct
-            description: "WMS erfpct attribute."
+            description: "Emergency Replenishment Percent — Much the same as trfpct, this field indicates the percentage of maxqvl which should be used during emergency replenishment operations."
           - name: esc_type
-            description: "WMS esc_type attribute."
+            description: "Escalation Type - Location capacity escalation type."
           - name: esc_thr
-            description: "WMS esc_thr attribute."
+            description: "Escalation Threshold - Escalation Threshold."
           - name: useflg
-            description: "Flag (0/1): useflg."
+            description: "Location Usable — This flag indicates that the location is usable. If set to false, future allocations and stores are disabled at this location."
           - name: stoflg
-            description: "Flag (0/1): stoflg."
+            description: "Storable — This flag indicates that the location is available for storage operations."
           - name: pckflg
-            description: "Flag (0/1): pckflg."
+            description: "Pickable — This flag indicates that the location is available for picking (allocation) operations."
           - name: repflg
-            description: "Flag (0/1): repflg."
+            description: "Replenishment — This flag indicates that the location may be replenished."
           - name: asgflg
-            description: "Flag (0/1): asgflg."
+            description: "Assignment — This flag indicates that this loc is permanently assigned. In processing area, it applies to rescod value that is set. In normal sto. areas, it indicates itmnum is assigned to loc. STORE-ASG-LOC policies tells the item that is assigned."
           - name: cipflg
-            description: "Flag (0/1): cipflg."
+            description: "Count In Progress — This flag indicates that there is a count in-progress at this location."
           - name: cntseq
-            description: "WMS cntseq attribute."
+            description: "Count Sequence — Much like travel sequence, this field is used to sequence counting activities."
           - name: numcnt
-            description: "WMS numcnt attribute."
+            description: "Number of Counts — Operational column used to track the number of counts performed during a particular cycle. Used when location based cycle counting is in effect."
           - name: abccod
-            description: "{{ doc('jdawms__abccod') }}"
+            description: "ABC Code — Used to schedule location based cycle counts much in the same was as the itmmst.abccod is used."
           - name: cntdte
-            description: "Date/time field: cntdte."
+            description: "Count Date — Date location was last counted."
           - name: devcod
-            description: "{{ doc('jdawms__devcod') }}"
+            description: "Device Code — Label device which is closest to this location."
           - name: lokcod
-            description: "Code/identifier: lokcod."
+            description: "Location Lock Code — Used to indicate that this loc is locked for processing. Often used by operational programs such as order overpack operations to indicate that a work station is processing a particular lane - this prevents collisions during processing."
           - name: locacc
-            description: "WMS locacc attribute."
+            description: "Location Access — Used to indicate that special vehicle access is necessary to get to this location. This is used by the work manangement system to ensure that work is only sent to devices if the device can access the location."
           - name: voc_chkdgt
-            description: "WMS voc_chkdgt attribute."
+            description: "Voice Check Digit - This will be a short code that will be used in voice to identify a location."
           - name: voc_chkdgt_2
-            description: "WMS voc_chkdgt_2 attribute."
+            description: "Voice Check Digit 2 - This will be a short code that will be used in voice to identify a location in addition to the standard Check Digit, used when the check digit rotation policy is configured."
           - name: voc_chkdgt_3
-            description: "WMS voc_chkdgt_3 attribute."
+            description: "Voice Check Digit 3 - This will be a short code that will be used in voice to identify a location in addition to the standard Check Digit, used when the check digit rotation policy is configured."
           - name: lstdte
-            description: "{{ doc('jdawms__lstdte') }}"
+            description: "Last Activity Date/Time — Last date/time activity occurred at this location."
           - name: lstcod
-            description: "{{ doc('jdawms__lstcod') }}"
+            description: "Last activity code at this location."
           - name: lst_usr_id
-            description: "{{ doc('jdawms__lst_usr_id') }}"
+            description: "Last user which performed an activity at this location."
           - name: slotseq
-            description: "WMS slotseq attribute."
+            description: "Slotting Sequence — Much like travel sequence, this field is used to sequence locations for slotting purposes."
           - name: perm_asgflg
-            description: "Flag (0/1): perm_asgflg."
+            description: "Permanently Assigned — Permanent Assignment - indicates whether or not the asgflg will get toggled on/off when a storage assignment policy is removed."
           - name: cnt_zone_id
-            description: "Code/identifier: cnt_zone_id."
+            description: "Count Zone — Unique identifier for the count zone."
           - name: pck_zone_id
-            description: "Code/identifier: pck_zone_id."
+            description: "Picking Zone — Unique identifier for picking zone."
           - name: sto_zone_id
-            description: "Code/identifier: sto_zone_id."
+            description: "Storage Zone — Unique identifier for storage zone."
           - name: mov_zone_id
-            description: "{{ doc('jdawms__mov_zone_id') }}"
+            description: "Movement Zone — Unique identifier for movement zone."
           - name: wrk_zone_id
-            description: "Code/identifier: wrk_zone_id."
+            description: "Work Zone — Unique identifier for work zone."
           - name: loc_typ_id
-            description: "Code/identifier: loc_typ_id."
+            description: "Location Type — Unique identifier for location type."
           - name: of_lvl_unit
-            description: "WMS of_lvl_unit attribute."
+            description: "Overflowed Level Unit - The number of level units overflowed by previous location, for example, if a location contains 3 level units then the range of this column will be from 0 to 3."
           - name: section
-            description: "WMS section attribute."
+            description: "Section — MRM field - The section of the warehouse where this location is located."
           - name: x
-            description: "WMS x attribute."
+            description: "X — MRM field - The X coordinate of the location."
           - name: y
-            description: "WMS y attribute."
+            description: "Y — MRM field - The Y coordinate of the location."
           - name: z
-            description: "WMS z attribute."
+            description: "Z — MRM field - The Z coordinate of the location."
           - name: attr1
-            description: "User-defined attribute: attr1."
+            description: "Attribute 1 — MRM field - Generic attribute."
           - name: attr2
-            description: "User-defined attribute: attr2."
+            description: "Attribute 2 — MRM field - Generic attribute."
           - name: attr3
-            description: "User-defined attribute: attr3."
+            description: "Attribute 3 — MRM field - Generic attribute."
           - name: attr4
-            description: "User-defined attribute: attr4."
+            description: "Attribute 4 — MRM field - Generic attribute."
           - name: attr5
-            description: "User-defined attribute: attr5."
+            description: "Attribute 5 — MRM field - Generic attribute."
           - name: basepoint_id
-            description: "Code/identifier: basepoint_id."
+            description: "Base Point ID — The base point used for mapping the RFID location coordinates."
           - name: top_left_x
-            description: "WMS top_left_x attribute."
+            description: "Top Left X — The top left x coordinate of the RFID location relative to it's the base point."
           - name: top_left_y
-            description: "WMS top_left_y attribute."
+            description: "Top Left Y — The top left y coordinate of the RFID location relative to it's the base point."
           - name: top_right_x
-            description: "WMS top_right_x attribute."
+            description: "Top Right X — The top right x coordinate of the RFID location relative to it's the base point."
           - name: top_right_y
-            description: "WMS top_right_y attribute."
+            description: "Top Right Y — The top right y coordinate of the RFID location relative to it's the base point."
           - name: bottom_left_x
-            description: "WMS bottom_left_x attribute."
+            description: "Bottom Left X — The bottom left x coordinate of the RFID location relative to it's the base point."
           - name: bottom_left_y
-            description: "WMS bottom_left_y attribute."
+            description: "Bottom Left Y — The bottom left y coordinate of the RFID location relative to it's the base point."
           - name: bottom_right_x
-            description: "WMS bottom_right_x attribute."
+            description: "Bottom Right X — The bottom right x coordinate of the RFID location relative to it's the base point."
           - name: bottom_right_y
-            description: "WMS bottom_right_y attribute."
+            description: "Bottom Right Y — The bottom right y coordinate of the RFID location relative to it's the base point."
           - name: border_pad
-            description: "WMS border_pad attribute."
+            description: "Border Padding — The value by which the four sides of the location will be extended to define an alternate border."
           - name: auto_mov_flg
-            description: "Flag (0/1): auto_mov_flg."
+            description: "Auto-Move — Location is configured to allow auto move by RFID processing."
           - name: slot_id
-            description: "Code/identifier: slot_id."
+            description: "Slot ID represents a grouping of dock doors in a dock. A dock can contain multiple slots and a slot can contain multiple doors. This is used to support appointments being added by the TM system."
           - name: def_maxqvl
-            description: "WMS def_maxqvl attribute."
+            description: "Default Maximum Capacity — Default Max QVL."
           - name: u_version
             description: "{{ doc('jdawms__u_version') }}"
           - name: ateseq
-            description: "WMS ateseq attribute."
+            description: "Allocate to Empty Sequence is used to sort locations having ATEflg set for their respective area while allocating inventory .Lesser the value higher the priority."
           - name: atedte
-            description: "Date/time field: atedte."
+            description: "Allocate to Empty Date — Date when the inventory in location having the ATEflg set for its respective area was first Allocated."
           - name: ins_dt
             description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
@@ -744,29 +746,29 @@ sources:
           - name: last_upd_user_id
             description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: cntbck_ena_flg
-            description: "Flag (0/1): cntbck_ena_flg."
+            description: "Count Back Flag — If this flag is set, the location supports countback."
           - name: prdlin
-            description: "WMS prdlin attribute."
+            description: "Production Line — The Production Line that the production station belongs to."
           - name: stgloc
-            description: "WMS stgloc attribute."
+            description: "Staging Location assigned to the production station. This is only useful if prdlin is set."
           - name: rcv_rescod
-            description: "Code/identifier: rcv_rescod."
+            description: "Receiving Resource Code — This will reserve the location for inbound product matching the value(trknum or invnum)."
           - name: pal_stck_rst
-            description: "WMS pal_stck_rst attribute."
+            description: "Pallet Stack Restriction."
           - name: maxwgt
-            description: "Weight field: maxwgt."
+            description: "Maximum Weight - The maximum weight allowed in location before planned and actual inventory movement is restricted."
           - name: lvl_typ_id
-            description: "Code/identifier: lvl_typ_id."
+            description: "The level type that the location is on."
           - name: billing_flg
-            description: "Flag (0/1): billing_flg."
+            description: "Indicates whether the location is to be included in Billing Storage calculations."
           - name: prtadr
-            description: "WMS prtadr attribute."
+            description: "Printer Address."
           - name: lbl_prtadr
-            description: "WMS lbl_prtadr attribute."
+            description: "Label Printer Address."
           - name: min_lvl_unit
-            description: "WMS min_lvl_unit attribute."
+            description: "Minimum Level Unit - The minimum level units of inventory which can fit in at that moment for allocate location."
           - name: max_lvl_unit
-            description: "WMS max_lvl_unit attribute."
+            description: "Maximum Level Unit - The maximum level units of inventory which can fit in at that moment for allocate location."
           - name: loaddate
             description: "{{ doc('jdawms__loaddate') }}"
       - name: pckwrk_dtl
@@ -777,39 +779,39 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: wrkref_dtl
-            description: "{{ doc('jdawms__wrkref_dtl') }}"
+            description: "Work Task Detail — This uniquely identifies a single record on the pick work detail table."
           - name: wrkref
-            description: "{{ doc('jdawms__wrkref') }}"
+            description: "Work Task — This uniquely parent identifies of record."
           - name: cmbcod
-            description: "Code/identifier: cmbcod."
+            description: "Combination Code — Multiple picks may be tied together via a single combination code."
           - name: wh_id
             description: "{{ doc('jdawms__wh_id') }}"
           - name: client_id
             description: "{{ doc('jdawms__client_id') }}"
           - name: dstloc
-            description: "Destination location for the picked stock."
+            description: "Destination Location — The destination location for depositing the inventory, trailer or whatever entity the work is designed to accomplish."
           - name: dst_mov_zone_id
-            description: "{{ doc('jdawms__dst_mov_zone_id') }}"
+            description: "Movement Zone — Destination Movement Zone ID - Movement Zone to which the inventory for this order line will be staged."
           - name: ship_line_id
-            description: "{{ doc('jdawms__ship_line_id') }}"
+            description: "Shipment Line ID — If pick is associated to an order, this will have the value of the shipment line ID that is satisfied by this pick."
           - name: ship_id
-            description: "{{ doc('jdawms__ship_id') }}"
+            description: "Shipment ID — If pick is associated to an order, this is the shipment ID which requires this pick."
           - name: ordnum
-            description: "{{ doc('jdawms__ordnum') }}"
+            description: "Outbound Order Number — If associated to an order, this is the order number which requires this pick."
           - name: ordlin
-            description: "{{ doc('jdawms__ordlin') }}"
+            description: "Outbound Order Line — If associated to an order, this is the order line which requires this pick."
           - name: ordsln
-            description: "{{ doc('jdawms__ordsln') }}"
+            description: "Outbound Order Sub-Line — If associated to an order, this is the order sub-line which requires this pick."
           - name: stcust
-            description: "WMS stcust attribute."
+            description: "Ship-To Customer - The customer to which this order will be ultimately be shipped."
           - name: rtcust
-            description: "WMS rtcust attribute."
+            description: "Route-To Customer - The customer to which this order will be shipped."
           - name: concod
-            description: "Code/identifier: concod."
+            description: "Consolidation Code."
           - name: pckqty
             description: "{{ doc('jdawms__pckqty') }}"
           - name: pck_catch_qty
-            description: "Picked catch weight/quantity."
+            description: "{{ doc('jdawms__pck_catch_qty') }}"
           - name: appqty
             description: "{{ doc('jdawms__appqty') }}"
           - name: app_catch_qty
@@ -817,55 +819,55 @@ sources:
           - name: lodlvl
             description: "{{ doc('jdawms__lodlvl') }}"
           - name: ship_ctncod
-            description: "Code/identifier: ship_ctncod."
+            description: "Shipping Carton Type — Shipping Carton Code."
           - name: ship_ctnnum
-            description: "Code/identifier: ship_ctnnum."
+            description: "Shipping Carton Number."
           - name: wkonum
-            description: "{{ doc('jdawms__wkonum') }}"
+            description: "Work Order Number — If for a work order, this will indicate which work order number."
           - name: wkorev
             description: "{{ doc('jdawms__wkorev') }}"
           - name: wkolin
-            description: "WMS wkolin attribute."
+            description: "Work Order Line."
           - name: seqnum
-            description: "Sequence number."
+            description: "Sequence Number — Work Order Line Sequence Number."
           - name: subnum
-            description: "{{ doc('jdawms__subnum') }}"
+            description: "Sub-LPN — For a cartonized kit, this field will indicate the label that will be applied to the completed kit."
           - name: dtlnum
-            description: "{{ doc('jdawms__dtlnum') }}"
+            description: "Detail LPN — This field is not currently utilized by standard processing."
           - name: subucc
-            description: "{{ doc('jdawms__subucc') }}"
+            description: "Sub-Load UCC Code — Subload UCC code number."
           - name: subtag
-            description: "{{ doc('jdawms__subtag') }}"
+            description: "Case Tag — Sub-Load Tag - used to define the RFID tag value for case pick."
           - name: cur_cas
-            description: "WMS cur_cas attribute."
+            description: "Current case number to use in 1-of labeling."
           - name: tot_cas_cnt
-            description: "WMS tot_cas_cnt attribute."
+            description: "Total case count for use in 1-of labeling."
           - name: prtdte
             description: "{{ doc('jdawms__prtdte') }}"
           - name: bto_seqnum
-            description: "Code/identifier: bto_seqnum."
+            description: "BTO Sequence — This field represents the sequence that the line will be picked as determined by the Build to Order system."
           - name: slot
-            description: "WMS slot attribute."
+            description: "Slot — When using BTO, the user is directed to place the inventory for this order line into this slot. The slot is determined by the Build to Order system."
           - name: bto_dlv_seq
-            description: "WMS bto_dlv_seq attribute."
+            description: "Delivery Sequence — The delivery sequence will be used for sorting the list and comes from the order line."
           - name: lm_assign_num
             description: "{{ doc('jdawms__lm_assign_num') }}"
           - name: lm_assign_seqnum
             description: "{{ doc('jdawms__lm_assign_seqnum') }}"
           - name: pm_err_cod
-            description: "Code/identifier: pm_err_cod."
+            description: "Error Code — Contains the error code if pre-manifesting was performed for the pick and failed."
           - name: pm_err_desc
-            description: "WMS pm_err_desc attribute."
+            description: "Error Description — Contains the error description if pre-manifesting was performed for the pick and failed."
           - name: ctnerr_flg
-            description: "Flag (0/1): ctnerr_flg."
+            description: "Cartonization Error Flag - specifies whether the picks are failed to cartonize or not. Picks that fail to cartonize will have error flag as true."
           - name: res_uom
-            description: "WMS res_uom attribute."
+            description: "Detail UOM."
           - name: ins_dt
-            description: "{{ doc('jdawms__ins_dt') }}"
+            description: "{{ doc('jdawms__ins_dt__pckwrk_dtl') }}"
           - name: last_upd_dt
-            description: "{{ doc('jdawms__last_upd_dt') }}"
+            description: "{{ doc('jdawms__last_upd_dt__pckwrk_dtl') }}"
           - name: ins_user_id
-            description: "{{ doc('jdawms__ins_user_id') }}"
+            description: "{{ doc('jdawms__ins_user_id__pckwrk_dtl') }}"
           - name: last_upd_user_id
             description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: rowid
@@ -879,7 +881,7 @@ sources:
           - name: prtnum
             description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "{{ doc('jdawms__prt_client_id') }}"
+            description: "{{ doc('jdawms__prt_client_id__pckwrk_dtl') }}"
           - name: loaddate
             description: "{{ doc('jdawms__loaddate') }}"
       - name: pckwrk_hdr
@@ -890,131 +892,131 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: wrkref
-            description: "{{ doc('jdawms__wrkref') }}"
+            description: "Work Task — This uniquely identifies the record."
           - name: wrktyp
             description: "{{ doc('jdawms__wrktyp') }}"
           - name: schbat
             description: "{{ doc('jdawms__schbat') }}"
           - name: srcloc
-            description: "Source location for the pick."
+            description: "Source Location — The source location for beginning the work."
           - name: srcare
-            description: "WMS srcare attribute."
+            description: "Source Area - Area code to which the inventory for this order line will be picked."
           - name: client_id
             description: "{{ doc('jdawms__client_id') }}"
           - name: wh_id
             description: "{{ doc('jdawms__wh_id') }}"
           - name: lblbat
-            description: "WMS lblbat attribute."
+            description: "Label Batch — Pick works grouped in the same label batch will all share the same lblbat value."
           - name: lblseq
-            description: "WMS lblseq attribute."
+            description: "Label Sequence — Sequence used to order label printing."
           - name: devcod
             description: "{{ doc('jdawms__devcod') }}"
           - name: oprcod
-            description: "Code/identifier: oprcod."
+            description: "Operation Code applied to the Pick."
           - name: pck_mthd_id
-            description: "Code/identifier: pck_mthd_id."
+            description: "Pick Method Id - Identifier of a pick method."
           - name: pckqty
             description: "{{ doc('jdawms__pckqty') }}"
           - name: pck_catch_qty
-            description: "Quantity field: pck_catch_qty."
+            description: "{{ doc('jdawms__pck_catch_qty') }}"
           - name: appqty
             description: "{{ doc('jdawms__appqty') }}"
           - name: app_catch_qty
             description: "{{ doc('jdawms__app_catch_qty') }}"
           - name: pcksts
-            description: "Pick status code (open, in-progress, completed)."
+            description: "Pick Status."
           - name: prtnum
             description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "{{ doc('jdawms__prt_client_id') }}"
+            description: "{{ doc('jdawms__prt_client_id__pckwrk_dtl') }}"
           - name: orgcod
-            description: "{{ doc('jdawms__orgcod') }}"
+            description: "Origin Code — If this pick requires a specific origin code, this value will be filled in."
           - name: revlvl
-            description: "{{ doc('jdawms__revlvl') }}"
+            description: "Revision Level — If this pick requires a specific revision level, this value will be filled in."
           - name: lotnum
-            description: "{{ doc('jdawms__lotnum') }}"
+            description: "Lot Number — If this pick requires a specific lot number, this value will be filled in."
           - name: asset_slot
-            description: "WMS asset_slot attribute."
+            description: "Slot Number - The slot number assigned during list pick generation based on pick list rule."
           - name: sup_lotnum
-            description: "{{ doc('jdawms__sup_lotnum') }}"
+            description: "Supplier Lot Number — If this pick requires a specific supplier lot number, this value will be filled in."
           - name: invsts
-            description: "{{ doc('jdawms__invsts') }}"
+            description: "Inventory Status."
           - name: invsts_prg
-            description: "WMS invsts_prg attribute."
+            description: "Inventory Status Progression."
           - name: lodlvl
             description: "{{ doc('jdawms__lodlvl') }}"
           - name: loducc
-            description: "{{ doc('jdawms__loducc') }}"
+            description: "LPN UCC — Load UCC code number."
           - name: lodtag
-            description: "{{ doc('jdawms__lodtag') }}"
+            description: "Load Tag - used to define the RFID tag value for pallet pick."
           - name: lodnum
-            description: "{{ doc('jdawms__lodnum') }}"
+            description: "LPN — This field is not currently utilized by standard processing."
           - name: untcas
             description: "{{ doc('jdawms__untcas') }}"
           - name: untpak
-            description: "{{ doc('jdawms__untpak') }}"
+            description: "Units per pack."
           - name: ftpcod
             description: "{{ doc('jdawms__ftpcod') }}"
           - name: ctncod
-            description: "Code/identifier: ctncod."
+            description: "Carton Type — The code for the carton being used."
           - name: ctnnum
-            description: "Code/identifier: ctnnum."
+            description: "Carton Number."
           - name: ctnseg
-            description: "WMS ctnseg attribute."
+            description: "Carton Segment."
           - name: pos_id
-            description: "Code/identifier: pos_id."
+            description: "Pos ID — Position ID to track position of the List/Carton in the group of Lists."
           - name: visflg
-            description: "Flag (0/1): visflg."
+            description: "Visible — This field is not used by standard system processing."
           - name: splflg
-            description: "Flag (0/1): splflg."
+            description: "Split Case Flag - Determines whether or not the system can allocate partial case quantities."
           - name: locflg
-            description: "Flag (0/1): locflg."
+            description: "Confirm location on pickup."
           - name: lodflg
-            description: "Flag (0/1): lodflg."
+            description: "Load Pick — Confirm load number on pickup."
           - name: subflg
-            description: "Flag (0/1): subflg."
+            description: "Sub-Load Pick — Confirm case identifier on pickup."
           - name: dtlflg
-            description: "Flag (0/1): dtlflg."
+            description: "Detail Pick — Confirm piece identifier on pickup."
           - name: prtflg
-            description: "Flag (0/1): prtflg."
+            description: "Confirm item number on pickup."
           - name: orgflg
-            description: "{{ doc('jdawms__orgflg') }}"
+            description: "Origin Code — Confirm origin code on pickup."
           - name: revflg
-            description: "{{ doc('jdawms__revflg') }}"
+            description: "Revision — Confirm revision level on pickup."
           - name: lotflg
-            description: "{{ doc('jdawms__lotflg') }}"
+            description: "Lot Tracking — Confirm lot number on pickup."
           - name: sup_lot_flg
-            description: "{{ doc('jdawms__sup_lot_flg') }}"
+            description: "Supplier Lot Tracking — Confirm supplier lot number on pickup."
           - name: qtyflg
-            description: "Flag (0/1): qtyflg."
+            description: "Confirm Quantity — Confirm pick quantity on pickup."
           - name: catch_qty_flg
-            description: "Flag (0/1): catch_qty_flg."
+            description: "Confirm catch quantity on pickup."
           - name: adddte
-            description: "{{ doc('jdawms__adddte') }}"
+            description: "Date Added — Added date - Date/time when pick work was added."
           - name: pckdte
-            description: "Pick timestamp."
+            description: "Date Picked — Date/time that pick was confirmed."
           - name: cmpdte
-            description: "Pick completion timestamp."
+            description: "Date Completed — Completed date - Date/time when pick work was completed."
           - name: refloc
-            description: "Reference location."
+            description: "Reference Location — The source location identifier that will be displayed to the RF operator. This may not be the same as the srcloc value."
           - name: ackdevcod
-            description: "Code/identifier: ackdevcod."
+            description: "Acknowledged Device — Used during cluster picking to tag which pick works will be processed by a device."
           - name: pipflg
-            description: "Flag (0/1): pipflg."
+            description: "Pre-Inventory Allocation — Indicates if the pick is a pre-inventory pick where the pick work exists before the inventory is delivered to the location."
           - name: frsflg
-            description: "Flag (0/1): frsflg."
+            description: "Process By Freshness — Freshness Process Flag - This flag is set if this order line requires freshness processing - that is, that the oldest product shipped is newer than the newest product previously shipped."
           - name: clst_seq
-            description: "WMS clst_seq attribute."
+            description: "Cluster Sequence - Indicates in what order a carton will be filled in a bulk cluster pick."
           - name: min_shelf_hrs
-            description: "WMS min_shelf_hrs attribute."
+            description: "Minimum Shelf Life (Hours) — Minimum Shelf Hours - If set, only inventory with an expiration date that is at least this many hours away from expiring will be allocated for this order line."
           - name: prtdte
             description: "{{ doc('jdawms__prtdte') }}"
           - name: list_grp_id
-            description: "Code/identifier: list_grp_id."
+            description: "List Group ID - The List Group Id assigned by scanning several list_id's."
           - name: list_id
-            description: "Code/identifier: list_id."
+            description: "List ID- Identifies the list_id to which the pick had been assigned."
           - name: list_seqnum
-            description: "Code/identifier: list_seqnum."
+            description: "List Sequence - The sequence the pick fell in the list."
           - name: est_time
             description: "{{ doc('jdawms__est_time') }}"
           - name: lm_assign_num
@@ -1022,205 +1024,205 @@ sources:
           - name: lm_assign_seqnum
             description: "{{ doc('jdawms__lm_assign_seqnum') }}"
           - name: skip_cnt
-            description: "WMS skip_cnt attribute."
+            description: "Skip Count — The number of times this pick has been skipped."
           - name: pallet_pos
-            description: "WMS pallet_pos attribute."
+            description: "Pallet Position — Concatenated Pallet Position/Pallet Number as sent from PalletCtl."
           - name: pallet_id
-            description: "Code/identifier: pallet_id."
+            description: "Pallet identifier as sent from PalletCtl."
           - name: pallet_load_seq
-            description: "WMS pallet_load_seq attribute."
+            description: "Pallet Load Sequence — Sequence in which the pallet is to be loaded onto the truck."
           - name: rttn_id
-            description: "Code/identifier: rttn_id."
+            description: "Rotation ID used for tracking bonded inventory."
           - name: rttn_id_flg
-            description: "Flag (0/1): rttn_id_flg."
+            description: "Confirm Rotation ID — Rotation ID verification flag - used to indicate whether or not pick verification is turned on for rotation id. '1' means yes and '0' means no."
           - name: unassign_flg
-            description: "Flag (0/1): unassign_flg."
+            description: "Manually Replan To List — When Un-Assign Flag is checked, the pick has been un-assigned."
           - name: asset_typ
-            description: "{{ doc('jdawms__asset_typ') }}"
+            description: "Handling Unit Type — Asset Type - Asset Type to be picked. But system will NOT force user to Pick the particular Asset type on the table."
           - name: supnum
-            description: "{{ doc('jdawms__supnum') }}"
+            description: "Supplier Number: Supplier number specific to the pick."
           - name: supflg
-            description: "Flag (0/1): supflg."
+            description: "Confirm Supplier — Supplier Flag: Confirm supplier number on pickup."
           - name: unique_pallet_id
-            description: "Code/identifier: unique_pallet_id."
+            description: "Unique Pallet ID — Pallet ID that uniquely identifies the pallet to the PalletCtl system."
           - name: palctlsts
-            description: "WMS palctlsts attribute."
+            description: "PalletCtl status. DONE(PalletCtl finished),WPPP(Waiting PalletCtl,pcksts=P),WPPH(Waiting PalletCtl,pcksts=H),WSTP(Waiting Shorts,pcksts=P),WSTH(Waiting Shorts,pcksts=H),WXDP(Waiting XDCK,pcksts=P),WXDH(Waiting XDCK,pcksts=H)."
           - name: start_pal_flg
-            description: "Flag (0/1): start_pal_flg."
+            description: "Starter Pallet — Used with PalletCTL to indicate this pick is a starter pallet."
           - name: list_conf_flg
-            description: "Flag (0/1): list_conf_flg."
+            description: "List Confirm Flag — Mark records which need to have the inventory moved from a temporary load to the main pick to load. After the pick is confirmed, the flag will be unset."
           - name: pck_uom
-            description: "WMS pck_uom attribute."
+            description: "Picking UOM — UOM set according to pckqty when created in allocating inventory. Represents at which UOM level shoud user pick the inventory."
           - name: assign_grp
-            description: "WMS assign_grp attribute."
+            description: "Assignment group number used to group together a set of picks."
           - name: lock_flg
-            description: "Flag (0/1): lock_flg."
+            description: "Lock Flag — This flag indicates whether work should be created in LOCK or PEND status."
           - name: abs_ordinv_dte
-            description: "Date/time field: abs_ordinv_dte."
+            description: "Absolute Order Inventory Allocation Date — Picking validation - used to store the absolute date for inventory at time of allocation, Date is Julian."
           - name: thresh_pck_flg
-            description: "Flag (0/1): thresh_pck_flg."
+            description: "Threshold Pick — Setting this flag makes the pckwrk record a threshold pick."
           - name: pck_to_id
-            description: "Code/identifier: pck_to_id."
+            description: "Pick to ID — This indicates the asset to which the list will be picked to. If it is a serialized asset, then this will hold the asset id or serial number of the asset id. In case of non serialized asset, this will hold the scanned load number."
           - name: last_pck_usr_id
-            description: "Code/identifier: last_pck_usr_id."
+            description: "Last Pick User ID — The Last Picker columns is updated when a user picks a work reference. This column will contain the user's id. Since, multiple user can pick a work reference the column will always contain the last user to pick it."
           - name: sp_hand_flg
-            description: "Flag (0/1): sp_hand_flg."
+            description: "Special Handling — Indicates if the pick is for special handling."
           - name: rule_nam
-            description: "WMS rule_nam attribute."
+            description: "Rule Name — This will be an unique rule name which will have to exists in alloc_rule table. Allocation logic will get the inventory attributes from alloc_rule table."
           - name: mandte
-            description: "Date/time field: mandte."
+            description: "Manufactured Date — This will be used to hold the allocated inventory's man_dte."
           - name: expire_dte
-            description: "{{ doc('jdawms__expire_dte') }}"
+            description: "Expiration Date — This will be used to hold the allocated inventory's expire_dte."
           - name: mandte_flg
-            description: "Flag (0/1): mandte_flg."
+            description: "Manufactured Date Tracking — This will be used to determine whether or not to prompt the user to verify the man_dte while picking."
           - name: expire_dte_flg
-            description: "Flag (0/1): expire_dte_flg."
+            description: "Expiration Date Flag — This will be used to determine whether or not to prompt the user to verify the expire_dte while picking."
           - name: palctl_split_flg
-            description: "Flag (0/1): palctl_split_flg."
+            description: "Pallet Control Split Flag — This will be used to denote that the pick has been split by pallet control. When a replan is sent to pallet control for a pick whose palctl_split_flg is TRUE the status will be 3. Any other picks that are on that UID will also have status 3."
           - name: attr_str1_flg
-            description: "Flag (0/1): attr_str1_flg."
+            description: "Confirm Inventory Attribute Text 1 Flag.Indicates whether user needs to confirm the Text Inventory Attribute1 on pickup."
           - name: attr_str2_flg
-            description: "Flag (0/1): attr_str2_flg."
+            description: "Confirm Inventory Attribute Text 2 Flag.Indicates whether user needs to confirm the Text Inventory Attribute2 on pickup."
           - name: attr_str3_flg
-            description: "Flag (0/1): attr_str3_flg."
+            description: "Confirm Inventory Attribute Text 3 Flag.Indicates whether user needs to confirm the Text Inventory Attribute3 on pickup."
           - name: attr_str4_flg
-            description: "Flag (0/1): attr_str4_flg."
+            description: "Confirm Inventory Attribute Text 4 Flag.Indicates whether user needs to confirm the Text Inventory Attribute4 on pickup."
           - name: attr_str5_flg
-            description: "Flag (0/1): attr_str5_flg."
+            description: "Confirm Inventory Attribute Text 5 Flag.Indicates whether user needs to confirm the Text Inventory Attribute5 on pickup."
           - name: attr_str6_flg
-            description: "Flag (0/1): attr_str6_flg."
+            description: "Confirm Inventory Attribute Text 6 Flag.Indicates whether user needs to confirm the Text Inventory Attribute6 on pickup."
           - name: attr_str7_flg
-            description: "Flag (0/1): attr_str7_flg."
+            description: "Confirm Inventory Attribute Text 7 Flag.Indicates whether user needs to confirm the Text Inventory Attribute7 on pickup."
           - name: attr_str8_flg
-            description: "Flag (0/1): attr_str8_flg."
+            description: "Confirm Inventory Attribute Text 8 Flag.Indicates whether user needs to confirm the Text Inventory Attribute8 on pickup."
           - name: attr_str9_flg
-            description: "Flag (0/1): attr_str9_flg."
+            description: "Confirm Inventory Attribute Text 9 Flag.Indicates whether user needs to confirm the Text Inventory Attribute9 on pickup."
           - name: attr_str10_flg
-            description: "Flag (0/1): attr_str10_flg."
+            description: "Confirm Inventory Attribute Text 10 Flag.Indicates whether user needs to confirm the Text Inventory Attribute10 on pickup."
           - name: attr_str11_flg
-            description: "Flag (0/1): attr_str11_flg."
+            description: "Confirm Inventory Attribute Text 11 Flag.Indicates whether user needs to confirm the Text Inventory Attribute11 on pickup."
           - name: attr_str12_flg
-            description: "Flag (0/1): attr_str12_flg."
+            description: "Confirm Inventory Attribute Text 12 Flag.Indicates whether user needs to confirm the Text Inventory Attribute12 on pickup."
           - name: attr_str13_flg
-            description: "Flag (0/1): attr_str13_flg."
+            description: "Confirm Inventory Attribute Text 13 Flag.Indicates whether user needs to confirm the Text Inventory Attribute13 on pickup."
           - name: attr_str14_flg
-            description: "Flag (0/1): attr_str14_flg."
+            description: "Confirm Inventory Attribute Text 14 Flag.Indicates whether user needs to confirm the Text Inventory Attribute14 on pickup."
           - name: attr_str15_flg
-            description: "Flag (0/1): attr_str15_flg."
+            description: "Confirm Inventory Attribute Text 15 Flag.Indicates whether user needs to confirm the Text Inventory Attribute15 on pickup."
           - name: attr_str16_flg
-            description: "Flag (0/1): attr_str16_flg."
+            description: "Confirm Inventory Attribute Text 16 Flag.Indicates whether user needs to confirm the Text Inventory Attribute16 on pickup."
           - name: attr_str17_flg
-            description: "Flag (0/1): attr_str17_flg."
+            description: "Confirm Inventory Attribute Text 17 Flag.Indicates whether user needs to confirm the Text Inventory Attribute17 on pickup."
           - name: attr_str18_flg
-            description: "Flag (0/1): attr_str18_flg."
+            description: "Confirm Inventory Attribute Text 18 Flag.Indicates whether user needs to confirm the Text Inventory Attribute18 on pickup."
           - name: attr_int1_flg
-            description: "Flag (0/1): attr_int1_flg."
+            description: "Confirm Inventory Attribute Number 1 Flag.Indicates whether user needs to confirm the Number Inventory Attribute1 on pickup."
           - name: attr_int2_flg
-            description: "Flag (0/1): attr_int2_flg."
+            description: "Confirm Inventory Attribute Number 2 Flag.Indicates whether user needs to confirm the Number Inventory Attribute2 on pickup."
           - name: attr_int3_flg
-            description: "Flag (0/1): attr_int3_flg."
+            description: "Confirm Inventory Attribute Number 3 Flag.Indicates whether user needs to confirm the Number Inventory Attribute3 on pickup."
           - name: attr_int4_flg
-            description: "Flag (0/1): attr_int4_flg."
+            description: "Confirm Inventory Attribute Number 4 Flag.Indicates whether user needs to confirm the Number Inventory Attribute4 on pickup."
           - name: attr_int5_flg
-            description: "Flag (0/1): attr_int5_flg."
+            description: "Confirm Inventory Attribute Number 5 Flag.Indicates whether user needs to confirm the Number Inventory Attribute5 on pickup."
           - name: attr_flt1_flg
-            description: "Flag (0/1): attr_flt1_flg."
+            description: "Confirm Inventory Attribute Decimal 1 Flag.Indicates whether user needs to confirm the Decimal Inventory Attribute1 on pickup."
           - name: attr_flt2_flg
-            description: "Flag (0/1): attr_flt2_flg."
+            description: "Confirm Inventory Attribute Decimal 2 Flag.Indicates whether user needs to confirm the Decimal Inventory Attribute2 on pickup."
           - name: attr_flt3_flg
-            description: "Flag (0/1): attr_flt3_flg."
+            description: "Confirm Inventory Attribute Decimal 3 Flag.Indicates whether user needs to confirm the Decimal Inventory Attribute3 on pickup."
           - name: attr_dte1_flg
-            description: "Flag (0/1): attr_dte1_flg."
+            description: "Confirm Inventory Attribute Date 1 Flag.Indicates whether user needs to confirm the Date Inventory Attribute1 on pickup."
           - name: attr_dte2_flg
-            description: "Flag (0/1): attr_dte2_flg."
+            description: "Confirm Inventory Attribute Date 2 Flag.Indicates whether user needs to confirm the Date Inventory Attribute2 on pickup."
           - name: inv_attr_str1
-            description: "{{ doc('jdawms__inv_attr_str1') }}"
+            description: "Inventory Attribute Text 1. Confirm Inventory Attribute Text 1 for the pickup."
           - name: inv_attr_str2
-            description: "{{ doc('jdawms__inv_attr_str2') }}"
+            description: "Inventory Attribute Text 2. Confirm Inventory Attribute Text 2 for the pickup."
           - name: inv_attr_str3
-            description: "{{ doc('jdawms__inv_attr_str3') }}"
+            description: "Inventory Attribute Text 3. Confirm Inventory Attribute Text 3 for the pickup."
           - name: inv_attr_str4
-            description: "{{ doc('jdawms__inv_attr_str4') }}"
+            description: "Inventory Attribute Text 4. Confirm Inventory Attribute Text 4 for the pickup."
           - name: inv_attr_str5
-            description: "{{ doc('jdawms__inv_attr_str5') }}"
+            description: "Inventory Attribute Text 5. Confirm Inventory Attribute Text 5 for the pickup."
           - name: inv_attr_str6
-            description: "{{ doc('jdawms__inv_attr_str6') }}"
+            description: "Inventory Attribute Text 6. Confirm Inventory Attribute Text 6 for the pickup."
           - name: inv_attr_str7
-            description: "{{ doc('jdawms__inv_attr_str7') }}"
+            description: "Inventory Attribute Text 7. Confirm Inventory Attribute Text 7 for the pickup."
           - name: inv_attr_str8
-            description: "{{ doc('jdawms__inv_attr_str8') }}"
+            description: "Inventory Attribute Text 8. Confirm Inventory Attribute Text 8 for the pickup."
           - name: inv_attr_str9
-            description: "{{ doc('jdawms__inv_attr_str9') }}"
+            description: "Inventory Attribute Text 9. Confirm Inventory Attribute Text 9 for the pickup."
           - name: inv_attr_str10
-            description: "{{ doc('jdawms__inv_attr_str10') }}"
+            description: "Inventory Attribute Text 10. Confirm Inventory Attribute Text 10 for the pickup."
           - name: inv_attr_str11
-            description: "{{ doc('jdawms__inv_attr_str11') }}"
+            description: "Inventory Attribute Text 11. Confirm Inventory Attribute Text 11 for the pickup."
           - name: inv_attr_str12
-            description: "{{ doc('jdawms__inv_attr_str12') }}"
+            description: "Inventory Attribute Text 12. Confirm Inventory Attribute Text 12 for the pickup."
           - name: inv_attr_str13
-            description: "{{ doc('jdawms__inv_attr_str13') }}"
+            description: "Inventory Attribute Text 13. Confirm Inventory Attribute Text 13 for the pickup."
           - name: inv_attr_str14
-            description: "{{ doc('jdawms__inv_attr_str14') }}"
+            description: "Inventory Attribute Text 14. Confirm Inventory Attribute Text 14 for the pickup."
           - name: inv_attr_str15
-            description: "{{ doc('jdawms__inv_attr_str15') }}"
+            description: "Inventory Attribute Text 15. Confirm Inventory Attribute Text 15 for the pickup."
           - name: inv_attr_str16
-            description: "{{ doc('jdawms__inv_attr_str16') }}"
+            description: "Inventory Attribute Text 16. Confirm Inventory Attribute Text 16 for the pickup."
           - name: inv_attr_str17
-            description: "{{ doc('jdawms__inv_attr_str17') }}"
+            description: "Inventory Attribute Text 17. Confirm Inventory Attribute Text 17 for the pickup."
           - name: inv_attr_str18
-            description: "{{ doc('jdawms__inv_attr_str18') }}"
+            description: "Inventory Attribute Text 18. Confirm Inventory Attribute Text 18 for the pickup."
           - name: inv_attr_int1
-            description: "{{ doc('jdawms__inv_attr_int1') }}"
+            description: "Inventory Attribute Number 1. Confirm Inventory Attribute Number 1 for the pickup."
           - name: inv_attr_int2
-            description: "{{ doc('jdawms__inv_attr_int2') }}"
+            description: "Inventory Attribute Number 2. Confirm Inventory Attribute Number 2 for the pickup."
           - name: inv_attr_int3
-            description: "{{ doc('jdawms__inv_attr_int3') }}"
+            description: "Inventory Attribute Number 3. Confirm Inventory Attribute Number 3 for the pickup."
           - name: inv_attr_int4
-            description: "{{ doc('jdawms__inv_attr_int4') }}"
+            description: "Inventory Attribute Number 4. Confirm Inventory Attribute Number 4 for the pickup."
           - name: inv_attr_int5
-            description: "{{ doc('jdawms__inv_attr_int5') }}"
+            description: "Inventory Attribute Number 5. Confirm Inventory Attribute Number 5 for the pickup."
           - name: inv_attr_flt1
-            description: "{{ doc('jdawms__inv_attr_flt1') }}"
+            description: "Unit Cost — Inventory Attribute Decimal 1 . Confirm Inventory Attribute Decimal 1 for the pickup."
           - name: inv_attr_flt2
-            description: "{{ doc('jdawms__inv_attr_flt2') }}"
+            description: "Inventory Attribute Decimal 2 . Confirm Inventory Attribute Decimal 2 for the pickup."
           - name: inv_attr_flt3
-            description: "{{ doc('jdawms__inv_attr_flt3') }}"
+            description: "Inventory Attribute Decimal 3 . Confirm Inventory Attribute Decimal 3 for the pickup."
           - name: inv_attr_dte1
-            description: "{{ doc('jdawms__inv_attr_dte1') }}"
+            description: "Inventory Attribute Date 1 . Confirm Inventory Attribute Date 1 for the pickup."
           - name: inv_attr_dte2
-            description: "{{ doc('jdawms__inv_attr_dte2') }}"
+            description: "Inventory Attribute Date 2 . Confirm Inventory Attribute Date 2 for the pickup."
           - name: wcs_pck_grp
-            description: "WMS wcs_pck_grp attribute."
+            description: "WCS Pick Group — pick group determined by command 'log pick request'."
           - name: wcs_reported_dt
-            description: "Date/time field: wcs_reported_dt."
+            description: "WCS Reported Date — timestamp of when 'log pick request' was successfully completed."
           - name: wcs_can_pcksts
-            description: "WMS wcs_can_pcksts attribute."
+            description: "WCS Cancel Pick Status — pick status when 'process cancel pick' was called."
           - name: wcs_can_req_dt
-            description: "Date/time field: wcs_can_req_dt."
+            description: "WCS Cancel Request Date — timestamp of when 'process cancel pick' was called."
           - name: cstms_typ
-            description: "WMS cstms_typ attribute."
+            description: "Customs Type, This will be used to hold the value of allocated inventory, and validated when picking."
           - name: cstms_typ_flg
-            description: "Flag (0/1): cstms_typ_flg."
+            description: "Confirm Customs Type — Flag used to indicate whether or not pick verification is turned on for customs type. '1' means yes and '0' means no."
           - name: pip_counter
-            description: "WMS pip_counter attribute."
+            description: "Pre-Inventory Allocation Counter — Counter for the number of times this pick was processed as a PIP pick. If the counter exceeds a set policy value it will remove the pip pick and create the rplwrk."
           - name: ins_dt
-            description: "{{ doc('jdawms__ins_dt') }}"
+            description: "{{ doc('jdawms__ins_dt__pckwrk_dtl') }}"
           - name: last_upd_dt
-            description: "{{ doc('jdawms__last_upd_dt') }}"
+            description: "{{ doc('jdawms__last_upd_dt__pckwrk_dtl') }}"
           - name: ins_user_id
-            description: "{{ doc('jdawms__ins_user_id') }}"
+            description: "{{ doc('jdawms__ins_user_id__pckwrk_dtl') }}"
           - name: last_upd_user_id
             description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: rowid
-            description: "{{ doc('jdawms__rowid') }}"
+            description: "Row ID."
           - name: uc_inch_volume
-            description: "WMS uc_inch_volume attribute."
+            description: "Volume in inches of each pick."
           - name: uc_aisle_volume
-            description: "WMS uc_aisle_volume attribute."
+            description: "Volume in inches of the total picks on an order within an aisle."
           - name: uc_layers
-            description: "WMS uc_layers attribute."
+            description: "Layers of each pick."
           - name: uc_picks
-            description: "WMS uc_picks attribute."
+            description: "If there are multiple picks of the same part on an order return 2."
           - name: loaddate
             description: "{{ doc('jdawms__loaddate') }}"
       - name: prtdsc
@@ -1250,47 +1252,47 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: prtnum
-            description: "{{ doc('jdawms__prtnum') }}"
+            description: "Item Number — The item number to which a footprint is associated."
           - name: ftpcod
             description: "{{ doc('jdawms__ftpcod') }}"
           - name: prt_client_id
-            description: "{{ doc('jdawms__prt_client_id') }}"
+            description: "Item Client ID — In non-3PL systems, this will be set to a default of '----'."
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "Warehouse ID - the warehouse in which the item number and footprint code are to be associated."
           - name: caslvl
-            description: "WMS caslvl attribute."
+            description: "Cases per Tier — Case per tier."
           - name: nstlen
-            description: "WMS nstlen attribute."
+            description: "Nesting Length — Nested Length."
           - name: nstwid
-            description: "Code/identifier: nstwid."
+            description: "Nesting Width — Nested Width."
           - name: nsthgt
-            description: "WMS nsthgt attribute."
+            description: "Nesting Height — Nested Height."
           - name: pal_stck_hgt
-            description: "WMS pal_stck_hgt attribute."
+            description: "Pallet Stack Height."
           - name: def_asset_typ
-            description: "WMS def_asset_typ attribute."
+            description: "Default Handling Unit Type — Default Asset Type: The default asset type identifier."
           - name: defftp_flg
-            description: "Flag (0/1): defftp_flg."
+            description: "Default Item Footprint — Default Flag which indicates current ftpcod is default ftpcod for the item."
           - name: stkmtd
-            description: "WMS stkmtd attribute."
+            description: "Stack Method."
           - name: load_attr1_cfg
-            description: "WMS load_attr1_cfg attribute."
+            description: "Wrapped — The first load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped."
           - name: load_attr2_cfg
-            description: "WMS load_attr2_cfg attribute."
+            description: "LPN Attribute 2 — The second load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped."
           - name: load_attr3_cfg
-            description: "WMS load_attr3_cfg attribute."
+            description: "LPN Attribute 3 — The third load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped."
           - name: load_attr4_cfg
-            description: "WMS load_attr4_cfg attribute."
+            description: "LPN Attribute 4 — The fourth load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped."
           - name: load_attr5_cfg
-            description: "WMS load_attr5_cfg attribute."
+            description: "LPN Attribute 5 — The fifth load attribute. A load attribute is a configurable field to indicate attributes of a load such as the load being wrapped."
           - name: rcvftp_flg
-            description: "Flag (0/1): rcvftp_flg."
+            description: "Receiving Item Footprint flag which indicates current ftpcod was created during receiving."
           - name: level_units
-            description: "WMS level_units attribute."
+            description: "Level Units — Number of level units that the footprint occupies when on a level."
           - name: ins_dt
             description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "{{ doc('jdawms__last_upd_dt') }}"
+            description: "{{ doc('jdawms__last_upd_dt__prtftp') }}"
           - name: ins_user_id
             description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
@@ -1305,53 +1307,53 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: prtnum
-            description: "{{ doc('jdawms__prtnum') }}"
+            description: "{{ doc('jdawms__prtnum__inv_snap') }}"
           - name: ftpcod
-            description: "{{ doc('jdawms__ftpcod') }}"
+            description: "Footprint Code."
           - name: prt_client_id
-            description: "{{ doc('jdawms__prt_client_id') }}"
+            description: "{{ doc('jdawms__prt_client_id__inv_snap') }}"
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "{{ doc('jdawms__wh_id__inv_snap') }}"
           - name: uomcod
-            description: "{{ doc('jdawms__uomcod') }}"
+            description: "Unit Of Measure — UOM Code."
           - name: uomlvl
-            description: "Unit-of-measure level in the packaging hierarchy (1=each … up)."
+            description: "UOM level, a number which is manipulated by system. Upper UOM level has greater uomlvl."
           - name: len
-            description: "WMS len attribute."
+            description: "Length — UOM Length."
           - name: wid
-            description: "Code/identifier: wid."
+            description: "Width — UOM Width."
           - name: hgt
-            description: "WMS hgt attribute."
+            description: "Height — UOM Height."
           - name: grswgt
-            description: "Weight field: grswgt."
+            description: "Gross Weight — UOM gross weight which is weight with package."
           - name: netwgt
-            description: "Weight field: netwgt."
+            description: "Net Weight — UOM net weight which weight without package."
           - name: pal_flg
-            description: "Flag (0/1): pal_flg."
+            description: "Pallet Flag — Pallet UOM flag, which indicates if current UOM is a pallet UOM."
           - name: layer_flg
-            description: "Flag (0/1): layer_flg."
+            description: "Layer Flag — Layer UOM flag, which indicates if current UOM is a layer UOM."
           - name: cas_flg
-            description: "Flag (0/1): cas_flg."
+            description: "Case Flag — Case UOM flag, which indicates if current UOM is case UOM."
           - name: pak_flg
-            description: "Flag (0/1): pak_flg."
+            description: "Pack Flag — Package UOM flag, which indicates if current UOM is package uom."
           - name: stk_flg
-            description: "Flag (0/1): stk_flg."
+            description: "Unit UOM flag, which indicates if current UOM is unit UOM."
           - name: rcv_flg
-            description: "Flag (0/1): rcv_flg."
+            description: "Receive Flag — Receive UOM Flag. This indicates if current uom is the default UOM when receiving."
           - name: untqty
-            description: "{{ doc('jdawms__untqty') }}"
+            description: "Unit Quantity — Unit per UOM."
           - name: ctn_flg
-            description: "Flag (0/1): ctn_flg."
+            description: "Cartonization Flag — Allow Cartonization Flag, which indicates if this UOM can be cartonized."
           - name: thresh_pct
-            description: "WMS thresh_pct attribute."
+            description: "Threshold Percentage — Minimum percentage value of platform capacity a partial platform must contain to qualify as a Threshold Pick. The value in this field can be greater than 0.000% and no more than 100.000%."
           - name: ctn_dstr_flg
-            description: "Flag (0/1): ctn_dstr_flg."
+            description: "Carton Distribution — This flag determines if the carton will be utilized in the distribution process. These carton types will not be used for cartonization."
           - name: bulk_pck_flg
-            description: "Flag (0/1): bulk_pck_flg."
+            description: "Bulk Picking Flag, which indicates if current UOM is supported Bulk Picking."
           - name: ins_dt
             description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "{{ doc('jdawms__last_upd_dt') }}"
+            description: "{{ doc('jdawms__last_upd_dt__prtftp') }}"
           - name: ins_user_id
             description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
@@ -1366,59 +1368,59 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: prtnum
-            description: "{{ doc('jdawms__prtnum') }}"
+            description: "{{ doc('jdawms__prtnum__dlytrn') }}"
           - name: prt_client_id
             description: "{{ doc('jdawms__prt_client_id') }}"
           - name: wh_id_tmpl
-            description: "Warehouse template identifier the part master belongs to."
+            description: "Warehouse ID Template - The wh_id_tmpl= '----' will represent a default item that will be shared by all warehouses. An entry with a wh_id_tmpl != '----' is an override for that warehouse."
           - name: prtfam
-            description: "Part family/grouping."
+            description: "Item Family Name."
           - name: dsp_prtnum
-            description: "Display/formatted part number."
+            description: "Display Item Number."
           - name: age_pflnam
             description: "WMS age_pflnam attribute."
           - name: lodlvl
-            description: "{{ doc('jdawms__lodlvl') }}"
+            description: "LPN Level — Set to one of L (load), S (Subload), or D (Detail). For example, if set to Subload, then product is considered serialized at a case level."
           - name: orgflg
-            description: "{{ doc('jdawms__orgflg') }}"
+            description: "Origin Code — If set, the system will track origin code for this product."
           - name: revflg
-            description: "{{ doc('jdawms__revflg') }}"
+            description: "Revision — If set, the system will track revision level for this product."
           - name: lotflg
-            description: "{{ doc('jdawms__lotflg') }}"
+            description: "Lot Tracking — If set, the system will track lot number for this product."
           - name: sup_lot_flg
-            description: "{{ doc('jdawms__sup_lot_flg') }}"
+            description: "Supplier Lot Tracking — If set, the system will track supplier lot number for this product."
           - name: stkuom
-            description: "Stocking unit of measure."
+            description: "Stocking Unit of Measure — Provides the UOM code to associate with untqty."
           - name: abccod
-            description: "{{ doc('jdawms__abccod') }}"
+            description: "ABC Code — Used to indicate the relative frequency by which this product should be counted."
           - name: fifwin
-            description: "WMS fifwin attribute."
+            description: "Window — Used to indicate the time interval in which product should be considered equal for FIFO consideration during product storage. The unit of measure of the time interval is based on the TIMCOD field."
           - name: velzon
-            description: "{{ doc('jdawms__velzon') }}"
+            description: "Velocity — Used to indicate the relative velocity of the product and how it should be stored. I.e. fast moving product should be stored in easy to access fast moving locations."
           - name: rcvsts
-            description: "Receiving status of the part."
+            description: "Receive Status — The default inventory status that this product should get when identified during receiving."
           - name: rcvflg
-            description: "Flag (0/1): rcvflg."
+            description: "Receivable — This flag must be set for product to be identified during receiving. Useful if items downloads from host often need addtln info. New items may be downloaded with rcvflg set to false to prevent rcv'ng until someone manually intervenes."
           - name: prdflg
-            description: "Flag (0/1): prdflg."
+            description: "Production Inventory — This flag is set if this is inventory that a host system cares about. When tracking supplies and other non-costed items, this flag should be set to false."
           - name: wgtcod
-            description: "Code/identifier: wgtcod."
+            description: "Weight Code — The weight Code - This is a user defined code for the describing the weight type, usually takes the values HEAVY, MEDIUM or LIGHT."
           - name: prtfit
-            description: "WMS prtfit attribute."
+            description: "Fit — The fit."
           - name: moddte
             description: "{{ doc('jdawms__moddte') }}"
           - name: mod_usr_id
             description: "{{ doc('jdawms__mod_usr_id') }}"
           - name: dspuom
-            description: "WMS dspuom attribute."
+            description: "Display UOM — The uom that this item used to display. It should be UOM defined in itmftp_dtl."
           - name: rptuom
-            description: "WMS rptuom attribute."
+            description: "Report UOM — The uom that this item used to report. It should be UOM defined in itmftp_dtl."
           - name: dte_win_typ
-            description: "WMS dte_win_typ attribute."
+            description: "Date Window Type selected for the part. This can have Manufacture Date Window or Expiration Date Window or FIFO Window."
           - name: dte_code
-            description: "Date-control code (shelf-life handling)."
+            description: "Date Code — This will describe whether the part is Manufacture Date (M) or Expiration Date (E) or Both (B) tracked. If the part is not date tracked, its value will be null."
           - name: ordinv
-            description: "WMS ordinv attribute."
+            description: "Inventory Rotation Method — Location Order By - This value determines how the system will determine which inventory in an area code to allocate for this order line. Examples of possible values include FEFO-ORDER-BY, FIFO-ORDER-BY."
           - name: loaddate
             description: "{{ doc('jdawms__loaddate') }}"
       - name: rplcfg
@@ -1429,39 +1431,39 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: rplnum
-            description: "Replenishment rule number."
+            description: "Replenishment Number — Identifier for the replenishment."
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "Warehouse id."
           - name: prtnum
-            description: "{{ doc('jdawms__prtnum') }}"
+            description: "Item number of an Item."
           - name: prt_client_id
-            description: "{{ doc('jdawms__prt_client_id') }}"
+            description: "Item Client ID — Client Identifier of an Item."
           - name: stoloc
-            description: "{{ doc('jdawms__stoloc') }}"
+            description: "Location — Storage Location."
           - name: mov_zone_id
-            description: "{{ doc('jdawms__mov_zone_id') }}"
+            description: "Movement Zone — The movement zone identifier."
           - name: invsts
-            description: "{{ doc('jdawms__invsts') }}"
+            description: "Inventory Status of the Items."
           - name: pctflg
-            description: "Flag (0/1): pctflg."
+            description: "Percentage — Pecentage flag to check the number of availble items whether by number or by percentage."
           - name: maxunt
-            description: "Maximum units target for the location."
+            description: "Maximum unit for a particular item."
           - name: minunt
-            description: "Minimum units trigger for the location."
+            description: "Minimum unit for a particular item."
           - name: maxloc
-            description: "Maximum locations to replenish."
+            description: "Maximum Locations for Item — Maximum locations for replenishment."
           - name: cmpflg
-            description: "Flag (0/1): cmpflg."
+            description: "Complete — Flag for Completion of replenishmnt."
           - name: rpldte
-            description: "Last replenishment date."
+            description: "Last Attempted Replenishment — Date of the replenishment."
           - name: inc_pct_flg
-            description: "Flag (0/1): inc_pct_flg."
+            description: "Increment Percentage flag to check the number of increment items whether by number or by percentage."
           - name: inc_unt
-            description: "WMS inc_unt attribute."
+            description: "Increment Unit when a location can be over allocated."
           - name: rls_pct
-            description: "WMS rls_pct attribute."
+            description: "Release Percent — The perecent will be used to get the max capacity of the location by multipy the maxqvl of the location. System will use this max capacity to check if the emergency/demand replenishment should be released to pending."
           - name: mod_usr_id
-            description: "{{ doc('jdawms__mod_usr_id') }}"
+            description: "Modified by — Identifier of Last user who modified the replenishment."
           - name: loaddate
             description: "{{ doc('jdawms__loaddate') }}"
       - name: shipment
@@ -1472,151 +1474,151 @@ sources:
             warn_after: {count: 48, period: hour}
         columns:
           - name: ship_id
-            description: "{{ doc('jdawms__ship_id') }}"
+            description: "Shipment Id."
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "{{ doc('jdawms__wh_id__invsum') }}"
           - name: host_client_id
-            description: "Host system client/owner id."
+            description: "Host Client Id."
           - name: host_ext_id
-            description: "Code/identifier: host_ext_id."
+            description: "Host External Id."
           - name: shpsts
-            description: "Shipment status code."
+            description: "Shipment Status — Ship Status."
           - name: stop_id
-            description: "Route stop identifier."
+            description: "Stop Id."
           - name: rt_adr_id
-            description: "Code/identifier: rt_adr_id."
+            description: "Route-to Address Id."
           - name: cargrp
-            description: "WMS cargrp attribute."
+            description: "Carrier Group."
           - name: carcod
-            description: "{{ doc('jdawms__carcod') }}"
+            description: "Carrier Code."
           - name: srvlvl
-            description: "{{ doc('jdawms__srvlvl') }}"
+            description: "Service Level."
           - name: sddflg
-            description: "Flag (0/1): sddflg."
+            description: "Saturday Delivery Flag."
           - name: doc_num
-            description: "Shipping document number."
+            description: "Document Number - The document number for any paperwork (bill of lading)."
           - name: track_num
-            description: "Carrier tracking number."
+            description: "Pro Number — Tracking Number - The tracking number for any paperwork."
           - name: mst_waybill
-            description: "WMS mst_waybill attribute."
+            description: "Master waybill number."
           - name: frtchg
-            description: "Freight charge."
+            description: "Freight Charge."
           - name: frtcod
-            description: "Code/identifier: frtcod."
+            description: "Freight Code."
           - name: frtrte
-            description: "WMS frtrte attribute."
+            description: "Freight Rate."
           - name: adddte
             description: "{{ doc('jdawms__adddte') }}"
           - name: alcdte
-            description: "Date/time field: alcdte."
+            description: "Allocation Date."
           - name: stgdte
-            description: "Staged timestamp."
+            description: "Staged Date."
           - name: loddte
-            description: "Loaded (onto vehicle) timestamp."
+            description: "Loaded Date."
           - name: entdte
-            description: "Date/time field: entdte."
+            description: "Date Entered."
           - name: early_shpdte
-            description: "Earliest allowed ship date."
+            description: "Early Ship Date."
           - name: late_shpdte
-            description: "Latest allowed ship date."
+            description: "Late Ship Date."
           - name: early_dlvdte
-            description: "Earliest allowed delivery date."
+            description: "Early Delivery Date."
           - name: late_dlvdte
-            description: "Latest allowed delivery date."
+            description: "Late Delivery Date."
           - name: dstloc
-            description: "Destination/staging location."
+            description: "Destination Location."
           - name: rrlflg
-            description: "Flag (0/1): rrlflg."
+            description: "Release Remaining Lines Flag."
           - name: wave_set
-            description: "WMS wave_set attribute."
+            description: "Wave Set."
           - name: tms_group_id
-            description: "Code/identifier: tms_group_id."
+            description: "TMS Group Id."
           - name: tms_move_id
-            description: "Code/identifier: tms_move_id."
+            description: "TMS Carrier Move ID for LTL shipments actuals transaction to planned carrier move within TMS."
           - name: tms_move_plan_id
-            description: "Code/identifier: tms_move_plan_id."
+            description: "TMS Move Plan ID for LTL shipments actuals transaction to planned carrier move within TMS."
           - name: lst_prtdte
             description: "Date/time field: lst_prtdte."
           - name: super_ship_id
-            description: "Code/identifier: super_ship_id."
+            description: "Super Shipment Id - If this shipment was planned into a super shipment, this is the super shipment identifier."
           - name: super_ship_flg
             description: "Flag (0/1): super_ship_flg."
           - name: in_transit_flg
-            description: "Flag (0/1): in_transit_flg."
+            description: "In Transit Flag. Specifies if the shipment is currently enroute to a customer."
           - name: pln_shpsts
-            description: "WMS pln_shpsts attribute."
+            description: "Planning Status of this shipment (only for use by TM.)."
           - name: ses_grp_nam
-            description: "WMS ses_grp_nam attribute."
+            description: "Session Group — Used to indicate the application group that owns this shipment (only for use by TM.)."
           - name: optm_base_cost
-            description: "WMS optm_base_cost attribute."
+            description: "Optimization Basis Cost — The basis cost to ship this shipment regardless. It could would be lesser of the standard TL and LTL service."
           - name: rate_serv_nam
-            description: "WMS rate_serv_nam attribute."
+            description: "Rating service name of the optimization basis cost."
           - name: arcdte
-            description: "{{ doc('jdawms__arcdte') }}"
+            description: "Archive Date."
           - name: arc_src
-            description: "{{ doc('jdawms__arc_src') }}"
+            description: "Archive Source."
           - name: lbl_prtdte
-            description: "Date/time field: lbl_prtdte."
+            description: "Label Print date. It is used in processing super shipment to see if the labels for the child shipment have been printed."
           - name: ses_tag
-            description: "WMS ses_tag attribute."
+            description: "Session Tag — Used to a shipment within an application group, so that a new session does not need to be made to run the group multiple times (only for use by TM.)."
           - name: price_sts
-            description: "WMS price_sts attribute."
+            description: "Price Status — This indicates the price status for the shipment."
           - name: src_sys
-            description: "WMS src_sys attribute."
+            description: "Source System — Used to identify the source system of the shipment."
           - name: par_ship_id
-            description: "Code/identifier: par_ship_id."
+            description: "Original shipment Id for cloned shipment."
           - name: hub_adr_id
-            description: "Code/identifier: hub_adr_id."
+            description: "Hub Address — FK (tm_adrmst) Hub Address. Only used for TM."
           - name: hub_arrdte
-            description: "Date/time field: hub_arrdte."
+            description: "Hub Arrive Date — Date that arrives at hub. Only used for TM."
           - name: zs_line_haul_id
-            description: "Code/identifier: zs_line_haul_id."
+            description: "Line Haul ID — Used to indicate which carrier move this shipment belongs to. Only used for TM."
           - name: hub_rate_serv_nam
-            description: "WMS hub_rate_serv_nam attribute."
+            description: "Hub Rating Service Name — FK (tm_rate_serv) The rating service name used for this shipment provided by hub. Only used for TM."
           - name: tot_pkg_qty
-            description: "Total package count on the shipment."
+            description: "Total Number of Packages — (PARCEL related) Total number of packages."
           - name: crncy_code
-            description: "WMS crncy_code attribute."
+            description: "Currency Code — The Currency Code for the Currency fields in the table."
           - name: aesitn
-            description: "WMS aesitn attribute."
+            description: "AES Number — AES Internal Transaction Number."
           - name: aes_typ
-            description: "WMS aes_typ attribute."
+            description: "AES Type - Typically can be one of PRE(Pre Shipment) or POST(Post Shipment) or DOWN(AES server is down)."
           - name: aes_acpt_dte
-            description: "Date/time field: aes_acpt_dte."
+            description: "AES Accepted Date - Used for AES Type of PRE where we give the date of AES Acceptance."
           - name: ftsrnum
-            description: "Code/identifier: ftsrnum."
+            description: "FTSR Number — Foreign Trade Statistics Regulations Number."
           - name: export_typ
-            description: "WMS export_typ attribute."
+            description: "Export Type — International shipment documentation option required for manifesting international packages using some transnational carriers. The valid values are provided by the Parcel system for each carrier."
           - name: docind
-            description: "WMS docind attribute."
+            description: "Document Indicator — (PARCEL) Document indicator - specifies if the shipment is a letter, document or non-document shipment."
           - name: descgoods
-            description: "WMS descgoods attribute."
+            description: "Description of Goods — (PARCEL) Description of Goods."
           - name: exprsntxt
-            description: "WMS exprsntxt attribute."
+            description: "Reason for Export — (PARCEL) Reason for Export."
           - name: pack_code
-            description: "WMS pack_code attribute."
+            description: "Packing Code — The BTO Packing Code determines how a BTO order should be picked and packed into containers."
           - name: pln_cmpl_flg
-            description: "Flag (0/1): pln_cmpl_flg."
+            description: "Planning Complete — This flag is set to true when no additional lines are going to be added to the shipment. However, it does not prevent lines from being added to the shipment."
           - name: dispatch_code
-            description: "WMS dispatch_code attribute."
+            description: "Dispatch Code — The code represent the item commodities that are contained in the shipment."
           - name: moddte
             description: "{{ doc('jdawms__moddte') }}"
           - name: mod_usr_id
             description: "{{ doc('jdawms__mod_usr_id') }}"
           - name: book_num
-            description: "Code/identifier: book_num."
+            description: "Booking Number — Federal Express Freight Booking Number, typically used when shipping large packages over 150 pounds."
           - name: dst_mov_zone_id
-            description: "{{ doc('jdawms__dst_mov_zone_id') }}"
+            description: "Movement Zone to which the inventory for this order line will be staged."
           - name: bola_num
-            description: "Code/identifier: bola_num."
+            description: "Delivery Note Number — A generated number by client when the shipment's status is changed to staged."
           - name: dlv_dte
-            description: "Actual delivery date."
+            description: "Delivery Date — Date that the customer site received this shipment."
           - name: pod_conf_flg
-            description: "Flag (0/1): pod_conf_flg."
+            description: "Proof of Delivery Confirmed — Denotes that all inventory on this shipment has been accounted for between the WMS Site and Customer Site."
           - name: dlvseq_load_order
-            description: "WMS dlvseq_load_order attribute."
+            description: "Delivery Sequence Loading Order — Order of Delivery Sequence that shipments should be loaded. D = Disabled, ASC = Ascending, DESC = Descending."
           - name: wa_rule_reference
-            description: "WMS wa_rule_reference attribute."
+            description: "Work Assignment Rule Reference — Field for making a reference when creating work assignment rules to provide override capability."
           - name: _rescued_data
             description: "{{ doc('jdawms___rescued_data') }}"
           - name: loaddate
@@ -1629,75 +1631,75 @@ sources:
             warn_after: {count: 48, period: hour}
         columns:
           - name: ship_line_id
-            description: "{{ doc('jdawms__ship_line_id') }}"
+            description: "Shipment Line ID."
           - name: ship_id
-            description: "{{ doc('jdawms__ship_id') }}"
+            description: "Shipment ID."
           - name: wh_id
-            description: "{{ doc('jdawms__wh_id') }}"
+            description: "Warehouse ID - the warehouse in which the order is to be fulfilled."
           - name: client_id
-            description: "{{ doc('jdawms__client_id') }}"
+            description: "Client ID - The client code that owns this shipment Line. In a non-3PL system, this value defaults to '----'."
           - name: ordnum
-            description: "{{ doc('jdawms__ordnum') }}"
+            description: "Outbound Order Number — Order Number."
           - name: ordlin
-            description: "{{ doc('jdawms__ordlin') }}"
+            description: "Outbound Order Line — Order Line."
           - name: ordsln
-            description: "{{ doc('jdawms__ordsln') }}"
+            description: "Outbound Order Sub-Line — Order Sub-Line."
           - name: cons_batch
-            description: "WMS cons_batch attribute."
+            description: "Consolidate Batch."
           - name: shpwth
-            description: "WMS shpwth attribute."
+            description: "Ship With."
           - name: linsts
-            description: "Shipment line status code."
+            description: "Line Status."
           - name: prcpri
-            description: "WMS prcpri attribute."
+            description: "Processing Priority."
           - name: pckgr1
-            description: "WMS pckgr1 attribute."
+            description: "Pick Group 1."
           - name: pckgr2
-            description: "WMS pckgr2 attribute."
+            description: "Pick Group 2."
           - name: pckgr3
-            description: "WMS pckgr3 attribute."
+            description: "Pick Group 3."
           - name: pckgr4
-            description: "WMS pckgr4 attribute."
+            description: "Pick Group 4."
           - name: schbat
-            description: "{{ doc('jdawms__schbat') }}"
+            description: "Schedule Batch Number."
           - name: pckqty
-            description: "{{ doc('jdawms__pckqty') }}"
+            description: "Pick Quantity."
           - name: inpqty
-            description: "In-process quantity."
+            description: "Inprocess Quantity."
           - name: stgqty
-            description: "Staged quantity."
+            description: "Staged Quantity."
           - name: shpqty
-            description: "Shipped quantity."
+            description: "Shipped Quantity."
           - name: oviqty
-            description: "Over/short/damaged variance quantity."
+            description: "Over-Alloc In-Process Qty."
           - name: ovramt
-            description: "WMS ovramt attribute."
+            description: "Over-Allocation Amount."
           - name: ovrcod
-            description: "Code/identifier: ovrcod."
+            description: "Over-Allocation Code."
           - name: edtflg
-            description: "Flag (0/1): edtflg."
+            description: "Edited by Host."
           - name: tot_pln_cas_qty
-            description: "Quantity field: tot_pln_cas_qty."
+            description: "Total Plan Case Quantity — (TMS Related) Total number of cases. This value is to be used only for transportation planning purposes."
           - name: tot_pln_misc2_qty
-            description: "Quantity field: tot_pln_misc2_qty."
+            description: "Total Plan Misc Two Quantity — (TMS Related) Total miscellaneous quantity for the order line. This value is to be used only for transportation planning purposes."
           - name: tot_pln_wgt
-            description: "Total planned weight for the line."
+            description: "Total Plan Weight — (TMS Related) Holds the total weight of the pieces on the shipment line. This value is to be used only for transportation planning purposes."
           - name: tot_pln_cube
-            description: "Total planned cube (volume) for the line."
+            description: "Total Plan Cube — (TMS Related) Holds the total cube/volume for the pieces on the order line. This value is to be used only for transporation planning purposes."
           - name: tot_pln_misc_qty
-            description: "Quantity field: tot_pln_misc_qty."
+            description: "Total Plan Misc Quantity — (TMS Related) Total miscellaneous quantity for the order line. This value is to be used only for transportation planning purposes."
           - name: tot_pln_pal_qty
-            description: "Quantity field: tot_pln_pal_qty."
+            description: "Total Plan Pallets — (TMS Related) Total number of pallets. This value is to be used only for transportation planning purposes."
           - name: tot_pln_qty
-            description: "Total planned quantity for the line."
+            description: "Total Planned Quantify — (TMS Related) Total order Quantity."
           - name: unt_ins_val
-            description: "WMS unt_ins_val attribute."
+            description: "Unit Insurance Value — (TM only) The total value of the goods on this shipment that need to be insured by the cargo insurance."
           - name: rel_val
-            description: "WMS rel_val attribute."
+            description: "Release Value — (TM only) The value for a release value basis, this value can be in any currencies."
           - name: rel_val_unt_typ
-            description: "WMS rel_val_unt_typ attribute."
+            description: "Release Value Unit Type — (TM only) The unit basis for the release value."
           - name: wkonum
-            description: "{{ doc('jdawms__wkonum') }}"
+            description: "Work Order Number."
           - name: wkorev
             description: "{{ doc('jdawms__wkorev') }}"
           - name: moddte
@@ -1705,19 +1707,19 @@ sources:
           - name: mod_usr_id
             description: "{{ doc('jdawms__mod_usr_id') }}"
           - name: dstr_qty
-            description: "Quantity field: dstr_qty."
+            description: "Distribution Quantity."
           - name: prtnum
             description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "{{ doc('jdawms__prt_client_id') }}"
+            description: "Item Client ID - The client code for the item that is ordered. In a non-3PL system, this value defaults to '----'."
           - name: est_time
-            description: "{{ doc('jdawms__est_time') }}"
+            description: "Estimated Goal Time — Estimated time to pick the inventory for this order line."
           - name: picked_qty
-            description: "Quantity actually picked for the line."
+            description: "The total number of units that have been picked."
           - name: instgqty
-            description: "Quantity field: instgqty."
+            description: "Quantity currently in a staging lane."
           - name: inloadqty
-            description: "Quantity field: inloadqty."
+            description: "Quantity currently loaded in a trailer."
           - name: ftpcod
             description: "{{ doc('jdawms__ftpcod') }}"
           - name: untpal

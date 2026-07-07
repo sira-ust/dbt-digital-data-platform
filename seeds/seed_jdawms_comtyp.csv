@@ -1,0 +1,4 @@
+comtyp,MOCA type,SQL Server type,length meaning,Tuning note
+S,String,nvarchar/varchar,character count (e.g. S/30 = nvarchar(30)),BY is Unicode — compare with N'...' literals or you get CONVERT_IMPLICIT and lose index seeks
+D,Date/DateTime,char(14) (YYYYMMDDHHMMSS),always 14,"Stored as a string, not datetime. Range filters are string comparisons — pass N'YYYYMMDDHHMMSS', never datetime"
+I,Integer,int,"bytes (4 = int, 2 = smallint, 8 = bigint)","Flags (super_ship_flg, sddflg) are int 0/1, not bit — low selectivity, poor index candidates alone"
