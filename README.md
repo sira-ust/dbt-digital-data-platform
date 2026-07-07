@@ -12,17 +12,29 @@ grain, views) + data quality checks. Aggregated analytics (`fct_*` incremental,
 Local development runs entirely on **DuckDB** against a sample export — no
 live MySQL connection, zero cloud cost.
 
+## Prerequisites
+
+- **Python 3.11+** and **git**
+- **No DuckDB install required.** `dbt-duckdb` (in `requirements.txt`) bundles
+  the DuckDB engine as a Python package — there is no separate database
+  server to install, run, or configure. `dbt build` works right after
+  `pip install -r requirements.txt`.
+- Windows: PowerShell is the primary shell. If `.venv\Scripts\Activate.ps1` is
+  blocked by execution policy on a managed machine, use `dbt-env.ps1` instead
+  (below) — it puts the venv on `PATH` and sets `DBT_PROFILES_DIR` without
+  needing script execution to be enabled.
+
 ## Local DuckDB workflow
 
 ```powershell
 python -m venv .venv
-. .\dbt-env.ps1
+. .\dbt-env.ps1          # or: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 copy profiles.example.yml profiles.yml
 dbt deps
 
-# Flatten raw API JSON -> parquet
-duckdb -c ".read scripts/flatten_api_json.sql"
+# Flatten raw API JSON -> parquet (pure SQL — no DuckDB CLI needed)
+python -c "import duckdb; duckdb.sql(open('scripts/flatten_api_json.sql', encoding='utf-8').read())"
 
 # Generate mock parquet for the jdawms (WMS) source + the two sample-less
 # mysql tables — schema-exact, from the git-tracked UC snapshot; no
@@ -31,6 +43,40 @@ python scripts/generate_jdawms_mock.py
 
 dbt build
 ```
+
+## Querying the local database
+
+`dev.duckdb` is a plain file — no server to connect to. A few ways in:
+
+```powershell
+# One-off query
+python -c "import duckdb; duckdb.connect('dev.duckdb', read_only=True).sql('select * from ust_staging.stg_jdawms__dlytrn limit 10').show()"
+
+# Interactive Python REPL
+python
+>>> import duckdb
+>>> con = duckdb.connect('dev.duckdb', read_only=True)
+>>> con.sql("select table_schema, table_name from information_schema.tables order by 1, 2").show()
+```
+
+Use `read_only=True` — `dbt build`/`dbt run` hold a lock on the file, and a
+read-only connection avoids fighting over it. Tables are schema-prefixed per
+`dbt_project.yml` (`ust_staging`, `ust_intermediate`, `ust_dq`,
+`ust_reporting`, `ust_seeds`), not bare model names. If `.show()`'s
+box-drawing output looks garbled on Windows, set `$env:PYTHONIOENCODING="utf-8"`
+first — it's a console codepage issue, not a query problem.
+
+For an interactive SQL shell instead of Python, install the CLI (not in
+`requirements.txt` — optional):
+
+```powershell
+pip install duckdb-cli
+duckdb dev.duckdb
+D select * from ust_staging.stg_jdawms__dlytrn limit 10;
+```
+
+DBeaver and the VS Code SQLTools/DuckDB extensions can also open `dev.duckdb`
+directly if a GUI is preferred.
 
 ## Layers
 
