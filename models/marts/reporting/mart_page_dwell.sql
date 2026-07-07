@@ -1,3 +1,10 @@
+{{ config(materialized='table') }}
+
+-- NOT incremental by design: this is a lifetime aggregate with one row per page
+-- and no date/partition grain. Every new event changes an existing page's totals,
+-- so there's nothing to append — an incremental build would force a full recompute
+-- anyway (or corrupt the running totals). Full-refresh table is the correct choice.
+
 with events as (
 
     select * from {{ ref('stg_mysql__tracking_report_event') }}

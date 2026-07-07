@@ -1,4 +1,13 @@
-{{ config(materialized='table') }}
+-- incremental_strategy switches by engine: Databricks can't do `delete+insert`
+-- and DuckDB (dev) can't do `merge`. Both do the same thing — update the row if
+-- the unique_key already exists, insert it if not — so this one line keeps the
+-- model working on both targets.
+{{ config(
+    materialized='incremental',
+    unique_key='entity_id',
+    incremental_strategy=('merge' if target.type == 'databricks' else 'delete+insert'),
+    on_schema_change='append_new_columns'
+) }}
 
 -- fct_events — published event-grain fact: the denormalised event spine.
 -- One row per system_event_log record = int_events_enriched (decoded spine +
@@ -15,6 +24,16 @@
 with e as (
 
     select * from {{ ref('int_events_enriched') }}
+
+    {% if is_incremental() %}
+    -- Reprocess a trailing window so late-arriving / clock-skewed events (event_at_utc
+    -- is device-local time) are picked up; merge on entity_id makes it idempotent.
+    -- Widen the 3-day window if your ingestion lag is longer.
+    where event_at_utc >= (
+        select {{ dbt.dateadd('day', -3, "coalesce(max(event_at_utc), cast('1900-01-01' as timestamp))") }}
+        from {{ this }}
+    )
+    {% endif %}
 
 )
 

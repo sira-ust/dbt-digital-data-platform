@@ -1,5 +1,9 @@
 version: 2
 
+# Column descriptions: inline if unique to this column; shared text (used by 2+
+# columns) lives in models/docs/_mysql_glossary.md as a {% docs %} block and is
+# referenced via {{ doc('mysql__<name>') }}. Edit shared defs there.
+
 models:
   - name: stg_mysql__tracking_report
     description: >
@@ -12,11 +16,11 @@ models:
         description: Primary key. One row per customer session.
         tests: [unique, not_null]
       - name: customer_id
-        description: Customer identifier.
+        description: "{{ doc('mysql__customer_id') }}"
       - name: customer_name
         description: Customer name.
       - name: session_id
-        description: Session identifier (currently unpopulated).
+        description: "{{ doc('mysql__session_id_unpopulated') }}"
       - name: device_model
         description: Device model. Source column is `model`.
       - name: app_version
@@ -28,9 +32,9 @@ models:
       - name: total_events
         description: Number of events in the session. Source column is `total_event`.
       - name: created_at
-        description: Record creation time. Source column is `create_at` (source typo).
+        description: "{{ doc('mysql__created_at_typo') }}"
       - name: updated_at
-        description: Record last update time. Latest wins on dedup.
+        description: "{{ doc('mysql__updated_at_dedup') }}"
 
   - name: stg_mysql__tracking_report_event
     description: >
@@ -51,7 +55,7 @@ models:
               config:
                 severity: warn
       - name: customer_id
-        description: Customer identifier.
+        description: "{{ doc('mysql__customer_id') }}"
       - name: customer_name
         description: Customer name (usually empty at event level).
       - name: event_type_code
@@ -65,13 +69,13 @@ models:
       - name: item_no
         description: Item number.
       - name: sku
-        description: Product SKU.
+        description: "{{ doc('mysql__sku') }}"
       - name: qty
-        description: Quantity (string; cast in int layer if numeric operations needed).
+        description: "{{ doc('mysql__qty') }}"
       - name: quote_id
         description: Quote identifier.
       - name: keyword
-        description: Search keyword.
+        description: "{{ doc('mysql__keyword') }}"
       - name: page
         description: Current page name.
       - name: event_type
@@ -85,19 +89,19 @@ models:
       - name: duration_seconds
         description: Event duration in seconds (bigint). Source column is `second`.
       - name: method
-        description: Interaction method code.
+        description: "{{ doc('mysql__method') }}"
       - name: categories_name
         description: Product category name.
       - name: icon
         description: Icon identifier.
       - name: timezone
-        description: Device UTC offset string.
+        description: "{{ doc('mysql__timezone') }}"
       - name: app_version
         description: App version (usually empty at event level). Source column is `version`.
       - name: created_at
-        description: Record creation time. Source column is `create_at` (source typo).
+        description: "{{ doc('mysql__created_at_typo') }}"
       - name: updated_at
-        description: Record last update time. Latest wins on dedup.
+        description: "{{ doc('mysql__updated_at_dedup') }}"
 
   - name: stg_mysql__user_activity_report
     description: >
@@ -110,11 +114,11 @@ models:
         description: Primary key. One row per salesperson session.
         tests: [unique, not_null]
       - name: username
-        description: Salesperson login account. Source column is `user`.
+        description: "{{ doc('mysql__username_user') }}"
       - name: user_name
         description: Salesperson display name with code prefix.
       - name: session_id
-        description: Session identifier (currently unpopulated).
+        description: "{{ doc('mysql__session_id_unpopulated') }}"
       - name: begin_time
         description: Login / session start time.
       - name: end_time
@@ -134,7 +138,7 @@ models:
       - name: created_at
         description: Record creation time.
       - name: updated_at
-        description: Record last update time. Latest wins on dedup.
+        description: "{{ doc('mysql__updated_at_dedup') }}"
 
   - name: stg_mysql__user_activity_report_event
     description: >
@@ -160,7 +164,7 @@ models:
               config:
                 severity: warn
       - name: username
-        description: Salesperson login account. Source column is `user`.
+        description: "{{ doc('mysql__username_user') }}"
       - name: activity_type
         description: Activity type code. Source column is `act_type`.
       - name: begin_time
@@ -170,7 +174,7 @@ models:
       - name: customer
         description: Customer being visited (if applicable).
       - name: keyword
-        description: Search keyword.
+        description: "{{ doc('mysql__keyword') }}"
       - name: location
         description: GPS coordinates ("lat,lon" or null).
       - name: layout
@@ -180,11 +184,11 @@ models:
       - name: visits_num
         description: Visit sequence number (bigint).
       - name: sku
-        description: Product SKU.
+        description: "{{ doc('mysql__sku') }}"
       - name: title
         description: Activity label.
       - name: qty
-        description: Quantity (string; cast in int layer if numeric operations needed).
+        description: "{{ doc('mysql__qty') }}"
       - name: response
         description: API response payload.
       - name: battery
@@ -198,11 +202,11 @@ models:
       - name: device_space
         description: Available device storage.
       - name: timezone
-        description: Device UTC offset string.
+        description: "{{ doc('mysql__timezone') }}"
       - name: method
-        description: Interaction method code.
+        description: "{{ doc('mysql__method') }}"
       - name: updated_at
-        description: Record last update time. Latest wins on dedup.
+        description: "{{ doc('mysql__updated_at_dedup') }}"
 
   - name: stg_mysql__system_event_log
     description: >
@@ -328,6 +332,6 @@ models:
       - name: meta_description
         description: SEO meta description.
       - name: created_at
-        description: Record creation time. Source column is `create_at` (source typo).
+        description: "{{ doc('mysql__created_at_typo') }}"
       - name: updated_at
         description: Record last update time.

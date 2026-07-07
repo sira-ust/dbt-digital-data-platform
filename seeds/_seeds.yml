@@ -83,3 +83,40 @@ seeds:
       - name: category_name
         tests:
           - not_null
+
+  - name: seed_jdawms_data_dictionary
+    description: >
+      JDA/Blue Yonder WMS data dictionary (source: wms datadictory_Dbt_2026.xlsx,
+      tab "wms datadictory_Dbt", received 2026-07-07). Grain — one row per
+      (table_name, column_name) across the 16 replicated jdawms tables.
+      column_comment is the SME-verified business definition; lngdsc is the WMS
+      display label; comtyp/length are the WMS-side types (see
+      seed_jdawms_comtyp), not the Databricks landed types. Source of truth for
+      the descriptions in models/staging/jdawms/_jdawms__sources.yml and
+      models/docs/_jdawms_glossary.md — re-run the glossary generator when this
+      seed changes. 24 rows have an empty column_comment (fall back to lngdsc).
+    config:
+      tags: ["jdawms", "reference"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [table_name, column_name]
+    columns:
+      - name: table_name
+        tests: [not_null]
+      - name: column_name
+        tests: [not_null]
+
+  - name: seed_jdawms_comtyp
+    description: >
+      Legend for the comtyp data-type codes used in seed_jdawms_data_dictionary
+      (source: wms datadictory_Dbt_2026.xlsx, tab "comtyp definition").
+      One row per comtyp code with the MOCA type, SQL Server type, meaning of
+      the length column, and query-tuning notes. NOTE: the source tab defines
+      S, D, I only — code F (float, used by *_qty/*_wgt columns in the
+      dictionary) is not documented in the source workbook.
+    config:
+      tags: ["jdawms", "reference"]
+    columns:
+      - name: comtyp
+        tests: [unique, not_null]

@@ -1,6 +1,28 @@
+-- incremental_strategy switches by engine: Databricks can't do `delete+insert`
+-- and DuckDB (dev) can't do `merge`. Both do the same thing — update the row if
+-- the unique_key already exists, insert it if not — so this one line keeps the
+-- model working on both targets.
+{{ config(
+    materialized='incremental',
+    unique_key='session_id',
+    incremental_strategy=('merge' if target.type == 'databricks' else 'delete+insert'),
+    on_schema_change='append_new_columns'
+) }}
+
+-- One row per customer app session. Incremental: reprocess recent sessions on a
+-- trailing window (events can trickle in after a session starts) and merge on
+-- session_id so a re-aggregated session cleanly replaces its prior row.
+
 with sessions as (
 
     select * from {{ ref('int_customer_sessions') }}
+
+    {% if is_incremental() %}
+    where session_start >= (
+        select {{ dbt.dateadd('day', -3, "coalesce(max(session_start), cast('1900-01-01' as timestamp))") }}
+        from {{ this }}
+    )
+    {% endif %}
 
 ),
 

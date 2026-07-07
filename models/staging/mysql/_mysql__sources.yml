@@ -1,11 +1,15 @@
 version: 2
 
+# Column descriptions: inline if unique to this column; shared text (used by 2+
+# columns) lives in models/docs/_mysql_glossary.md as a {% docs %} block and is
+# referenced via {{ doc('mysql_src__<name>') }}. Edit shared defs there.
+
 sources:
   - name: mysql
     description: >
       UST website MySQL database. All tables are READ-ONLY for dbt. The source
       location is target-dependent:
-        DuckDB (dev):     external_location reads the API JSON in data/raw_api/;
+        DuckDB (dev):     external_location reads the API JSON in data/mock/mysql/raw_api/;
                           schema/identifier are symbolic. admin_users and category
                           have no sample, so their staging models return empty.
         Databricks (POC): reads the real MySQL tables mirrored into the `mysql`
@@ -28,7 +32,7 @@ sources:
         identifier: "{{ 'ust_tracking_report' if target.type == 'databricks' else 'temp_tracking_report' }}"
         description: One row per customer app session. Source for /customer/tracking/ sessions.
         config:
-          external_location: "read_json_auto('data/raw_api/customer/tracking/customer_reports.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/customer/tracking/customer_reports.json')"
           loaded_at_field: updated_at
           freshness:
             warn_after: {count: 24, period: hour}
@@ -36,13 +40,13 @@ sources:
           - name: entity_id
             description: Primary key
           - name: customer_id
-            description: Customer identifier
+            description: "{{ doc('mysql_src__customer_id') }}"
           - name: customer_name
             description: Customer name
           - name: session_id
-            description: Session identifier (currently unpopulated)
+            description: "{{ doc('mysql_src__session_id_unpopulated') }}"
           - name: model
-            description: Device model
+            description: "{{ doc('mysql_src__device_model') }}"
           - name: version
             description: Application version string
           - name: start_time
@@ -52,22 +56,22 @@ sources:
           - name: total_event
             description: Number of events in the session
           - name: create_at
-            description: Record creation time (note — API/DB typo, missing 'd')
+            description: "{{ doc('mysql_src__created_at_typo') }}"
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"
 
       - name: tracking_report_event
         identifier: "{{ 'ust_tracking_report_event' if target.type == 'databricks' else 'temp_tracking_report_event' }}"
         description: One row per customer action within a session. Child of tracking_report.
         config:
-          external_location: "read_json_auto('data/raw_api/customer/tracking/customer_events.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/customer/tracking/customer_events.json')"
         columns:
           - name: entity_id
             description: Primary key
           - name: parent_id
             description: FK -> tracking_report.entity_id
           - name: customer_id
-            description: Customer identifier
+            description: "{{ doc('mysql_src__customer_id') }}"
           - name: customer_name
             description: Customer name (usually empty at event level)
           - name: type
@@ -81,13 +85,13 @@ sources:
           - name: item_no
             description: Item number
           - name: sku
-            description: Product SKU
+            description: "{{ doc('mysql_src__sku') }}"
           - name: qty
             description: Quantity
           - name: quote_id
             description: Quote identifier
           - name: keyword
-            description: Search keyword
+            description: "{{ doc('mysql_src__keyword') }}"
           - name: page
             description: Current page name
           - name: event_type
@@ -101,25 +105,25 @@ sources:
           - name: second
             description: Duration in seconds (stored as string)
           - name: method
-            description: Interaction method code
+            description: "{{ doc('mysql_src__method') }}"
           - name: categories_name
             description: Product category name
           - name: icon
             description: Icon identifier
           - name: timezone
-            description: Device UTC offset string
+            description: "{{ doc('mysql_src__timezone') }}"
           - name: version
             description: App version (usually empty at event level)
           - name: create_at
-            description: Record creation time (note — API/DB typo, missing 'd')
+            description: "{{ doc('mysql_src__created_at_typo') }}"
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"
 
       - name: user_activity_report
         identifier: "{{ 'ust_user_activity_report' if target.type == 'databricks' else 'temp_user_activity_report' }}"
         description: One row per salesperson login session. Source for /user/activity/ sessions.
         config:
-          external_location: "read_json_auto('data/raw_api/user/activity/sales_reports.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/user/activity/sales_reports.json')"
           loaded_at_field: updated_at
           freshness:
             warn_after: {count: 24, period: hour}
@@ -131,7 +135,7 @@ sources:
           - name: user_name
             description: Salesperson display name with code prefix
           - name: session_id
-            description: Session identifier (currently unpopulated)
+            description: "{{ doc('mysql_src__session_id_unpopulated') }}"
           - name: begin_time
             description: Login / session start time
           - name: end_time
@@ -141,7 +145,7 @@ sources:
           - name: voluntarily_exit
             description: Whether the user exited normally (0/1)
           - name: model
-            description: Device model
+            description: "{{ doc('mysql_src__device_model') }}"
           - name: location
             description: GPS coordinates at session start ("lat,lon" or null)
           - name: sales_name
@@ -151,13 +155,13 @@ sources:
           - name: created_at
             description: Record creation time
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"
 
       - name: user_activity_report_event
         identifier: "{{ 'ust_user_activity_report_event' if target.type == 'databricks' else 'temp_user_activity_report_event' }}"
         description: One row per salesperson activity within a session. Child of user_activity_report.
         config:
-          external_location: "read_json_auto('data/raw_api/user/activity/sales_events.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/user/activity/sales_events.json')"
         columns:
           - name: entity_id
             description: Primary key
@@ -174,7 +178,7 @@ sources:
           - name: customer
             description: Customer being visited (if applicable)
           - name: keyword
-            description: Search keyword
+            description: "{{ doc('mysql_src__keyword') }}"
           - name: location
             description: GPS coordinates ("lat,lon" or empty)
           - name: layout
@@ -184,7 +188,7 @@ sources:
           - name: visits_num
             description: Visit sequence number
           - name: sku
-            description: Product SKU
+            description: "{{ doc('mysql_src__sku') }}"
           - name: title
             description: Activity label
           - name: qty
@@ -202,11 +206,11 @@ sources:
           - name: device_space
             description: Available device storage
           - name: timezone
-            description: Device UTC offset string
+            description: "{{ doc('mysql_src__timezone') }}"
           - name: method
-            description: Interaction method code
+            description: "{{ doc('mysql_src__method') }}"
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"
 
       - name: system_event_log
         identifier: "{{ 'ust_system_event_log' if target.type == 'databricks' else 'temp_system_events' }}"
@@ -216,7 +220,7 @@ sources:
           and the staging model unnests it. Databricks reads the pre-flattened
           temp_system_events table (one row per event); staging skips the unnest.
         config:
-          external_location: "read_json_auto('data/raw_api/system/event/log/raw_log.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/system/event/log/raw_log.json')"
           loaded_at_field: created_at
           freshness:
             warn_after: {count: 24, period: hour}
@@ -258,9 +262,12 @@ sources:
         identifier: "{{ 'ust_admin_users' if target.type == 'databricks' else 'temp_admin_users' }}"
         description: >
           Administrator and salesperson master data. Links to other tables via
-          username or salesperson_code. No local JSON sample — the staging model
-          returns an empty schema-correct result on DuckDB and reads the real
-          table on the databricks target.
+          username or salesperson_code. No local JSON sample — on DuckDB reads
+          mock parquet (data/mock/mysql/, generated by
+          scripts/generate_jdawms_mock.py with usernames matching the local
+          activity sample); reads the real table on the databricks target.
+        config:
+          external_location: "read_parquet('data/mock/mysql/ust_admin_users.parquet')"
         columns:
           - name: user_id
             description: Primary key
@@ -298,9 +305,12 @@ sources:
       - name: category
         identifier: "{{ 'ust_category' if target.type == 'databricks' else 'temp_category' }}"
         description: >
-          Product category master data. No local JSON sample — the staging model
-          returns an empty schema-correct result on DuckDB and reads the real
-          table on the databricks target.
+          Product category master data. No local JSON sample — on DuckDB reads
+          mock parquet (data/mock/mysql/, generated by
+          scripts/generate_jdawms_mock.py from seed_categories so ids/names
+          line up); reads the real table on the databricks target.
+        config:
+          external_location: "read_parquet('data/mock/mysql/ust_category.parquet')"
         columns:
           - name: category_id
             description: Primary key
@@ -325,4 +335,4 @@ sources:
           - name: create_at
             description: Record creation time (note — DB typo, missing 'd')
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"

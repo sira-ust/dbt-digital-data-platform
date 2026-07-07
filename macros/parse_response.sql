@@ -34,13 +34,3 @@
 {% macro default__response_part(column, idx) -%}
     nullif(trim(split_part({{ column }}, ',', {{ idx }})), '')
 {%- endmacro %}
-
-
-{# duration — 'Time:42' -> 42 (seconds, integer; null if absent) #}
-{% macro parse_duration_seconds(column) -%}
-    {{ return(adapter.dispatch('parse_duration_seconds', 'ust_digital_platform')(column)) }}
-{%- endmacro %}
-
-{% macro default__parse_duration_seconds(column) -%}
-    try_cast(regexp_extract({{ column }}, 'Time:([0-9]+)', 1) as integer)
-{%- endmacro %}
