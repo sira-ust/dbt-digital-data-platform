@@ -1,5 +1,9 @@
 version: 2
 
+# Column descriptions: inline if unique to this column; shared text (used by 2+
+# columns) lives in models/docs/_mysql_glossary.md as a {% docs %} block and is
+# referenced via {{ doc('mysql_src__<name>') }}. Edit shared defs there.
+
 sources:
   - name: mysql
     description: >
@@ -36,13 +40,13 @@ sources:
           - name: entity_id
             description: Primary key
           - name: customer_id
-            description: Customer identifier
+            description: "{{ doc('mysql_src__customer_id') }}"
           - name: customer_name
             description: Customer name
           - name: session_id
-            description: Session identifier (currently unpopulated)
+            description: "{{ doc('mysql_src__session_id_unpopulated') }}"
           - name: model
-            description: Device model
+            description: "{{ doc('mysql_src__device_model') }}"
           - name: version
             description: Application version string
           - name: start_time
@@ -52,9 +56,9 @@ sources:
           - name: total_event
             description: Number of events in the session
           - name: create_at
-            description: Record creation time (note — API/DB typo, missing 'd')
+            description: "{{ doc('mysql_src__created_at_typo') }}"
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"
 
       - name: tracking_report_event
         identifier: "{{ 'ust_tracking_report_event' if target.type == 'databricks' else 'temp_tracking_report_event' }}"
@@ -67,7 +71,7 @@ sources:
           - name: parent_id
             description: FK -> tracking_report.entity_id
           - name: customer_id
-            description: Customer identifier
+            description: "{{ doc('mysql_src__customer_id') }}"
           - name: customer_name
             description: Customer name (usually empty at event level)
           - name: type
@@ -81,13 +85,13 @@ sources:
           - name: item_no
             description: Item number
           - name: sku
-            description: Product SKU
+            description: "{{ doc('mysql_src__sku') }}"
           - name: qty
             description: Quantity
           - name: quote_id
             description: Quote identifier
           - name: keyword
-            description: Search keyword
+            description: "{{ doc('mysql_src__keyword') }}"
           - name: page
             description: Current page name
           - name: event_type
@@ -101,19 +105,19 @@ sources:
           - name: second
             description: Duration in seconds (stored as string)
           - name: method
-            description: Interaction method code
+            description: "{{ doc('mysql_src__method') }}"
           - name: categories_name
             description: Product category name
           - name: icon
             description: Icon identifier
           - name: timezone
-            description: Device UTC offset string
+            description: "{{ doc('mysql_src__timezone') }}"
           - name: version
             description: App version (usually empty at event level)
           - name: create_at
-            description: Record creation time (note — API/DB typo, missing 'd')
+            description: "{{ doc('mysql_src__created_at_typo') }}"
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"
 
       - name: user_activity_report
         identifier: "{{ 'ust_user_activity_report' if target.type == 'databricks' else 'temp_user_activity_report' }}"
@@ -131,7 +135,7 @@ sources:
           - name: user_name
             description: Salesperson display name with code prefix
           - name: session_id
-            description: Session identifier (currently unpopulated)
+            description: "{{ doc('mysql_src__session_id_unpopulated') }}"
           - name: begin_time
             description: Login / session start time
           - name: end_time
@@ -141,7 +145,7 @@ sources:
           - name: voluntarily_exit
             description: Whether the user exited normally (0/1)
           - name: model
-            description: Device model
+            description: "{{ doc('mysql_src__device_model') }}"
           - name: location
             description: GPS coordinates at session start ("lat,lon" or null)
           - name: sales_name
@@ -151,7 +155,7 @@ sources:
           - name: created_at
             description: Record creation time
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"
 
       - name: user_activity_report_event
         identifier: "{{ 'ust_user_activity_report_event' if target.type == 'databricks' else 'temp_user_activity_report_event' }}"
@@ -174,7 +178,7 @@ sources:
           - name: customer
             description: Customer being visited (if applicable)
           - name: keyword
-            description: Search keyword
+            description: "{{ doc('mysql_src__keyword') }}"
           - name: location
             description: GPS coordinates ("lat,lon" or empty)
           - name: layout
@@ -184,7 +188,7 @@ sources:
           - name: visits_num
             description: Visit sequence number
           - name: sku
-            description: Product SKU
+            description: "{{ doc('mysql_src__sku') }}"
           - name: title
             description: Activity label
           - name: qty
@@ -202,11 +206,11 @@ sources:
           - name: device_space
             description: Available device storage
           - name: timezone
-            description: Device UTC offset string
+            description: "{{ doc('mysql_src__timezone') }}"
           - name: method
-            description: Interaction method code
+            description: "{{ doc('mysql_src__method') }}"
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"
 
       - name: system_event_log
         identifier: "{{ 'ust_system_event_log' if target.type == 'databricks' else 'temp_system_events' }}"
@@ -325,4 +329,4 @@ sources:
           - name: create_at
             description: Record creation time (note — DB typo, missing 'd')
           - name: updated_at
-            description: Record last update time
+            description: "{{ doc('mysql_src__updated_at') }}"

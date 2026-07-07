@@ -1,5 +1,9 @@
 version: 2
 
+# Column descriptions: inline if unique to this column; shared text (used by 2+
+# columns) lives in models/docs/_jdawms_glossary.md as a {% docs %} block and is
+# referenced here via {{ doc('jdawms__<column>') }}. Edit shared defs there.
+
 sources:
   - name: jdawms
     description: >
@@ -32,11 +36,11 @@ sources:
           - name: actcod
             description: "Activity code — specific activity within the operation."
           - name: lodnum
-            description: "License-plate / load (LPN) number."
+            description: "{{ doc('jdawms__lodnum') }}"
           - name: subnum
-            description: "Sub (carton/case) number nested within a load."
+            description: "{{ doc('jdawms__subnum') }}"
           - name: dtlnum
-            description: "Inventory detail number (innermost unit)."
+            description: "{{ doc('jdawms__dtlnum') }}"
           - name: to_lodnum
             description: "Code/identifier: to_lodnum."
           - name: to_subnum
@@ -44,75 +48,75 @@ sources:
           - name: to_dtlnum
             description: "Code/identifier: to_dtlnum."
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: orgcod
-            description: "Country/origin code of the goods."
+            description: "{{ doc('jdawms__orgcod') }}"
           - name: revlvl
-            description: "Revision level of the part."
+            description: "{{ doc('jdawms__revlvl') }}"
           - name: lotnum
-            description: "Lot/batch number."
+            description: "{{ doc('jdawms__lotnum') }}"
           - name: sup_lotnum
-            description: "Supplier lot number."
+            description: "{{ doc('jdawms__sup_lotnum') }}"
           - name: supnum
-            description: "Supplier number."
+            description: "{{ doc('jdawms__supnum') }}"
           - name: inv_attr_str1
-            description: "User-defined inventory string attribute 1 (inv_attr_str1)."
+            description: "{{ doc('jdawms__inv_attr_str1') }}"
           - name: inv_attr_str2
-            description: "User-defined inventory string attribute 2 (inv_attr_str2)."
+            description: "{{ doc('jdawms__inv_attr_str2') }}"
           - name: inv_attr_str3
-            description: "User-defined inventory string attribute 3 (inv_attr_str3)."
+            description: "{{ doc('jdawms__inv_attr_str3') }}"
           - name: inv_attr_str4
-            description: "User-defined inventory string attribute 4 (inv_attr_str4)."
+            description: "{{ doc('jdawms__inv_attr_str4') }}"
           - name: inv_attr_str5
-            description: "User-defined inventory string attribute 5 (inv_attr_str5)."
+            description: "{{ doc('jdawms__inv_attr_str5') }}"
           - name: inv_attr_str6
-            description: "User-defined inventory string attribute 6 (inv_attr_str6)."
+            description: "{{ doc('jdawms__inv_attr_str6') }}"
           - name: inv_attr_str7
-            description: "User-defined inventory string attribute 7 (inv_attr_str7)."
+            description: "{{ doc('jdawms__inv_attr_str7') }}"
           - name: inv_attr_str8
-            description: "User-defined inventory string attribute 8 (inv_attr_str8)."
+            description: "{{ doc('jdawms__inv_attr_str8') }}"
           - name: inv_attr_str9
-            description: "User-defined inventory string attribute 9 (inv_attr_str9)."
+            description: "{{ doc('jdawms__inv_attr_str9') }}"
           - name: inv_attr_str10
-            description: "User-defined inventory string attribute 0 (inv_attr_str10)."
+            description: "{{ doc('jdawms__inv_attr_str10') }}"
           - name: inv_attr_str11
-            description: "User-defined inventory string attribute 1 (inv_attr_str11)."
+            description: "{{ doc('jdawms__inv_attr_str11') }}"
           - name: inv_attr_str12
-            description: "User-defined inventory string attribute 2 (inv_attr_str12)."
+            description: "{{ doc('jdawms__inv_attr_str12') }}"
           - name: inv_attr_str13
-            description: "User-defined inventory string attribute 3 (inv_attr_str13)."
+            description: "{{ doc('jdawms__inv_attr_str13') }}"
           - name: inv_attr_str14
-            description: "User-defined inventory string attribute 4 (inv_attr_str14)."
+            description: "{{ doc('jdawms__inv_attr_str14') }}"
           - name: inv_attr_str15
-            description: "User-defined inventory string attribute 5 (inv_attr_str15)."
+            description: "{{ doc('jdawms__inv_attr_str15') }}"
           - name: inv_attr_str16
-            description: "User-defined inventory string attribute 6 (inv_attr_str16)."
+            description: "{{ doc('jdawms__inv_attr_str16') }}"
           - name: inv_attr_str17
-            description: "User-defined inventory string attribute 7 (inv_attr_str17)."
+            description: "{{ doc('jdawms__inv_attr_str17') }}"
           - name: inv_attr_str18
-            description: "User-defined inventory string attribute 8 (inv_attr_str18)."
+            description: "{{ doc('jdawms__inv_attr_str18') }}"
           - name: inv_attr_int1
-            description: "User-defined inventory attribute: inv_attr_int1."
+            description: "{{ doc('jdawms__inv_attr_int1') }}"
           - name: inv_attr_int2
-            description: "User-defined inventory attribute: inv_attr_int2."
+            description: "{{ doc('jdawms__inv_attr_int2') }}"
           - name: inv_attr_int3
-            description: "User-defined inventory attribute: inv_attr_int3."
+            description: "{{ doc('jdawms__inv_attr_int3') }}"
           - name: inv_attr_int4
-            description: "User-defined inventory attribute: inv_attr_int4."
+            description: "{{ doc('jdawms__inv_attr_int4') }}"
           - name: inv_attr_int5
-            description: "User-defined inventory attribute: inv_attr_int5."
+            description: "{{ doc('jdawms__inv_attr_int5') }}"
           - name: inv_attr_flt1
-            description: "User-defined inventory attribute: inv_attr_flt1."
+            description: "{{ doc('jdawms__inv_attr_flt1') }}"
           - name: inv_attr_flt2
-            description: "User-defined inventory attribute: inv_attr_flt2."
+            description: "{{ doc('jdawms__inv_attr_flt2') }}"
           - name: inv_attr_flt3
-            description: "User-defined inventory attribute: inv_attr_flt3."
+            description: "{{ doc('jdawms__inv_attr_flt3') }}"
           - name: inv_attr_dte1
-            description: "User-defined inventory attribute: inv_attr_dte1."
+            description: "{{ doc('jdawms__inv_attr_dte1') }}"
           - name: inv_attr_dte2
-            description: "User-defined inventory attribute: inv_attr_dte2."
+            description: "{{ doc('jdawms__inv_attr_dte2') }}"
           - name: movref
             description: "Movement reference linking related transactions."
           - name: reacod
@@ -120,7 +124,7 @@ sources:
           - name: trnqty
             description: "Transaction quantity (signed by movement direction)."
           - name: catch_qty
-            description: "Catch weight/quantity (variable-weight items)."
+            description: "{{ doc('jdawms__catch_qty') }}"
           - name: traknm
             description: "WMS traknm attribute."
           - name: catch_unttyp
@@ -146,13 +150,13 @@ sources:
           - name: trct_num
             description: "Code/identifier: trct_num."
           - name: carcod
-            description: "Carrier code."
+            description: "{{ doc('jdawms__carcod') }}"
           - name: ship_id
-            description: "Shipment identifier."
+            description: "{{ doc('jdawms__ship_id') }}"
           - name: client_id
-            description: "Client/owner id for the record (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__client_id') }}"
           - name: ordnum
-            description: "Order number."
+            description: "{{ doc('jdawms__ordnum') }}"
           - name: trndtl_id
             description: "Code/identifier: trndtl_id."
           - name: trndtl_table
@@ -164,29 +168,29 @@ sources:
           - name: usr_id
             description: "User who performed the transaction."
           - name: devcod
-            description: "Device code that performed/recorded the activity."
+            description: "{{ doc('jdawms__devcod') }}"
           - name: arcdte
-            description: "Date/time field: arcdte."
+            description: "{{ doc('jdawms__arcdte') }}"
           - name: arc_src
-            description: "WMS arc_src attribute."
+            description: "{{ doc('jdawms__arc_src') }}"
           - name: cmnt
             description: "WMS cmnt attribute."
           - name: asset_typ
-            description: "Material-handling asset type (e.g. pallet, tote)."
+            description: "{{ doc('jdawms__asset_typ') }}"
           - name: asset_id
             description: "Code/identifier: asset_id."
           - name: asset_stat
             description: "WMS asset_stat attribute."
           - name: load_attr1_flg
-            description: "Flag (0/1): load_attr1_flg."
+            description: "{{ doc('jdawms__load_attr1_flg') }}"
           - name: load_attr2_flg
-            description: "Flag (0/1): load_attr2_flg."
+            description: "{{ doc('jdawms__load_attr2_flg') }}"
           - name: load_attr3_flg
-            description: "Flag (0/1): load_attr3_flg."
+            description: "{{ doc('jdawms__load_attr3_flg') }}"
           - name: load_attr4_flg
-            description: "Flag (0/1): load_attr4_flg."
+            description: "{{ doc('jdawms__load_attr4_flg') }}"
           - name: load_attr5_flg
-            description: "Flag (0/1): load_attr5_flg."
+            description: "{{ doc('jdawms__load_attr5_flg') }}"
           - name: var_nam
             description: "WMS var_nam attribute."
           - name: fr_value
@@ -194,11 +198,11 @@ sources:
           - name: to_value
             description: "WMS to_value attribute."
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: uomcod
-            description: "Unit-of-measure code."
+            description: "{{ doc('jdawms__uomcod') }}"
           - name: ftpcod
-            description: "Fetch/pack-type code — packaging configuration key for the part."
+            description: "{{ doc('jdawms__ftpcod') }}"
           - name: distro_excp_id
             description: "Code/identifier: distro_excp_id."
           - name: excp_code
@@ -208,15 +212,15 @@ sources:
           - name: rptqty
             description: "Quantity field: rptqty."
           - name: u_version
-            description: "Optimistic-lock version counter maintained by the WMS."
+            description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: to_trct_num
             description: "Code/identifier: to_trct_num."
           - name: to_trlr_num
@@ -224,15 +228,15 @@ sources:
           - name: to_carcod
             description: "Code/identifier: to_carcod."
           - name: srvlvl
-            description: "Carrier service level."
+            description: "{{ doc('jdawms__srvlvl') }}"
           - name: to_srvlvl
             description: "WMS to_srvlvl attribute."
           - name: rowid
-            description: "Source database internal row identifier."
+            description: "{{ doc('jdawms__rowid') }}"
           - name: _rescued_data
-            description: "Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null."
+            description: "{{ doc('jdawms___rescued_data') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: inv_snap
         description: "Inventory snapshot per part — point-in-time on-hand/shippable/ordered quantity rollup generated by a snapshot job."
         config:
@@ -243,9 +247,9 @@ sources:
           - name: inv_snap_id
             description: "Primary key — snapshot row id."
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: gendte
             description: "Generation timestamp of the snapshot/record."
           - name: rcvqty
@@ -271,29 +275,29 @@ sources:
           - name: pnd_rcvqty
             description: "Quantity field: pnd_rcvqty."
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: snap_gen_num
             description: "Snapshot generation number."
           - name: moddte
-            description: "Last-modified timestamp in the source WMS."
+            description: "{{ doc('jdawms__moddte') }}"
           - name: mod_usr_id
-            description: "User/process that last modified the row in the WMS."
+            description: "{{ doc('jdawms__mod_usr_id') }}"
           - name: u_version
-            description: "Optimistic-lock version counter maintained by the WMS."
+            description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: rowid
-            description: "Source database internal row identifier."
+            description: "{{ doc('jdawms__rowid') }}"
           - name: _rescued_data
-            description: "Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null."
+            description: "{{ doc('jdawms___rescued_data') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: invdtl
         description: "Inventory detail — stock at the innermost unit (detail) level: quantity, status, dates, and its parent sub/load."
         config:
@@ -302,57 +306,57 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: dtlnum
-            description: "Inventory detail number (innermost unit)."
+            description: "{{ doc('jdawms__dtlnum') }}"
           - name: subnum
-            description: "Sub (carton/case) number nested within a load."
+            description: "{{ doc('jdawms__subnum') }}"
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: invsts
-            description: "Inventory status code (e.g. available, hold, damaged)."
+            description: "{{ doc('jdawms__invsts') }}"
           - name: fifdte
             description: "FIFO date used for stock rotation."
           - name: expire_dte
-            description: "Expiration date of the stock."
+            description: "{{ doc('jdawms__expire_dte') }}"
           - name: untqty
-            description: "Quantity in stock/base units."
+            description: "{{ doc('jdawms__untqty') }}"
           - name: untcas
-            description: "Units per case."
+            description: "{{ doc('jdawms__untcas') }}"
           - name: untpak
-            description: "Units per pack/inner."
+            description: "{{ doc('jdawms__untpak') }}"
           - name: ftpcod
-            description: "Fetch/pack-type code — packaging configuration key for the part."
+            description: "{{ doc('jdawms__ftpcod') }}"
           - name: rcvkey
             description: "WMS rcvkey attribute."
           - name: ship_line_id
-            description: "Shipment line identifier."
+            description: "{{ doc('jdawms__ship_line_id') }}"
           - name: wrkref
-            description: "Pick-work reference (task) identifier."
+            description: "{{ doc('jdawms__wrkref') }}"
           - name: wrkref_dtl
-            description: "Pick-work detail (task line) identifier."
+            description: "{{ doc('jdawms__wrkref_dtl') }}"
           - name: adddte
-            description: "Timestamp the record was created/added."
+            description: "{{ doc('jdawms__adddte') }}"
           - name: rcvdte
             description: "Received date of the detail."
           - name: lstmov
-            description: "Timestamp of the last movement of this unit."
+            description: "{{ doc('jdawms__lstmov') }}"
           - name: lstdte
-            description: "Timestamp of the last activity against this record."
+            description: "{{ doc('jdawms__lstdte') }}"
           - name: lstcod
-            description: "Code describing the last activity/movement type."
+            description: "{{ doc('jdawms__lstcod') }}"
           - name: lst_usr_id
-            description: "User associated with the last activity."
+            description: "{{ doc('jdawms__lst_usr_id') }}"
           - name: alcflg
             description: "Allocated flag (1 = allocated to demand)."
           - name: catch_qty
-            description: "Catch weight/quantity (variable-weight items)."
+            description: "{{ doc('jdawms__catch_qty') }}"
           - name: lst_mov_zone_id
             description: "Code/identifier: lst_mov_zone_id."
           - name: hld_flg
             description: "Hold flag (1 = on hold)."
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: invlod
         description: "Inventory load (LPN/pallet) — the top-level license-plate unit stored in a location."
         config:
@@ -361,51 +365,51 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: lodnum
-            description: "License-plate / load (LPN) number."
+            description: "{{ doc('jdawms__lodnum') }}"
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: stoloc
-            description: "Storage location (slot) code."
+            description: "{{ doc('jdawms__stoloc') }}"
           - name: lodwgt
             description: "Weight field: lodwgt."
           - name: prmflg
-            description: "Flag (0/1): prmflg."
+            description: "{{ doc('jdawms__prmflg') }}"
           - name: unkflg
             description: "Flag (0/1): unkflg."
           - name: mvlflg
             description: "Flag (0/1): mvlflg."
           - name: adddte
-            description: "Timestamp the record was created/added."
+            description: "{{ doc('jdawms__adddte') }}"
           - name: lstmov
-            description: "Timestamp of the last movement of this unit."
+            description: "{{ doc('jdawms__lstmov') }}"
           - name: lstdte
-            description: "Timestamp of the last activity against this record."
+            description: "{{ doc('jdawms__lstdte') }}"
           - name: lstcod
-            description: "Code describing the last activity/movement type."
+            description: "{{ doc('jdawms__lstcod') }}"
           - name: lst_usr_id
-            description: "User associated with the last activity."
+            description: "{{ doc('jdawms__lst_usr_id') }}"
           - name: loducc
-            description: "WMS loducc attribute."
+            description: "{{ doc('jdawms__loducc') }}"
           - name: uccdte
-            description: "Date/time field: uccdte."
+            description: "{{ doc('jdawms__uccdte') }}"
           - name: palpos
             description: "WMS palpos attribute."
           - name: asset_typ
-            description: "Material-handling asset type (e.g. pallet, tote)."
+            description: "{{ doc('jdawms__asset_typ') }}"
           - name: avg_unt_catch_qty
             description: "Quantity field: avg_unt_catch_qty."
           - name: u_version
-            description: "Optimistic-lock version counter maintained by the WMS."
+            description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: lodtag
-            description: "WMS lodtag attribute."
+            description: "{{ doc('jdawms__lodtag') }}"
           - name: lod_tagsts
             description: "WMS lod_tagsts attribute."
           - name: lodhgt
@@ -415,21 +419,21 @@ sources:
           - name: distro_palopn_flg
             description: "Flag (0/1): distro_palopn_flg."
           - name: load_attr1_flg
-            description: "Flag (0/1): load_attr1_flg."
+            description: "{{ doc('jdawms__load_attr1_flg') }}"
           - name: load_attr2_flg
-            description: "Flag (0/1): load_attr2_flg."
+            description: "{{ doc('jdawms__load_attr2_flg') }}"
           - name: load_attr3_flg
-            description: "Flag (0/1): load_attr3_flg."
+            description: "{{ doc('jdawms__load_attr3_flg') }}"
           - name: load_attr4_flg
-            description: "Flag (0/1): load_attr4_flg."
+            description: "{{ doc('jdawms__load_attr4_flg') }}"
           - name: load_attr5_flg
-            description: "Flag (0/1): load_attr5_flg."
+            description: "{{ doc('jdawms__load_attr5_flg') }}"
           - name: no_loc_putaway
             description: "WMS no_loc_putaway attribute."
           - name: completed_receiving_date
             description: "Date/time field: completed_receiving_date."
           - name: est_time
-            description: "Estimated task time (system-computed)."
+            description: "{{ doc('jdawms__est_time') }}"
           - name: lodlen
             description: "WMS lodlen attribute."
           - name: lodwdt
@@ -439,7 +443,7 @@ sources:
           - name: est_lodwgt
             description: "Weight field: est_lodwgt."
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: invsub
         description: "Inventory sub (carton/case) — the intermediate unit nested inside a load and containing details."
         config:
@@ -448,13 +452,13 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: subnum
-            description: "Sub (carton/case) number nested within a load."
+            description: "{{ doc('jdawms__subnum') }}"
           - name: lodnum
-            description: "License-plate / load (LPN) number."
+            description: "{{ doc('jdawms__lodnum') }}"
           - name: subwgt
             description: "Weight field: subwgt."
           - name: prmflg
-            description: "Flag (0/1): prmflg."
+            description: "{{ doc('jdawms__prmflg') }}"
           - name: phyflg
             description: "Flag (0/1): phyflg."
           - name: mvsflg
@@ -466,43 +470,43 @@ sources:
           - name: distro_ctnopn_flg
             description: "Flag (0/1): distro_ctnopn_flg."
           - name: wrkref
-            description: "Pick-work reference (task) identifier."
+            description: "{{ doc('jdawms__wrkref') }}"
           - name: tagdev
             description: "WMS tagdev attribute."
           - name: adddte
-            description: "Timestamp the record was created/added."
+            description: "{{ doc('jdawms__adddte') }}"
           - name: lstmov
-            description: "Timestamp of the last movement of this unit."
+            description: "{{ doc('jdawms__lstmov') }}"
           - name: lstdte
-            description: "Timestamp of the last activity against this record."
+            description: "{{ doc('jdawms__lstdte') }}"
           - name: lstcod
-            description: "Code describing the last activity/movement type."
+            description: "{{ doc('jdawms__lstcod') }}"
           - name: lst_usr_id
-            description: "User associated with the last activity."
+            description: "{{ doc('jdawms__lst_usr_id') }}"
           - name: subucc
-            description: "WMS subucc attribute."
+            description: "{{ doc('jdawms__subucc') }}"
           - name: uccdte
-            description: "Date/time field: uccdte."
+            description: "{{ doc('jdawms__uccdte') }}"
           - name: subtag
-            description: "WMS subtag attribute."
+            description: "{{ doc('jdawms__subtag') }}"
           - name: sub_tagsts
             description: "WMS sub_tagsts attribute."
           - name: asset_typ
-            description: "Material-handling asset type (e.g. pallet, tote)."
+            description: "{{ doc('jdawms__asset_typ') }}"
           - name: est_subwgt
             description: "Weight field: est_subwgt."
           - name: u_version
-            description: "Optimistic-lock version counter maintained by the WMS."
+            description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: invsum
         description: "Inventory summary — aggregated on-hand quantity per storage location, part, and status."
         config:
@@ -511,25 +515,25 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: stoloc
-            description: "Storage location (slot) code."
+            description: "{{ doc('jdawms__stoloc') }}"
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: arecod
-            description: "Area code — logical warehouse area/zone the location belongs to."
+            description: "{{ doc('jdawms__arecod') }}"
           - name: invsts
-            description: "Inventory status code (e.g. available, hold, damaged)."
+            description: "{{ doc('jdawms__invsts') }}"
           - name: untpak
-            description: "Units per pack/inner."
+            description: "{{ doc('jdawms__untpak') }}"
           - name: untcas
-            description: "Units per case."
+            description: "{{ doc('jdawms__untcas') }}"
           - name: untpal
-            description: "Units per pallet."
+            description: "{{ doc('jdawms__untpal') }}"
           - name: untqty
-            description: "Quantity in stock/base units."
+            description: "{{ doc('jdawms__untqty') }}"
           - name: comqty
             description: "Committed quantity (allocated)."
           - name: pndqty
@@ -537,7 +541,7 @@ sources:
           - name: com_catch_qty
             description: "Quantity field: com_catch_qty."
           - name: catch_qty
-            description: "Catch weight/quantity (variable-weight items)."
+            description: "{{ doc('jdawms__catch_qty') }}"
           - name: olddte
             description: "Date/time field: olddte."
           - name: newdte
@@ -555,19 +559,19 @@ sources:
           - name: new_inv_attr_dte2
             description: "WMS new_inv_attr_dte2 attribute."
           - name: u_version
-            description: "Optimistic-lock version counter maintained by the WMS."
+            description: "{{ doc('jdawms__u_version') }}"
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: rowid
-            description: "Source database internal row identifier."
+            description: "{{ doc('jdawms__rowid') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: locmst
         description: "Location master — every storage location (slot) in the warehouse with its area, dimensions, and control flags."
         config:
@@ -576,17 +580,17 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: stoloc
-            description: "Storage location (slot) code."
+            description: "{{ doc('jdawms__stoloc') }}"
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: arecod
-            description: "Area code — logical warehouse area/zone the location belongs to."
+            description: "{{ doc('jdawms__arecod') }}"
           - name: loccod
             description: "Location type/usage code."
           - name: locsts
             description: "Location status code."
           - name: velzon
-            description: "Velocity zone."
+            description: "{{ doc('jdawms__velzon') }}"
           - name: aisle_id
             description: "Aisle identifier."
           - name: trvseq
@@ -642,11 +646,11 @@ sources:
           - name: numcnt
             description: "WMS numcnt attribute."
           - name: abccod
-            description: "ABC velocity classification code."
+            description: "{{ doc('jdawms__abccod') }}"
           - name: cntdte
             description: "Date/time field: cntdte."
           - name: devcod
-            description: "Device code that performed/recorded the activity."
+            description: "{{ doc('jdawms__devcod') }}"
           - name: lokcod
             description: "Code/identifier: lokcod."
           - name: locacc
@@ -658,11 +662,11 @@ sources:
           - name: voc_chkdgt_3
             description: "WMS voc_chkdgt_3 attribute."
           - name: lstdte
-            description: "Timestamp of the last activity against this record."
+            description: "{{ doc('jdawms__lstdte') }}"
           - name: lstcod
-            description: "Code describing the last activity/movement type."
+            description: "{{ doc('jdawms__lstcod') }}"
           - name: lst_usr_id
-            description: "User associated with the last activity."
+            description: "{{ doc('jdawms__lst_usr_id') }}"
           - name: slotseq
             description: "WMS slotseq attribute."
           - name: perm_asgflg
@@ -674,7 +678,7 @@ sources:
           - name: sto_zone_id
             description: "Code/identifier: sto_zone_id."
           - name: mov_zone_id
-            description: "Movement zone identifier."
+            description: "{{ doc('jdawms__mov_zone_id') }}"
           - name: wrk_zone_id
             description: "Code/identifier: wrk_zone_id."
           - name: loc_typ_id
@@ -726,19 +730,19 @@ sources:
           - name: def_maxqvl
             description: "WMS def_maxqvl attribute."
           - name: u_version
-            description: "Optimistic-lock version counter maintained by the WMS."
+            description: "{{ doc('jdawms__u_version') }}"
           - name: ateseq
             description: "WMS ateseq attribute."
           - name: atedte
             description: "Date/time field: atedte."
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: cntbck_ena_flg
             description: "Flag (0/1): cntbck_ena_flg."
           - name: prdlin
@@ -764,7 +768,7 @@ sources:
           - name: max_lvl_unit
             description: "WMS max_lvl_unit attribute."
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: pckwrk_dtl
         description: "Pick work detail — line-level pick tasks: source detail, quantities, destination, and order linkage."
         config:
@@ -773,29 +777,29 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: wrkref_dtl
-            description: "Pick-work detail (task line) identifier."
+            description: "{{ doc('jdawms__wrkref_dtl') }}"
           - name: wrkref
-            description: "Pick-work reference (task) identifier."
+            description: "{{ doc('jdawms__wrkref') }}"
           - name: cmbcod
             description: "Code/identifier: cmbcod."
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: client_id
-            description: "Client/owner id for the record (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__client_id') }}"
           - name: dstloc
             description: "Destination location for the picked stock."
           - name: dst_mov_zone_id
-            description: "Code/identifier: dst_mov_zone_id."
+            description: "{{ doc('jdawms__dst_mov_zone_id') }}"
           - name: ship_line_id
-            description: "Shipment line identifier."
+            description: "{{ doc('jdawms__ship_line_id') }}"
           - name: ship_id
-            description: "Shipment identifier."
+            description: "{{ doc('jdawms__ship_id') }}"
           - name: ordnum
-            description: "Order number."
+            description: "{{ doc('jdawms__ordnum') }}"
           - name: ordlin
-            description: "Order line number."
+            description: "{{ doc('jdawms__ordlin') }}"
           - name: ordsln
-            description: "Order sub-line number."
+            description: "{{ doc('jdawms__ordsln') }}"
           - name: stcust
             description: "WMS stcust attribute."
           - name: rtcust
@@ -803,41 +807,41 @@ sources:
           - name: concod
             description: "Code/identifier: concod."
           - name: pckqty
-            description: "Picked quantity (planned to pick)."
+            description: "{{ doc('jdawms__pckqty') }}"
           - name: pck_catch_qty
             description: "Picked catch weight/quantity."
           - name: appqty
-            description: "Applied/confirmed quantity."
+            description: "{{ doc('jdawms__appqty') }}"
           - name: app_catch_qty
-            description: "Quantity field: app_catch_qty."
+            description: "{{ doc('jdawms__app_catch_qty') }}"
           - name: lodlvl
-            description: "Load level indicator."
+            description: "{{ doc('jdawms__lodlvl') }}"
           - name: ship_ctncod
             description: "Code/identifier: ship_ctncod."
           - name: ship_ctnnum
             description: "Code/identifier: ship_ctnnum."
           - name: wkonum
-            description: "Code/identifier: wkonum."
+            description: "{{ doc('jdawms__wkonum') }}"
           - name: wkorev
-            description: "WMS wkorev attribute."
+            description: "{{ doc('jdawms__wkorev') }}"
           - name: wkolin
             description: "WMS wkolin attribute."
           - name: seqnum
             description: "Sequence number."
           - name: subnum
-            description: "Sub (carton/case) number nested within a load."
+            description: "{{ doc('jdawms__subnum') }}"
           - name: dtlnum
-            description: "Inventory detail number (innermost unit)."
+            description: "{{ doc('jdawms__dtlnum') }}"
           - name: subucc
-            description: "WMS subucc attribute."
+            description: "{{ doc('jdawms__subucc') }}"
           - name: subtag
-            description: "WMS subtag attribute."
+            description: "{{ doc('jdawms__subtag') }}"
           - name: cur_cas
             description: "WMS cur_cas attribute."
           - name: tot_cas_cnt
             description: "WMS tot_cas_cnt attribute."
           - name: prtdte
-            description: "Date/time field: prtdte."
+            description: "{{ doc('jdawms__prtdte') }}"
           - name: bto_seqnum
             description: "Code/identifier: bto_seqnum."
           - name: slot
@@ -845,9 +849,9 @@ sources:
           - name: bto_dlv_seq
             description: "WMS bto_dlv_seq attribute."
           - name: lm_assign_num
-            description: "Code/identifier: lm_assign_num."
+            description: "{{ doc('jdawms__lm_assign_num') }}"
           - name: lm_assign_seqnum
-            description: "Code/identifier: lm_assign_seqnum."
+            description: "{{ doc('jdawms__lm_assign_seqnum') }}"
           - name: pm_err_cod
             description: "Code/identifier: pm_err_cod."
           - name: pm_err_desc
@@ -857,27 +861,27 @@ sources:
           - name: res_uom
             description: "WMS res_uom attribute."
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: rowid
-            description: "Source database internal row identifier."
+            description: "{{ doc('jdawms__rowid') }}"
           - name: schbat
-            description: "Scheduled batch / wave identifier."
+            description: "{{ doc('jdawms__schbat') }}"
           - name: untcas
-            description: "Units per case."
+            description: "{{ doc('jdawms__untcas') }}"
           - name: wrktyp
-            description: "Work type code."
+            description: "{{ doc('jdawms__wrktyp') }}"
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: pckwrk_hdr
         description: "Pick work header — one row per pick task/directive with status, part, quantities, and staging attributes."
         config:
@@ -886,71 +890,71 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: wrkref
-            description: "Pick-work reference (task) identifier."
+            description: "{{ doc('jdawms__wrkref') }}"
           - name: wrktyp
-            description: "Work type code."
+            description: "{{ doc('jdawms__wrktyp') }}"
           - name: schbat
-            description: "Scheduled batch / wave identifier."
+            description: "{{ doc('jdawms__schbat') }}"
           - name: srcloc
             description: "Source location for the pick."
           - name: srcare
             description: "WMS srcare attribute."
           - name: client_id
-            description: "Client/owner id for the record (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__client_id') }}"
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: lblbat
             description: "WMS lblbat attribute."
           - name: lblseq
             description: "WMS lblseq attribute."
           - name: devcod
-            description: "Device code that performed/recorded the activity."
+            description: "{{ doc('jdawms__devcod') }}"
           - name: oprcod
             description: "Code/identifier: oprcod."
           - name: pck_mthd_id
             description: "Code/identifier: pck_mthd_id."
           - name: pckqty
-            description: "Picked quantity (planned to pick)."
+            description: "{{ doc('jdawms__pckqty') }}"
           - name: pck_catch_qty
             description: "Quantity field: pck_catch_qty."
           - name: appqty
-            description: "Applied/confirmed quantity."
+            description: "{{ doc('jdawms__appqty') }}"
           - name: app_catch_qty
-            description: "Quantity field: app_catch_qty."
+            description: "{{ doc('jdawms__app_catch_qty') }}"
           - name: pcksts
             description: "Pick status code (open, in-progress, completed)."
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: orgcod
-            description: "Country/origin code of the goods."
+            description: "{{ doc('jdawms__orgcod') }}"
           - name: revlvl
-            description: "Revision level of the part."
+            description: "{{ doc('jdawms__revlvl') }}"
           - name: lotnum
-            description: "Lot/batch number."
+            description: "{{ doc('jdawms__lotnum') }}"
           - name: asset_slot
             description: "WMS asset_slot attribute."
           - name: sup_lotnum
-            description: "Supplier lot number."
+            description: "{{ doc('jdawms__sup_lotnum') }}"
           - name: invsts
-            description: "Inventory status code (e.g. available, hold, damaged)."
+            description: "{{ doc('jdawms__invsts') }}"
           - name: invsts_prg
             description: "WMS invsts_prg attribute."
           - name: lodlvl
-            description: "Load level indicator."
+            description: "{{ doc('jdawms__lodlvl') }}"
           - name: loducc
-            description: "WMS loducc attribute."
+            description: "{{ doc('jdawms__loducc') }}"
           - name: lodtag
-            description: "WMS lodtag attribute."
+            description: "{{ doc('jdawms__lodtag') }}"
           - name: lodnum
-            description: "License-plate / load (LPN) number."
+            description: "{{ doc('jdawms__lodnum') }}"
           - name: untcas
-            description: "Units per case."
+            description: "{{ doc('jdawms__untcas') }}"
           - name: untpak
-            description: "Units per pack/inner."
+            description: "{{ doc('jdawms__untpak') }}"
           - name: ftpcod
-            description: "Fetch/pack-type code — packaging configuration key for the part."
+            description: "{{ doc('jdawms__ftpcod') }}"
           - name: ctncod
             description: "Code/identifier: ctncod."
           - name: ctnnum
@@ -974,19 +978,19 @@ sources:
           - name: prtflg
             description: "Flag (0/1): prtflg."
           - name: orgflg
-            description: "Flag (0/1): orgflg."
+            description: "{{ doc('jdawms__orgflg') }}"
           - name: revflg
-            description: "Flag (0/1): revflg."
+            description: "{{ doc('jdawms__revflg') }}"
           - name: lotflg
-            description: "Flag (0/1): lotflg."
+            description: "{{ doc('jdawms__lotflg') }}"
           - name: sup_lot_flg
-            description: "Flag (0/1): sup_lot_flg."
+            description: "{{ doc('jdawms__sup_lot_flg') }}"
           - name: qtyflg
             description: "Flag (0/1): qtyflg."
           - name: catch_qty_flg
             description: "Flag (0/1): catch_qty_flg."
           - name: adddte
-            description: "Timestamp the record was created/added."
+            description: "{{ doc('jdawms__adddte') }}"
           - name: pckdte
             description: "Pick timestamp."
           - name: cmpdte
@@ -1004,7 +1008,7 @@ sources:
           - name: min_shelf_hrs
             description: "WMS min_shelf_hrs attribute."
           - name: prtdte
-            description: "Date/time field: prtdte."
+            description: "{{ doc('jdawms__prtdte') }}"
           - name: list_grp_id
             description: "Code/identifier: list_grp_id."
           - name: list_id
@@ -1012,11 +1016,11 @@ sources:
           - name: list_seqnum
             description: "Code/identifier: list_seqnum."
           - name: est_time
-            description: "Estimated task time (system-computed)."
+            description: "{{ doc('jdawms__est_time') }}"
           - name: lm_assign_num
-            description: "Code/identifier: lm_assign_num."
+            description: "{{ doc('jdawms__lm_assign_num') }}"
           - name: lm_assign_seqnum
-            description: "Code/identifier: lm_assign_seqnum."
+            description: "{{ doc('jdawms__lm_assign_seqnum') }}"
           - name: skip_cnt
             description: "WMS skip_cnt attribute."
           - name: pallet_pos
@@ -1032,9 +1036,9 @@ sources:
           - name: unassign_flg
             description: "Flag (0/1): unassign_flg."
           - name: asset_typ
-            description: "Material-handling asset type (e.g. pallet, tote)."
+            description: "{{ doc('jdawms__asset_typ') }}"
           - name: supnum
-            description: "Supplier number."
+            description: "{{ doc('jdawms__supnum') }}"
           - name: supflg
             description: "Flag (0/1): supflg."
           - name: unique_pallet_id
@@ -1066,7 +1070,7 @@ sources:
           - name: mandte
             description: "Date/time field: mandte."
           - name: expire_dte
-            description: "Expiration date of the stock."
+            description: "{{ doc('jdawms__expire_dte') }}"
           - name: mandte_flg
             description: "Flag (0/1): mandte_flg."
           - name: expire_dte_flg
@@ -1130,61 +1134,61 @@ sources:
           - name: attr_dte2_flg
             description: "Flag (0/1): attr_dte2_flg."
           - name: inv_attr_str1
-            description: "User-defined inventory string attribute 1 (inv_attr_str1)."
+            description: "{{ doc('jdawms__inv_attr_str1') }}"
           - name: inv_attr_str2
-            description: "User-defined inventory string attribute 2 (inv_attr_str2)."
+            description: "{{ doc('jdawms__inv_attr_str2') }}"
           - name: inv_attr_str3
-            description: "User-defined inventory string attribute 3 (inv_attr_str3)."
+            description: "{{ doc('jdawms__inv_attr_str3') }}"
           - name: inv_attr_str4
-            description: "User-defined inventory string attribute 4 (inv_attr_str4)."
+            description: "{{ doc('jdawms__inv_attr_str4') }}"
           - name: inv_attr_str5
-            description: "User-defined inventory string attribute 5 (inv_attr_str5)."
+            description: "{{ doc('jdawms__inv_attr_str5') }}"
           - name: inv_attr_str6
-            description: "User-defined inventory string attribute 6 (inv_attr_str6)."
+            description: "{{ doc('jdawms__inv_attr_str6') }}"
           - name: inv_attr_str7
-            description: "User-defined inventory string attribute 7 (inv_attr_str7)."
+            description: "{{ doc('jdawms__inv_attr_str7') }}"
           - name: inv_attr_str8
-            description: "User-defined inventory string attribute 8 (inv_attr_str8)."
+            description: "{{ doc('jdawms__inv_attr_str8') }}"
           - name: inv_attr_str9
-            description: "User-defined inventory string attribute 9 (inv_attr_str9)."
+            description: "{{ doc('jdawms__inv_attr_str9') }}"
           - name: inv_attr_str10
-            description: "User-defined inventory string attribute 0 (inv_attr_str10)."
+            description: "{{ doc('jdawms__inv_attr_str10') }}"
           - name: inv_attr_str11
-            description: "User-defined inventory string attribute 1 (inv_attr_str11)."
+            description: "{{ doc('jdawms__inv_attr_str11') }}"
           - name: inv_attr_str12
-            description: "User-defined inventory string attribute 2 (inv_attr_str12)."
+            description: "{{ doc('jdawms__inv_attr_str12') }}"
           - name: inv_attr_str13
-            description: "User-defined inventory string attribute 3 (inv_attr_str13)."
+            description: "{{ doc('jdawms__inv_attr_str13') }}"
           - name: inv_attr_str14
-            description: "User-defined inventory string attribute 4 (inv_attr_str14)."
+            description: "{{ doc('jdawms__inv_attr_str14') }}"
           - name: inv_attr_str15
-            description: "User-defined inventory string attribute 5 (inv_attr_str15)."
+            description: "{{ doc('jdawms__inv_attr_str15') }}"
           - name: inv_attr_str16
-            description: "User-defined inventory string attribute 6 (inv_attr_str16)."
+            description: "{{ doc('jdawms__inv_attr_str16') }}"
           - name: inv_attr_str17
-            description: "User-defined inventory string attribute 7 (inv_attr_str17)."
+            description: "{{ doc('jdawms__inv_attr_str17') }}"
           - name: inv_attr_str18
-            description: "User-defined inventory string attribute 8 (inv_attr_str18)."
+            description: "{{ doc('jdawms__inv_attr_str18') }}"
           - name: inv_attr_int1
-            description: "User-defined inventory attribute: inv_attr_int1."
+            description: "{{ doc('jdawms__inv_attr_int1') }}"
           - name: inv_attr_int2
-            description: "User-defined inventory attribute: inv_attr_int2."
+            description: "{{ doc('jdawms__inv_attr_int2') }}"
           - name: inv_attr_int3
-            description: "User-defined inventory attribute: inv_attr_int3."
+            description: "{{ doc('jdawms__inv_attr_int3') }}"
           - name: inv_attr_int4
-            description: "User-defined inventory attribute: inv_attr_int4."
+            description: "{{ doc('jdawms__inv_attr_int4') }}"
           - name: inv_attr_int5
-            description: "User-defined inventory attribute: inv_attr_int5."
+            description: "{{ doc('jdawms__inv_attr_int5') }}"
           - name: inv_attr_flt1
-            description: "User-defined inventory attribute: inv_attr_flt1."
+            description: "{{ doc('jdawms__inv_attr_flt1') }}"
           - name: inv_attr_flt2
-            description: "User-defined inventory attribute: inv_attr_flt2."
+            description: "{{ doc('jdawms__inv_attr_flt2') }}"
           - name: inv_attr_flt3
-            description: "User-defined inventory attribute: inv_attr_flt3."
+            description: "{{ doc('jdawms__inv_attr_flt3') }}"
           - name: inv_attr_dte1
-            description: "User-defined inventory attribute: inv_attr_dte1."
+            description: "{{ doc('jdawms__inv_attr_dte1') }}"
           - name: inv_attr_dte2
-            description: "User-defined inventory attribute: inv_attr_dte2."
+            description: "{{ doc('jdawms__inv_attr_dte2') }}"
           - name: wcs_pck_grp
             description: "WMS wcs_pck_grp attribute."
           - name: wcs_reported_dt
@@ -1200,15 +1204,15 @@ sources:
           - name: pip_counter
             description: "WMS pip_counter attribute."
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: rowid
-            description: "Source database internal row identifier."
+            description: "{{ doc('jdawms__rowid') }}"
           - name: uc_inch_volume
             description: "WMS uc_inch_volume attribute."
           - name: uc_aisle_volume
@@ -1218,7 +1222,7 @@ sources:
           - name: uc_picks
             description: "WMS uc_picks attribute."
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: prtdsc
         description: "Part description — localized long/short descriptions for part attributes (key-value by column + locale)."
         config:
@@ -1237,7 +1241,7 @@ sources:
           - name: short_dsc
             description: "Short description."
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: prtftp
         description: "Part fetch/pack-type header — packaging configuration (nesting, stack height, method) per part and pack type."
         config:
@@ -1246,13 +1250,13 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: ftpcod
-            description: "Fetch/pack-type code — packaging configuration key for the part."
+            description: "{{ doc('jdawms__ftpcod') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: caslvl
             description: "WMS caslvl attribute."
           - name: nstlen
@@ -1284,15 +1288,15 @@ sources:
           - name: level_units
             description: "WMS level_units attribute."
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: prtftp_dtl
         description: "Part fetch/pack-type detail — per unit-of-measure dimensions, weights, and packaging flags for a part pack type."
         config:
@@ -1301,15 +1305,15 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: ftpcod
-            description: "Fetch/pack-type code — packaging configuration key for the part."
+            description: "{{ doc('jdawms__ftpcod') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: uomcod
-            description: "Unit-of-measure code."
+            description: "{{ doc('jdawms__uomcod') }}"
           - name: uomlvl
             description: "Unit-of-measure level in the packaging hierarchy (1=each … up)."
           - name: len
@@ -1335,7 +1339,7 @@ sources:
           - name: rcv_flg
             description: "Flag (0/1): rcv_flg."
           - name: untqty
-            description: "Quantity in stock/base units."
+            description: "{{ doc('jdawms__untqty') }}"
           - name: ctn_flg
             description: "Flag (0/1): ctn_flg."
           - name: thresh_pct
@@ -1345,15 +1349,15 @@ sources:
           - name: bulk_pck_flg
             description: "Flag (0/1): bulk_pck_flg."
           - name: ins_dt
-            description: "Row insert timestamp in the source WMS."
+            description: "{{ doc('jdawms__ins_dt') }}"
           - name: last_upd_dt
-            description: "Row last-update timestamp in the source WMS."
+            description: "{{ doc('jdawms__last_upd_dt') }}"
           - name: ins_user_id
-            description: "User/process that inserted the row in the WMS."
+            description: "{{ doc('jdawms__ins_user_id') }}"
           - name: last_upd_user_id
-            description: "User/process that last updated the row in the WMS."
+            description: "{{ doc('jdawms__last_upd_user_id') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: prtmst
         description: "Part master — item master data: part number, family, stock UOM, velocity, date-control, and receiving flags."
         config:
@@ -1362,9 +1366,9 @@ sources:
             warn_after: {count: 168, period: hour}
         columns:
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: wh_id_tmpl
             description: "Warehouse template identifier the part master belongs to."
           - name: prtfam
@@ -1374,23 +1378,23 @@ sources:
           - name: age_pflnam
             description: "WMS age_pflnam attribute."
           - name: lodlvl
-            description: "Load level indicator."
+            description: "{{ doc('jdawms__lodlvl') }}"
           - name: orgflg
-            description: "Flag (0/1): orgflg."
+            description: "{{ doc('jdawms__orgflg') }}"
           - name: revflg
-            description: "Flag (0/1): revflg."
+            description: "{{ doc('jdawms__revflg') }}"
           - name: lotflg
-            description: "Flag (0/1): lotflg."
+            description: "{{ doc('jdawms__lotflg') }}"
           - name: sup_lot_flg
-            description: "Flag (0/1): sup_lot_flg."
+            description: "{{ doc('jdawms__sup_lot_flg') }}"
           - name: stkuom
             description: "Stocking unit of measure."
           - name: abccod
-            description: "ABC velocity classification code."
+            description: "{{ doc('jdawms__abccod') }}"
           - name: fifwin
             description: "WMS fifwin attribute."
           - name: velzon
-            description: "Velocity zone."
+            description: "{{ doc('jdawms__velzon') }}"
           - name: rcvsts
             description: "Receiving status of the part."
           - name: rcvflg
@@ -1402,9 +1406,9 @@ sources:
           - name: prtfit
             description: "WMS prtfit attribute."
           - name: moddte
-            description: "Last-modified timestamp in the source WMS."
+            description: "{{ doc('jdawms__moddte') }}"
           - name: mod_usr_id
-            description: "User/process that last modified the row in the WMS."
+            description: "{{ doc('jdawms__mod_usr_id') }}"
           - name: dspuom
             description: "WMS dspuom attribute."
           - name: rptuom
@@ -1416,7 +1420,7 @@ sources:
           - name: ordinv
             description: "WMS ordinv attribute."
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: rplcfg
         description: "Replenishment configuration — min/max rules that trigger replenishment of a part into a location."
         config:
@@ -1427,17 +1431,17 @@ sources:
           - name: rplnum
             description: "Replenishment rule number."
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: stoloc
-            description: "Storage location (slot) code."
+            description: "{{ doc('jdawms__stoloc') }}"
           - name: mov_zone_id
-            description: "Movement zone identifier."
+            description: "{{ doc('jdawms__mov_zone_id') }}"
           - name: invsts
-            description: "Inventory status code (e.g. available, hold, damaged)."
+            description: "{{ doc('jdawms__invsts') }}"
           - name: pctflg
             description: "Flag (0/1): pctflg."
           - name: maxunt
@@ -1457,9 +1461,9 @@ sources:
           - name: rls_pct
             description: "WMS rls_pct attribute."
           - name: mod_usr_id
-            description: "User/process that last modified the row in the WMS."
+            description: "{{ doc('jdawms__mod_usr_id') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: shipment
         description: "Shipment header — one row per outbound shipment: carrier, status, dates, destination, and freight details."
         config:
@@ -1468,9 +1472,9 @@ sources:
             warn_after: {count: 48, period: hour}
         columns:
           - name: ship_id
-            description: "Shipment identifier."
+            description: "{{ doc('jdawms__ship_id') }}"
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: host_client_id
             description: "Host system client/owner id."
           - name: host_ext_id
@@ -1484,9 +1488,9 @@ sources:
           - name: cargrp
             description: "WMS cargrp attribute."
           - name: carcod
-            description: "Carrier code."
+            description: "{{ doc('jdawms__carcod') }}"
           - name: srvlvl
-            description: "Carrier service level."
+            description: "{{ doc('jdawms__srvlvl') }}"
           - name: sddflg
             description: "Flag (0/1): sddflg."
           - name: doc_num
@@ -1502,7 +1506,7 @@ sources:
           - name: frtrte
             description: "WMS frtrte attribute."
           - name: adddte
-            description: "Timestamp the record was created/added."
+            description: "{{ doc('jdawms__adddte') }}"
           - name: alcdte
             description: "Date/time field: alcdte."
           - name: stgdte
@@ -1548,9 +1552,9 @@ sources:
           - name: rate_serv_nam
             description: "WMS rate_serv_nam attribute."
           - name: arcdte
-            description: "Date/time field: arcdte."
+            description: "{{ doc('jdawms__arcdte') }}"
           - name: arc_src
-            description: "WMS arc_src attribute."
+            description: "{{ doc('jdawms__arc_src') }}"
           - name: lbl_prtdte
             description: "Date/time field: lbl_prtdte."
           - name: ses_tag
@@ -1596,13 +1600,13 @@ sources:
           - name: dispatch_code
             description: "WMS dispatch_code attribute."
           - name: moddte
-            description: "Last-modified timestamp in the source WMS."
+            description: "{{ doc('jdawms__moddte') }}"
           - name: mod_usr_id
-            description: "User/process that last modified the row in the WMS."
+            description: "{{ doc('jdawms__mod_usr_id') }}"
           - name: book_num
             description: "Code/identifier: book_num."
           - name: dst_mov_zone_id
-            description: "Code/identifier: dst_mov_zone_id."
+            description: "{{ doc('jdawms__dst_mov_zone_id') }}"
           - name: bola_num
             description: "Code/identifier: bola_num."
           - name: dlv_dte
@@ -1614,9 +1618,9 @@ sources:
           - name: wa_rule_reference
             description: "WMS wa_rule_reference attribute."
           - name: _rescued_data
-            description: "Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null."
+            description: "{{ doc('jdawms___rescued_data') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
       - name: shipment_line
         description: "Shipment line — order line allocated to a shipment: planned/picked/shipped quantities and order linkage."
         config:
@@ -1625,19 +1629,19 @@ sources:
             warn_after: {count: 48, period: hour}
         columns:
           - name: ship_line_id
-            description: "Shipment line identifier."
+            description: "{{ doc('jdawms__ship_line_id') }}"
           - name: ship_id
-            description: "Shipment identifier."
+            description: "{{ doc('jdawms__ship_id') }}"
           - name: wh_id
-            description: "Warehouse (facility) identifier."
+            description: "{{ doc('jdawms__wh_id') }}"
           - name: client_id
-            description: "Client/owner id for the record (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__client_id') }}"
           - name: ordnum
-            description: "Order number."
+            description: "{{ doc('jdawms__ordnum') }}"
           - name: ordlin
-            description: "Order line number."
+            description: "{{ doc('jdawms__ordlin') }}"
           - name: ordsln
-            description: "Order sub-line number."
+            description: "{{ doc('jdawms__ordsln') }}"
           - name: cons_batch
             description: "WMS cons_batch attribute."
           - name: shpwth
@@ -1655,9 +1659,9 @@ sources:
           - name: pckgr4
             description: "WMS pckgr4 attribute."
           - name: schbat
-            description: "Scheduled batch / wave identifier."
+            description: "{{ doc('jdawms__schbat') }}"
           - name: pckqty
-            description: "Picked quantity (planned to pick)."
+            description: "{{ doc('jdawms__pckqty') }}"
           - name: inpqty
             description: "In-process quantity."
           - name: stgqty
@@ -1693,21 +1697,21 @@ sources:
           - name: rel_val_unt_typ
             description: "WMS rel_val_unt_typ attribute."
           - name: wkonum
-            description: "Code/identifier: wkonum."
+            description: "{{ doc('jdawms__wkonum') }}"
           - name: wkorev
-            description: "WMS wkorev attribute."
+            description: "{{ doc('jdawms__wkorev') }}"
           - name: moddte
-            description: "Last-modified timestamp in the source WMS."
+            description: "{{ doc('jdawms__moddte') }}"
           - name: mod_usr_id
-            description: "User/process that last modified the row in the WMS."
+            description: "{{ doc('jdawms__mod_usr_id') }}"
           - name: dstr_qty
             description: "Quantity field: dstr_qty."
           - name: prtnum
-            description: "Part (item) number — the SKU identifier."
+            description: "{{ doc('jdawms__prtnum') }}"
           - name: prt_client_id
-            description: "Client/owner id for the part (multi-client warehouse partitioning)."
+            description: "{{ doc('jdawms__prt_client_id') }}"
           - name: est_time
-            description: "Estimated task time (system-computed)."
+            description: "{{ doc('jdawms__est_time') }}"
           - name: picked_qty
             description: "Quantity actually picked for the line."
           - name: instgqty
@@ -1715,10 +1719,10 @@ sources:
           - name: inloadqty
             description: "Quantity field: inloadqty."
           - name: ftpcod
-            description: "Fetch/pack-type code — packaging configuration key for the part."
+            description: "{{ doc('jdawms__ftpcod') }}"
           - name: untpal
-            description: "Units per pallet."
+            description: "{{ doc('jdawms__untpal') }}"
           - name: _rescued_data
-            description: "Auto Loader rescued-data column — captures values that did not fit the schema on ingest; normally null."
+            description: "{{ doc('jdawms___rescued_data') }}"
           - name: loaddate
-            description: "Ingestion timestamp — when this row was loaded into the lakehouse (pipeline watermark, not a business field)."
+            description: "{{ doc('jdawms__loaddate') }}"
