@@ -144,8 +144,8 @@ the same inline-vs-shared rule.
     ├── staging/mysql/
     ├── staging/jdawms/           # WMS replica staging (databricks: real tables; duckdb: mock parquet)
     ├── intermediate/
+    ├── marts/core/facts/
     ├── marts/reporting/
-    ├── exposures.yml
     └── dq/
 ```
 
