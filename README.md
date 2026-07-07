@@ -81,9 +81,9 @@ directly if a GUI is preferred.
 ## Layers
 
 ```
-data/raw_api/*.json  →  scripts/flatten_api_json.sql  →  data/system_events.parquet
-                                                              │
-staging/mysql/ (view)   stg_mysql__system_events — dedup, types, code split, UTC
+data/mock/mysql/raw_api/*.json  →  scripts/flatten_api_json.sql (optional)  →  data/system_events.parquet
+                                                                                    │ (feeds analyses/ only — not read by dbt models)
+staging/mysql/ (view)   stg_mysql__* — reads raw_api/*.json directly; dedup, types, code split, UTC
 seeds/ (CSV)            seed_event_codes · seed_app_sources · seed_categories
                         seed_jdawms_data_dictionary · seed_jdawms_comtyp (WMS reference)
                               │
@@ -174,7 +174,7 @@ the same inline-vs-shared rule.
 ├── dbt_project.yml
 ├── profiles.example.yml
 ├── dbt-env.ps1
-├── data/                        # raw_api/*.json + parquet (git-ignored)
+├── data/                        # mock/{jdawmsrep,mysql}/ + parquet (git-ignored, see data/README.md)
 ├── scripts/
 │   ├── flatten_api_json.sql
 │   ├── generate_event_glossary.py

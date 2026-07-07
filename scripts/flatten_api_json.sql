@@ -4,10 +4,10 @@
 -- The sample data is the raw API response (Laravel-style pagination envelope):
 --   { code, msg, data: { current_page, data: [event records], per_page, total, ... } }
 -- Event records live at data.data[]. There may be multiple files (one per
--- page) in data/raw_api/.
+-- page) in data/mock/mysql/raw_api/.
 --
 -- Run BEFORE dbt build (DuckDB-only script, not part of the dbt DAG):
---   duckdb -c ".read scripts/flatten_api_json.sql"
+--   python -c "import duckdb; duckdb.sql(open('scripts/flatten_api_json.sql', encoding='utf-8').read())"
 --
 -- Idempotent: re-running overwrites data/system_events.parquet, and pages
 -- that overlap are deduplicated on entity_id (keep latest updated_at).
@@ -16,7 +16,7 @@
 copy (
     with raw_pages as (
 
-        -- matches data/*.json and data/raw_api/*.json alike
+        -- recursive glob — matches any *.json under data/ regardless of nesting
         select unnest("data"."data", recursive := true)
         from read_json_auto(
             'data/**/*.json',

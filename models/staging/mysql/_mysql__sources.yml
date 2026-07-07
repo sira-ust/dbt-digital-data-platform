@@ -9,7 +9,7 @@ sources:
     description: >
       UST website MySQL database. All tables are READ-ONLY for dbt. The source
       location is target-dependent:
-        DuckDB (dev):     external_location reads the API JSON in data/raw_api/;
+        DuckDB (dev):     external_location reads the API JSON in data/mock/mysql/raw_api/;
                           schema/identifier are symbolic. admin_users and category
                           have no sample, so their staging models return empty.
         Databricks (POC): reads the real MySQL tables mirrored into the `mysql`
@@ -32,7 +32,7 @@ sources:
         identifier: "{{ 'ust_tracking_report' if target.type == 'databricks' else 'temp_tracking_report' }}"
         description: One row per customer app session. Source for /customer/tracking/ sessions.
         config:
-          external_location: "read_json_auto('data/raw_api/customer/tracking/customer_reports.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/customer/tracking/customer_reports.json')"
           loaded_at_field: updated_at
           freshness:
             warn_after: {count: 24, period: hour}
@@ -64,7 +64,7 @@ sources:
         identifier: "{{ 'ust_tracking_report_event' if target.type == 'databricks' else 'temp_tracking_report_event' }}"
         description: One row per customer action within a session. Child of tracking_report.
         config:
-          external_location: "read_json_auto('data/raw_api/customer/tracking/customer_events.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/customer/tracking/customer_events.json')"
         columns:
           - name: entity_id
             description: Primary key
@@ -123,7 +123,7 @@ sources:
         identifier: "{{ 'ust_user_activity_report' if target.type == 'databricks' else 'temp_user_activity_report' }}"
         description: One row per salesperson login session. Source for /user/activity/ sessions.
         config:
-          external_location: "read_json_auto('data/raw_api/user/activity/sales_reports.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/user/activity/sales_reports.json')"
           loaded_at_field: updated_at
           freshness:
             warn_after: {count: 24, period: hour}
@@ -161,7 +161,7 @@ sources:
         identifier: "{{ 'ust_user_activity_report_event' if target.type == 'databricks' else 'temp_user_activity_report_event' }}"
         description: One row per salesperson activity within a session. Child of user_activity_report.
         config:
-          external_location: "read_json_auto('data/raw_api/user/activity/sales_events.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/user/activity/sales_events.json')"
         columns:
           - name: entity_id
             description: Primary key
@@ -220,7 +220,7 @@ sources:
           and the staging model unnests it. Databricks reads the pre-flattened
           temp_system_events table (one row per event); staging skips the unnest.
         config:
-          external_location: "read_json_auto('data/raw_api/system/event/log/raw_log.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/system/event/log/raw_log.json')"
           loaded_at_field: created_at
           freshness:
             warn_after: {count: 24, period: hour}

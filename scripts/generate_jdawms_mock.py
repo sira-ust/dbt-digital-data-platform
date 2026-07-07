@@ -1,9 +1,10 @@
 """Generate mock parquet for local DuckDB dev — no Unity Catalog access needed.
 
 Reads data/uc_schema_snapshot.csv (produced once by scripts/snapshot_uc_schema.py)
-and emits one parquet per table into data/mock/ (git-ignored):
+and emits one parquet per table into data/mock/ (git-ignored), mirroring the
+two real Unity Catalog schemas under ust_databricks:
 
-  data/mock/jdawms/<table>.parquet     all 16 jdawmsrep tables
+  data/mock/jdawmsrep/<table>.parquet  all 16 jdawmsrep tables (WMS replica)
   data/mock/mysql/<table>.parquet      ust_admin_users, ust_category
                                        (the two mysql tables with no JSON sample)
 
@@ -33,7 +34,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = ROOT / "data" / "uc_schema_snapshot.csv"
 DICTIONARY = ROOT / "seeds" / "seed_jdawms_data_dictionary.csv"
-OUT_JDAWMS = ROOT / "data" / "mock" / "jdawms"
+OUT_JDAWMS = ROOT / "data" / "mock" / "jdawmsrep"
 OUT_MYSQL = ROOT / "data" / "mock" / "mysql"
 
 # ---------------------------------------------------------------------------
@@ -237,7 +238,7 @@ def mock_mysql(schemas) -> None:
     """ust_admin_users (usernames from the local sample) + ust_category (from seed)."""
     OUT_MYSQL.mkdir(parents=True, exist_ok=True)
 
-    sample = ROOT / "data" / "raw_api" / "user" / "activity" / "sales_reports.json"
+    sample = ROOT / "data" / "mock" / "mysql" / "raw_api" / "user" / "activity" / "sales_reports.json"
     users: list[str] = []
     if sample.exists():
         d = json.load(open(sample, encoding="utf-8"))
