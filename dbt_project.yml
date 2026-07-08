@@ -137,6 +137,35 @@ seeds:
 
         category_id: string
 
+    # All code columns below are strings on purpose: staging models cast the
+    # raw codes to string, and Databricks won't implicit-cast joins the way
+    # DuckDB does.
+    seed_category_name_aliases:
+      +column_types:
+        category_id: string
+
+    seed_app_category_codes:
+      +column_types:
+        app_category_code: string
+        app_id: string
+        ust_category_id: string
+
+    seed_tracking_event_types:
+      +column_types:
+        event_type_code: string
+
+    seed_tracking_methods:
+      +column_types:
+        method_code: string
+
+    seed_activity_types:
+      +column_types:
+        activity_type_code: string
+
+    seed_activity_methods:
+      +column_types:
+        method_code: string
+
 tests:
 
   +store_failures: true
