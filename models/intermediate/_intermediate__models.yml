@@ -1,42 +1,6 @@
 version: 2
 
 models:
-  - name: int_customer_sessions
-    description: >
-      Event-grain join of stg_mysql__tracking_report (session header) and
-      stg_mysql__tracking_report_event (page/action events). One row per
-      session x event; sessions with no events still appear (left join).
-      Used by mart_customer_app_session and mart_page_dwell.
-    columns:
-      - name: session_id
-        description: FK to stg_mysql__tracking_report.entity_id.
-        tests: [not_null]
-      - name: customer_id
-        description: Customer identifier.
-      - name: event_id
-        description: FK to stg_mysql__tracking_report_event.entity_id. Null for sessions with no events.
-
-  - name: int_rep_activity_events
-    description: >
-      Event-grain join of stg_mysql__user_activity_report_event (activity
-      events) and stg_mysql__user_activity_report (session header), plus a lookup
-      to stg_mysql__admin_users for the rep territory. One row per rep activity
-      event enriched with device_model, app_version (both from the session header)
-      and activity_date. sales_code is resolved from admin_users.salesperson_code
-      via the login account (the event table no longer carries it) — NULL on the
-      duckdb target where admin_users is empty. Used by mart_rep_customer_visits
-      and mart_rep_daily_activity.
-    columns:
-      - name: entity_id
-        description: Primary key from stg_mysql__user_activity_report_event.
-        tests: [not_null, unique]
-      - name: session_id
-        description: FK to stg_mysql__user_activity_report.entity_id.
-      - name: username
-        description: Sales rep login account.
-      - name: activity_date
-        description: Calendar date derived from begin_time.
-
   - name: int_events_decoded
     description: >
       Decode/parse spine for the system event log. Reads lossless staging and
@@ -117,9 +81,50 @@ models:
   - name: int_events_enriched
     description: >
       Decoded events (int_events_decoded) joined to the event dictionary
-      (seed_event_codes) and app-source registry (seed_app_sources). Event
-      grain — one row per system_event_log record. Foundation for system-event
-      analytics.
+      (seed_event_codes) and app-source registry (seed_app_sources), plus
+      dictionary-driven classification: outcome (success/fail parsed from the
+      dev team's "- Success/- Fail" function names), canonical feature_name /
+      feature_group / page_context, and cart-edit flags. Classification applies
+      only to dictionary-mapped codes; unmapped codes (legacy, junk) get nulls
+      and are surfaced in dq_unmapped_event_codes. Event grain — one row per
+      system_event_log record. Foundation for system-event analytics.
     columns:
       - name: entity_id
         tests: [not_null, unique]
+      - name: outcome
+        description: >
+          success / fail parsed from the dictionary function name (the code
+          segment that marks outcome differs by family, so the name is the
+          authoritative marker). Null when the code has no outcome concept or
+          is unmapped.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [success, fail]
+      - name: feature_name
+        description: >
+          Canonical product feature (action type). search=L1 12, filter=11,
+          catalog_view=19, item_detail=14, image_enlarge=15, icon_click=L1 18
+          icon taps, oos_check=name-based (families 10+18). Null for
+          non-feature events.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [search, filter, icon_click, catalog_view, item_detail, image_enlarge, oos_check]
+      - name: feature_group
+        description: "Feature rollup: discovery / navigation / cart / stock."
+      - name: page_context
+        description: >
+          Catalog section the action happened in, parsed from the function
+          name: promo / backorder / history / suggest. Independent of
+          feature_name (e.g. add_item_promo_page = cart add in promo section).
+        tests:
+          - accepted_values:
+              arguments:
+                values: [promo, backorder, history, suggest]
+      - name: is_add
+        description: Cart add event (codes 1005xxxx, dictionary-mapped only).
+      - name: is_remove
+        description: Cart remove event (codes 1004xxxx, dictionary-mapped only).
+      - name: is_qty_change
+        description: Cart quantity-change event (codes 1015xxxx, dictionary-mapped only).

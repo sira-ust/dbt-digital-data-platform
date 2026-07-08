@@ -15,42 +15,9 @@
 
 {# ---- staged (models) ---------------------------------------------------- #}
 
-{% docs mysql__updated_at_dedup %}Record last update time. Latest wins on dedup.{% enddocs %}
-
 {% docs mysql__created_at_typo %}Record creation time. Source column is `create_at` (source typo).{% enddocs %}
-
-{% docs mysql__qty %}Quantity (string; cast in int layer if numeric operations needed).{% enddocs %}
-
-{% docs mysql__sku %}Product SKU.{% enddocs %}
-
-{% docs mysql__keyword %}Search keyword.{% enddocs %}
-
-{% docs mysql__method %}Interaction method code.{% enddocs %}
-
-{% docs mysql__timezone %}Device UTC offset string.{% enddocs %}
-
-{% docs mysql__username_user %}Salesperson login account. Source column is `user`.{% enddocs %}
-
-{% docs mysql__customer_id %}Customer identifier.{% enddocs %}
-
-{% docs mysql__session_id_unpopulated %}Session identifier (currently unpopulated).{% enddocs %}
 
 {# ---- raw (sources) ------------------------------------------------------ #}
 
 {% docs mysql_src__updated_at %}Record last update time{% enddocs %}
 
-{% docs mysql_src__created_at_typo %}Record creation time (note — API/DB typo, missing 'd'){% enddocs %}
-
-{% docs mysql_src__customer_id %}Customer identifier{% enddocs %}
-
-{% docs mysql_src__sku %}Product SKU{% enddocs %}
-
-{% docs mysql_src__keyword %}Search keyword{% enddocs %}
-
-{% docs mysql_src__method %}Interaction method code{% enddocs %}
-
-{% docs mysql_src__timezone %}Device UTC offset string{% enddocs %}
-
-{% docs mysql_src__device_model %}Device model{% enddocs %}
-
-{% docs mysql_src__session_id_unpopulated %}Session identifier (currently unpopulated){% enddocs %}

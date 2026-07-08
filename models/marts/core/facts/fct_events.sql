@@ -55,6 +55,13 @@ select
     l4_code,
     function_name,
     l1_category_name,
+    outcome,
+    feature_name,
+    feature_group,
+    page_context,
+    is_add,
+    is_remove,
+    is_qty_change,
     latitude,
     longitude,
     response

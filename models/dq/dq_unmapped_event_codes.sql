@@ -10,6 +10,11 @@
 -- is_well_formed_code separates true dictionary gaps (8-digit codes the app
 -- emits but the seed lacks) from malformed/junk codes. One row per unmapped
 -- description_code, most frequent first.
+--
+-- is_known_legacy: codes confirmed legacy/obsolete (dev-team gap review +
+-- user, 2026-07-08) and intentionally NOT in the dictionary: 00000000 test
+-- mark; 03110400, 10051500, 10691200, 11124000 obsolete. They stay visible
+-- here for the record; alerting should filter them out.
 
 with events as (
 
@@ -38,6 +43,8 @@ select
     -- portable all-digits-and-8-long check (no engine-specific regex)
     (length(description_code) = 8
         and try_cast(description_code as bigint) is not null)          as is_well_formed_code,
+    description_code in ('00000000', '03110400', '10051500', '10691200', '11124000')
+                                                                       as is_known_legacy,
     substr(description_code, 1, 2)                                     as l1_code,
     count(*)                                                           as event_count,
     count(distinct source_code)                                       as distinct_sources,

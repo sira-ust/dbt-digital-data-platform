@@ -1,102 +1,90 @@
 version: 2
 
 models:
-  - name: mart_page_dwell
+  - name: mart_rep_weekly
     description: >
-      Customer app page analytics at page-name grain (one row per page).
-      Sourced from stg_mysql__tracking_report_event. Search:* pages are
-      normalised to "Search Results". is_category_page flags product category
-      pages (e.g. Rice & Noodles, Beverages) vs nav/search pages.
+      Rep workload + feature usage, one row per sales_code x week. Order
+      counts/value are EXACT (fct_orders); per-cycle metrics are APPROXIMATE
+      (time-heuristic cycles from fct_order_cycles) — label as approximate in
+      BI. Full outer join of the two sides: a week can have orders with no
+      reconstructed cycles and vice versa. Answers "who's doing more or less
+      work, and is team activity growing or shrinking".
     columns:
-      - name: page_name
-        description: Page name; Search:* variants collapsed to "Search Results".
-        tests: [unique, not_null]
-      - name: is_search_page
-        description: True when the original page was a search-results page (Search:*).
-      - name: is_category_page
-        description: True for product category pages; false for nav and search pages.
-      - name: visit_count
-        description: Total page view events.
-      - name: distinct_customers
-        description: Unique customer_id values that visited this page.
-      - name: total_dwell_seconds
-        description: Sum of duration_seconds across all visits.
-      - name: avg_dwell_seconds
-        description: Average seconds per visit (rounded to 1 dp).
+      - name: sales_code
+        description: Rep territory code.
+        tests: [not_null]
+      - name: rep_name
+        description: Display name from admin_users (max per territory code).
+      - name: week_start
+        description: Monday of the ISO week.
+        tests: [not_null]
+      - name: orders_submitted
+        description: Submitted orders that week (exact, from fct_orders).
+      - name: order_value_total
+        description: Sum of grand_total that week (exact, from fct_orders).
+      - name: cycles_worked
+        description: Cycles the rep touched that week (approximate).
+      - name: cycles_submitted
+        description: Of those, cycles that ended in a submit.
+      - name: avg_days_to_close
+        description: Average calendar days from first cycle event to submit (approximate).
 
-  - name: mart_customer_app_session
+  - name: mart_customer_weekly
     description: >
-      Customer app sessions at session grain (one row per tracking_report
-      entity_id). Sourced from int_customer_sessions. Aggregates page views,
-      dwell time, cart actions, search events, and SKU interactions per session.
+      Customer behaviour, one row per customer_key x week. Event-based metrics
+      (features, cart edits, friction) come straight from int_events_enriched
+      so browsing outside any cycle still counts; cycle counts from
+      fct_order_cycles; order counts from fct_orders (exact). Includes
+      service_mode (self_service >= 80% self events / sales_assisted <= 20% /
+      mixed), friction-family counts (request review, sales review, restore,
+      delete, OOS checks) and churn_signal (removes > adds for
+      churn_consecutive_weeks observed weeks running).
     columns:
-      - name: session_id
-        description: Primary key — tracking_report entity_id.
-        tests: [unique, not_null]
-      - name: customer_id
-        description: Customer identifier.
-      - name: session_minutes
-        description: Session duration in minutes (session_end - session_start).
-      - name: page_views
-        description: Non-null page events within the session.
-      - name: distinct_pages
-        description: Unique pages visited.
-      - name: add_events
-        description: Cart add actions (event_type contains 'add').
-      - name: remove_events
-        description: Cart remove or delete actions.
-      - name: submit_events
-        description: submit_quote_cart_page events — order placement attempts.
-      - name: placed_order
-        description: True if at least one submit_quote_cart_page event occurred.
+      - name: customer_key
+        description: Unified customer key.
+        tests: [not_null]
+      - name: week_start
+        description: Monday of the ISO week.
+        tests: [not_null]
+      - name: service_mode
+        description: self_service / sales_assisted / mixed, by share of self events.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [self_service, sales_assisted, mixed]
+      - name: net_item_events
+        description: add_count - remove_count (event counts, not quantities).
+      - name: friction_total
+        description: Sum of the friction-family counts + OOS checks.
+      - name: churn_signal
+        description: >
+          True when removes outnumbered adds for churn_consecutive_weeks
+          observed weeks in a row (inactive weeks don't reset the streak).
+          A UX follow-up flag, not a verdict.
 
-  - name: mart_rep_customer_visits
+  - name: mart_feature_pairing
     description: >
-      Sales rep x customer grain (one row per rep-customer pair). Sourced from
-      int_rep_activity_events, filtered to events where customer is populated
-      and differs from username. Shows visit frequency, SKU coverage, and GPS
-      availability per rep-customer relationship.
+      Feature co-usage and trends, one row per feature pair x week. "Together"
+      = same customer used both features the same day (no session id exists, so
+      customer-day is the window; the pair RANKING is the signal). Pairs are
+      emitted once (feature_a < feature_b); rows where feature_a = feature_b
+      are the single-feature weekly trend. Actions only (feature_name);
+      catalog sections are covered in mart_customer_weekly.
     columns:
-      - name: username
-        description: Sales rep login account.
+      - name: week_start
+        description: Monday of the ISO week.
         tests: [not_null]
-      - name: customer
-        description: Customer being visited.
+      - name: feature_a
+        description: First feature of the pair (alphabetical; = feature_b for trend rows).
         tests: [not_null]
-      - name: visit_days
-        description: Distinct calendar days the rep visited this customer.
-      - name: relationship_days
-        description: Days between first and last visit.
-      - name: unique_skus_shown
-        description: Distinct SKUs presented or ordered during visits.
-      - name: has_gps
-        description: True if any visit event had GPS coordinates.
-
-  - name: mart_rep_daily_activity
-    description: >
-      Sales rep x day grain (one row per rep per calendar day). Sourced from
-      int_rep_activity_events. Aggregates sessions, customer visits, SKU
-      events, GPS pings, and device battery metrics per rep per day.
-    columns:
-      - name: username
-        description: Sales rep login account.
+      - name: feature_b
+        description: Second feature of the pair.
         tests: [not_null]
-      - name: activity_date
-        description: Calendar date.
-        tests: [not_null]
-      - name: sessions
-        description: Distinct session IDs active on this day.
-      - name: total_events
-        description: All activity events on this day.
-      - name: customers_visited
-        description: Distinct customers the rep interacted with (excludes self-reference).
-      - name: unique_skus
-        description: Distinct SKUs referenced in activity events.
-      - name: gps_pings
-        description: Events that had a non-null location.
-      - name: active_minutes
-        description: Minutes between first and last event of the day.
-      - name: min_battery
-        description: Lowest battery reading recorded (bigint percentage).
-      - name: avg_battery
-        description: Average battery level across events with a battery reading.
+      - name: co_occurrence_days
+        description: Customer-days where both features were used.
+      - name: customers_count
+        description: Distinct customers behind the co-occurrences.
+      - name: pct_of_a_days_with_b
+        description: co_occurrence_days / days feature_a was used at all that week.
+      - name: wow_change
+        description: Week-over-week change in co_occurrence_days for the pair.

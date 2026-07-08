@@ -28,6 +28,13 @@ clean-targets:
 
   - dbt_packages
 
+vars:
+  # Order-cycle heuristic — decided 2026-07-08, holds until the app team stamps
+  # increment_id onto cart events (then cycles switch to exact order grouping).
+  cycle_gap_minutes: 60       # gap that ends an activity burst
+  cycle_abandon_days: 7       # open cycle with no activity this long = abandoned
+  churn_consecutive_weeks: 3  # removes > adds this many weeks running = churn signal
+
 
 
 # Layering:
@@ -150,21 +157,45 @@ seeds:
         app_id: string
         ust_category_id: string
 
+    # Disabled: these decode the LEGACY two-tier tracking/activity streams,
+    # whose staging/int/mart models were removed 2026-07-08 (superseded by the
+    # system_event_log spine). CSVs stay as the dev team's verbatim reference;
+    # re-enable if the legacy streams ever need decoding again.
     seed_tracking_event_types:
+      +enabled: false
       +column_types:
         event_type_code: string
 
     seed_tracking_methods:
+      +enabled: false
       +column_types:
         method_code: string
 
+    seed_tracking_sources:
+      +enabled: false
+
+    seed_tracking_icons:
+      +enabled: false
+
     seed_activity_types:
+      +enabled: false
       +column_types:
         activity_type_code: string
 
     seed_activity_methods:
+      +enabled: false
       +column_types:
         method_code: string
+
+    # Disabled: not referenced via ref() anywhere — the jdawms glossary/mock
+    # scripts read these CSVs directly from seeds/, not from a database table.
+    # Re-enable once a model actually needs to join against them (e.g. when
+    # jdawms coded-value seeds land and something decodes comtyp in SQL).
+    seed_jdawms_data_dictionary:
+      +enabled: false
+
+    seed_jdawms_comtyp:
+      +enabled: false
 
 tests:
 

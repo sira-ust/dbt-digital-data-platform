@@ -77,5 +77,99 @@ models:
         description: Event family name from seed_event_codes (denormalised).
       - name: function_name
         description: Specific event function name from seed_event_codes (denormalised).
+      - name: outcome
+        description: success / fail parsed from the dictionary name; null when no outcome concept.
+      - name: feature_name
+        description: >
+          Canonical product feature (search, filter, icon_click, catalog_view,
+          item_detail, image_enlarge, oos_check). Null for non-feature events.
+      - name: feature_group
+        description: "Feature rollup: discovery / navigation / cart / stock."
+      - name: page_context
+        description: "Catalog section: promo / backorder / history / suggest."
+      - name: is_add
+        description: Cart add event (1005xxxx).
+      - name: is_remove
+        description: Cart remove event (1004xxxx).
+      - name: is_qty_change
+        description: Cart quantity-change event (1015xxxx).
       - name: response
         description: Raw payload string (non-JSON). Parsed per-family downstream when needed.
+
+  - name: fct_order_cycles
+    description: >
+      One row per shopping cycle, reconstructed by time heuristic — APPROXIMATE
+      by design (cart events carry no order key; verified 0/1.12M on the real
+      mirror 2026-07-08). A burst = behavioural events for one customer with
+      gaps under var cycle_gap_minutes (60); a cycle = a chain of bursts ending
+      at a submit, or broken after var cycle_abandon_days (7) of inactivity.
+      Behavioural events = cart edits + feature interactions + submits, so
+      search-before-first-add belongs to the cycle it led to; a cycle with no
+      cart edits is a pure browsing session. Events without a customer_key
+      (18.5% of cart events) cannot join any cycle. Full-rebuild table (cycle
+      boundaries shift as new events arrive). When the app team stamps
+      increment_id onto cart events, only the cycle grouping changes — the
+      column contract stays.
+    columns:
+      - name: cycle_id
+        description: customer_key + cycle sequence.
+        tests: [unique, not_null]
+      - name: customer_key
+        description: Customer the cycle belongs to.
+        tests: [not_null]
+      - name: is_sales_assisted
+        description: True when any event in the cycle came from a sales app.
+      - name: sales_code
+        description: Rep territory code involved; null for self-service cycles.
+      - name: rep_username
+        description: Rep login involved; null for self-service cycles.
+      - name: app_name
+        description: Dominant app in the cycle (most events).
+      - name: started_at_utc
+        description: First behavioural event of the cycle (UTC).
+      - name: ended_at_utc
+        description: Last behavioural event of the cycle (UTC).
+      - name: burst_count
+        description: Number of activity sittings (gap >= cycle_gap_minutes splits).
+      - name: active_minutes
+        description: >
+          Time actually spent working, summed inside bursts only — overnight /
+          idle gaps never count. Single-event bursts contribute 0.
+      - name: days_active
+        description: Distinct calendar days with activity in the cycle.
+      - name: add_count
+        description: Cart add events in the cycle.
+      - name: remove_count
+        description: Cart remove events in the cycle.
+      - name: qty_change_count
+        description: Cart quantity-change events in the cycle.
+      - name: net_item_events
+        description: add_count - remove_count (event counts, not quantities).
+      - name: distinct_skus
+        description: Unique SKUs touched by cart events (parsed from payload).
+      - name: features_used_count
+        description: Distinct action features used in the cycle.
+      - name: is_submitted
+        description: True when the cycle ended in a submit event.
+      - name: submit_increment_id
+        description: Order increment id when the closing submit carried a KV payload.
+      - name: days_to_close
+        description: >
+          Calendar days from first event to submit (overnight counts — that is
+          what "days to close" means). Null for unsubmitted cycles. APPROXIMATE.
+      - name: cycle_status
+        description: submitted / abandoned (no activity for cycle_abandon_days) / open.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [submitted, abandoned, open]
+      - name: segment_name
+        description: >
+          Selling-style segment (proposed defaults, tune after review).
+          churner = more removes than adds; quick_reorder = submitted with
+          little browsing in one short sitting; browser = 3+ distinct features;
+          mixed = everything else.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [churner, quick_reorder, browser, mixed]
