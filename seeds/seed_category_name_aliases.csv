@@ -1,0 +1,170 @@
+raw_name,category_id,alias_type,dev_definition
+All Baking & Mixes,21,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Baking & Mixes' (id 21). Same meaning as the parent category.
+All Beverages,26,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Beverages' (id 26). Same meaning as the parent category.
+All Canned Goods & Vegetables,19,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Canned Goods & Vegetables' (id 19). Same meaning as the parent category.
+All Desserts & Sweets,24,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Desserts & Sweets' (id 24). Same meaning as the parent category.
+All Fresh & Frozen,27,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Fresh & Frozen' (id 27). Same meaning as the parent category.
+All Household,28,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Household' (id 28). Same meaning as the parent category.
+All Rice & Noodles,6,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Rice & Noodles' (id 6). Same meaning as the parent category.
+All Sauces & Seasonings,43,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Sauces & Seasonings' (id 43). Same meaning as the parent category.
+All Seafood & Meat,20,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Seafood & Meat' (id 20). Same meaning as the parent category.
+All Snacks,25,aggregate_view_all,Aggregate 'view all' entry -> maps to parent L3 category 'Snacks' (id 25). Same meaning as the parent category.
+100 Plus,177,category_match,Matches ust_category '100 PLUS' (id 177). Naming normalization only (case / '&' vs 'and' / separator).
+100 PLUS,177,category_match,Matches ust_category '100 PLUS' (id 177).
+2025 JoyLuck Spices,9,category_match,Matches ust_category '2025 JoyLuck Spices' (id 9).
+2025 Joyluck Spices,9,category_match,Matches ust_category '2025 JoyLuck Spices' (id 9). Naming normalization only (case / '&' vs 'and' / separator).
+2026 New Crop Rice,173,category_match,Matches ust_category '2026 New Crop Rice' (id 173).
+3 BALLERINA,178,category_match,Matches ust_category '3 BALLERINA' (id 178).
+3 Ballerina,178,category_match,Matches ust_category '3 BALLERINA' (id 178). Naming normalization only (case / '&' vs 'and' / separator).
+3 MIEN,179,category_match,Matches ust_category '3 MIEN' (id 179).
+999,180,category_match,Matches ust_category '999' (id 180).
+AA,181,category_match,Matches ust_category 'AA' (id 181).
+Aa,181,category_match,Matches ust_category 'AA' (id 181). Naming normalization only (case / '&' vs 'and' / separator).
+Ab,182,category_match,Matches ust_category 'AB' (id 182). Naming normalization only (case / '&' vs 'and' / separator).
+AB,182,category_match,Matches ust_category 'AB' (id 182).
+ABC,183,category_match,Matches ust_category 'ABC' (id 183).
+ACECOOK,184,category_match,Matches ust_category 'ACECOOK' (id 184).
+AJINOMOTO,186,category_match,Matches ust_category 'AJINOMOTO' (id 186).
+Ajinomoto,186,category_match,Matches ust_category 'AJINOMOTO' (id 186). Naming normalization only (case / '&' vs 'and' / separator).
+ALOHA,41,category_match,Matches ust_category 'ALOHA' (id 41).
+Aloha,41,category_match,Matches ust_category 'ALOHA' (id 41). Naming normalization only (case / '&' vs 'and' / separator).
+AMIRA,189,category_match,Matches ust_category 'AMIRA' (id 189).
+Apple,31,category_match,Matches ust_category 'APPLE' (id 31). Naming normalization only (case / '&' vs 'and' / separator).
+APPLE,31,category_match,Matches ust_category 'APPLE' (id 31).
+ARGO,191,category_match,Matches ust_category 'ARGO' (id 191).
+ARIGATO,192,category_match,Matches ust_category 'ARIGATO' (id 192).
+Arm&hammer,193,category_match,Matches ust_category 'ARM&HAMMER' (id 193). Naming normalization only (case / '&' vs 'and' / separator).
+Aroy-d,194,category_match,Matches ust_category 'AROY-D' (id 194). Naming normalization only (case / '&' vs 'and' / separator).
+AROY-D,194,category_match,Matches ust_category 'AROY-D' (id 194).
+B&w,196,category_match,Matches ust_category 'B&W' (id 196). Naming normalization only (case / '&' vs 'and' / separator).
+BENTO,198,category_match,Matches ust_category 'BENTO' (id 198).
+BHAESAJ,199,category_match,Matches ust_category 'BHAESAJ' (id 199).
+BIGEN,200,category_match,Matches ust_category 'BIGEN' (id 200).
+BINBIN,201,category_match,Matches ust_category 'BINBIN' (id 201).
+BINGGRAE,202,category_match,Matches ust_category 'BINGGRAE' (id 202).
+Bonus,208,category_match,Matches ust_category 'BONUS' (id 208). Naming normalization only (case / '&' vs 'and' / separator).
+BUTTERFLY,213,category_match,Matches ust_category 'BUTTERFLY' (id 213).
+C&H,214,category_match,Matches ust_category 'C&H' (id 214).
+CALBEE,216,category_match,Matches ust_category 'CALBEE' (id 216).
+Calbee,216,category_match,Matches ust_category 'CALBEE' (id 216). Naming normalization only (case / '&' vs 'and' / separator).
+CARABAO,218,category_match,Matches ust_category 'CARABAO' (id 218).
+CARNATION,221,category_match,Matches ust_category 'CARNATION' (id 221).
+Carnation,221,category_match,Matches ust_category 'CARNATION' (id 221). Naming normalization only (case / '&' vs 'and' / separator).
+CHAOKOH,39,category_match,Matches ust_category 'CHAOKOH' (id 39).
+Chaokoh,39,category_match,Matches ust_category 'CHAOKOH' (id 39). Naming normalization only (case / '&' vs 'and' / separator).
+Chef Choice,224,category_match,Matches ust_category 'CHEF CHOICE' (id 224). Naming normalization only (case / '&' vs 'and' / separator).
+CHEF CHOICE,224,category_match,Matches ust_category 'CHEF CHOICE' (id 224).
+Chef's Delight Swai,13,category_match,Matches ust_category 'Chef's Delight Swai' (id 13).
+Chuon Chuon,231,category_match,Matches ust_category 'CHUON CHUON' (id 231). Naming normalization only (case / '&' vs 'and' / separator).
+CHUON CHUON,231,category_match,Matches ust_category 'CHUON CHUON' (id 231).
+COCK,233,category_match,Matches ust_category 'COCK' (id 233).
+COFFEE DU MONDE,236,category_match,Matches ust_category 'COFFEE DU MONDE' (id 236).
+DANDY,238,category_match,Matches ust_category 'DANDY' (id 238).
+DEE,240,category_match,Matches ust_category 'DEE' (id 240).
+Desserts/sweet,99,category_match,Matches ust_category 'Desserts & Sweet' (id 99). Naming normalization only (case / '&' vs 'and' / separator).
+DOUBLE HAPPINESS,32,category_match,Matches ust_category 'DOUBLE HAPPINESS' (id 32).
+Double Happiness,32,category_match,Matches ust_category 'DOUBLE HAPPINESS' (id 32). Naming normalization only (case / '&' vs 'and' / separator).
+DR OETKER,243,category_match,Matches ust_category 'DR OETKER' (id 243).
+DRAGONFLY,30,category_match,Matches ust_category 'DRAGONFLY' (id 30).
+Dragonfly,30,category_match,Matches ust_category 'DRAGONFLY' (id 30). Naming normalization only (case / '&' vs 'and' / separator).
+EXCELLENT,246,category_match,Matches ust_category 'EXCELLENT' (id 246).
+FF,250,category_match,Matches ust_category 'FF' (id 250).
+FMF,251,category_match,Matches ust_category 'FMF' (id 251).
+Food Coloring/essence,90,category_match,Matches ust_category 'Food Coloring & Essence' (id 90). Naming normalization only (case / '&' vs 'and' / separator).
+Food Coloring/Essence,90,category_match,Matches ust_category 'Food Coloring & Essence' (id 90). Naming normalization only (case / '&' vs 'and' / separator).
+G7,254,category_match,Matches ust_category 'G7' (id 254).
+Garden,255,category_match,Matches ust_category 'GARDEN' (id 255). Naming normalization only (case / '&' vs 'and' / separator).
+GARDEN,255,category_match,Matches ust_category 'GARDEN' (id 255).
+GLOBAL DEER,260,category_match,Matches ust_category 'GLOBAL DEER' (id 260).
+Global Deer,260,category_match,Matches ust_category 'GLOBAL DEER' (id 260). Naming normalization only (case / '&' vs 'and' / separator).
+GOLDEN MOUNTAIN,266,category_match,Matches ust_category 'GOLDEN MOUNTAIN' (id 266).
+Healthy Boy,269,category_match,Matches ust_category 'HEALTHY BOY' (id 269). Naming normalization only (case / '&' vs 'and' / separator).
+Heavenly Chef,270,category_match,Matches ust_category 'HEAVENLY CHEF' (id 270). Naming normalization only (case / '&' vs 'and' / separator).
+Hello Beebee,271,category_match,Matches ust_category 'HELLO BEEBEE' (id 271). Naming normalization only (case / '&' vs 'and' / separator).
+HELLO BEEBEE,271,category_match,Matches ust_category 'HELLO BEEBEE' (id 271).
+Hisamitsu,273,category_match,Matches ust_category 'HISAMITSU' (id 273). Naming normalization only (case / '&' vs 'and' / separator).
+Honeybee,274,category_match,Matches ust_category 'HONEYBEE' (id 274). Naming normalization only (case / '&' vs 'and' / separator).
+HONEYBEE,274,category_match,Matches ust_category 'HONEYBEE' (id 274).
+HUNTS,277,category_match,Matches ust_category 'HUNTS' (id 277).
+Indomie,279,category_match,Matches ust_category 'INDOMIE' (id 279). Naming normalization only (case / '&' vs 'and' / separator).
+JHC,283,category_match,Matches ust_category 'JHC' (id 283).
+Jhc,283,category_match,Matches ust_category 'JHC' (id 283). Naming normalization only (case / '&' vs 'and' / separator).
+Joyluck,284,category_match,Matches ust_category 'JOYLUCK' (id 284). Naming normalization only (case / '&' vs 'and' / separator).
+JOYLUCK,284,category_match,Matches ust_category 'JOYLUCK' (id 284).
+JUFRAN,286,category_match,Matches ust_category 'JUFRAN' (id 286).
+KAMYENJAN,291,category_match,Matches ust_category 'KAMYENJAN' (id 291).
+KNORR,295,category_match,Matches ust_category 'KNORR' (id 295).
+KOONCHUN,296,category_match,Matches ust_category 'KOONCHUN' (id 296).
+KOPIKO,297,category_match,Matches ust_category 'KOPIKO' (id 297).
+KWAN LOONG,299,category_match,Matches ust_category 'KWAN LOONG' (id 299).
+Ladybird,302,category_match,Matches ust_category 'LADYBIRD' (id 302). Naming normalization only (case / '&' vs 'and' / separator).
+LAYS,304,category_match,Matches ust_category 'LAYS' (id 304).
+LEE KUM KEE,305,category_match,Matches ust_category 'LEE KUM KEE' (id 305).
+Lee Kum Kee,305,category_match,Matches ust_category 'LEE KUM KEE' (id 305). Naming normalization only (case / '&' vs 'and' / separator).
+LONGEVITY,310,category_match,Matches ust_category 'LONGEVITY' (id 310).
+LUX,315,category_match,Matches ust_category 'LUX' (id 315).
+MAE SRI,318,category_match,Matches ust_category 'MAE SRI' (id 318).
+MAEPLOY,36,category_match,Matches ust_category 'Maeploy' (id 36). Naming normalization only (case / '&' vs 'and' / separator).
+Maeploy,36,category_match,Matches ust_category 'Maeploy' (id 36).
+Mama,323,category_match,Matches ust_category 'MAMA' (id 323). Naming normalization only (case / '&' vs 'and' / separator).
+MAMA,323,category_match,Matches ust_category 'MAMA' (id 323).
+Mama Sita,324,category_match,Matches ust_category 'MAMA SITA' (id 324). Naming normalization only (case / '&' vs 'and' / separator).
+MAMA SITA,324,category_match,Matches ust_category 'MAMA SITA' (id 324).
+Meat Specialty/other,150,category_match,Matches ust_category 'Meat Specialty & Other' (id 150). Naming normalization only (case / '&' vs 'and' / separator).
+Meat Specialty/Other,150,category_match,Matches ust_category 'Meat Specialty & Other' (id 150). Naming normalization only (case / '&' vs 'and' / separator).
+MENLO,335,category_match,Matches ust_category 'MENLO' (id 335).
+Miao Miao,336,category_match,Matches ust_category 'MIAO MIAO' (id 336). Naming normalization only (case / '&' vs 'and' / separator).
+Milo,337,category_match,Matches ust_category 'MILO' (id 337). Naming normalization only (case / '&' vs 'and' / separator).
+NOH,356,category_match,Matches ust_category 'NOH' (id 356).
+NONGSHIM,37,category_match,Matches ust_category 'NONGSHIM' (id 37).
+Nongshim,37,category_match,Matches ust_category 'NONGSHIM' (id 37). Naming normalization only (case / '&' vs 'and' / separator).
+NORA,358,category_match,Matches ust_category 'NORA' (id 358).
+NUMBER ONE,42,category_match,Matches ust_category 'NUMBER ONE' (id 42).
+Number One,42,category_match,Matches ust_category 'NUMBER ONE' (id 42). Naming normalization only (case / '&' vs 'and' / separator).
+Obaba Fresh,529,category_match,Matches ust_category 'OBABA FRESH' (id 529). Naming normalization only (case / '&' vs 'and' / separator).
+OISHI,361,category_match,Matches ust_category 'OISHI' (id 361).
+Ojo,362,category_match,Matches ust_category 'OJO' (id 362). Naming normalization only (case / '&' vs 'and' / separator).
+OTHER,365,category_match,Matches ust_category 'OTHER' (id 365).
+Other,365,category_match,Matches ust_category 'OTHER' (id 365). Naming normalization only (case / '&' vs 'and' / separator).
+PANTAI,370,category_match,Matches ust_category 'PANTAI' (id 370).
+PEARL RIVER BRIDGE,372,category_match,Matches ust_category 'PEARL RIVER BRIDGE' (id 372).
+PHILIPPINE,373,category_match,Matches ust_category 'PHILIPPINE' (id 373).
+PINK LOTUS,33,category_match,Matches ust_category 'PINK LOTUS' (id 33).
+Pink Lotus,33,category_match,Matches ust_category 'PINK LOTUS' (id 33). Naming normalization only (case / '&' vs 'and' / separator).
+RED BOAT,40,category_match,Matches ust_category 'RED BOAT' (id 40).
+SAMYANG,387,category_match,Matches ust_category 'SAMYANG' (id 387).
+Sincere,399,category_match,Matches ust_category 'SINCERE' (id 399). Naming normalization only (case / '&' vs 'and' / separator).
+Squid,408,category_match,Matches ust_category 'SQUID' (id 408). Naming normalization only (case / '&' vs 'and' / separator).
+Sting,409,category_match,Matches ust_category 'STING' (id 409). Naming normalization only (case / '&' vs 'and' / separator).
+SUPER,415,category_match,Matches ust_category 'SUPER' (id 415).
+SUPER POWER,416,category_match,Matches ust_category 'SUPER POWER' (id 416).
+Syrups/Agar,69,category_match,Matches ust_category 'Syrups & Agar' (id 69). Naming normalization only (case / '&' vs 'and' / separator).
+Syrups/agar,69,category_match,Matches ust_category 'Syrups & Agar' (id 69). Naming normalization only (case / '&' vs 'and' / separator).
+TAO KAE NOI,418,category_match,Matches ust_category 'TAO KAE NOI' (id 418).
+Tas,419,category_match,Matches ust_category 'TAS' (id 419). Naming normalization only (case / '&' vs 'and' / separator).
+TASCO,34,category_match,Matches ust_category 'TASCO' (id 34).
+Tasco,34,category_match,Matches ust_category 'TASCO' (id 34). Naming normalization only (case / '&' vs 'and' / separator).
+TOTOLE,430,category_match,Matches ust_category 'TOTOLE' (id 430).
+TRIPLE LEAF TEA,432,category_match,Matches ust_category 'TRIPLE LEAF TEA' (id 432).
+UFC,439,category_match,Matches ust_category 'UFC' (id 439).
+VITASOY,443,category_match,Matches ust_category 'VITASOY' (id 443).
+Waiwai,445,category_match,Matches ust_category 'WAIWAI' (id 445). Naming normalization only (case / '&' vs 'and' / separator).
+WAIWAI,445,category_match,Matches ust_category 'WAIWAI' (id 445).
+WANG,446,category_match,Matches ust_category 'WANG' (id 446).
+WEI CHUAN,448,category_match,Matches ust_category 'WEI CHUAN' (id 448).
+Wf,449,category_match,Matches ust_category 'WF' (id 449). Naming normalization only (case / '&' vs 'and' / separator).
+WF,449,category_match,Matches ust_category 'WF' (id 449).
+WHITE FLOWER,450,category_match,Matches ust_category 'WHITE FLOWER' (id 450).
+White Flower,450,category_match,Matches ust_category 'WHITE FLOWER' (id 450). Naming normalization only (case / '&' vs 'and' / separator).
+White Rabbit,452,category_match,Matches ust_category 'WHITE RABBIT' (id 452). Naming normalization only (case / '&' vs 'and' / separator).
+WINDMILL,453,category_match,Matches ust_category 'WINDMILL' (id 453).
+Zebra,460,category_match,Matches ust_category 'ZEBRA' (id 460). Naming normalization only (case / '&' vs 'and' / separator).
+ZEBRA,460,category_match,Matches ust_category 'ZEBRA' (id 460).
+Cart,,ui_label,UI / navigation label collected in categories_name (not a product category).
+Categories,,ui_label,UI / navigation label collected in categories_name (not a product category).
+Editor's Pick,,ui_label,UI / navigation label collected in categories_name (not a product category).
+Home,,ui_label,UI / navigation label collected in categories_name (not a product category).
+Product Detail,,ui_label,UI / navigation label collected in categories_name (not a product category).
+Recommend by Service,,ui_label,UI / navigation label collected in categories_name (not a product category).
+Recommended,,ui_label,UI / navigation label collected in categories_name (not a product category).
+Search,,ui_label,UI / navigation label collected in categories_name (not a product category).

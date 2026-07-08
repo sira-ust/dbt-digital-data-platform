@@ -1,0 +1,3 @@
+method_code,meaning
+0,"When type=3, 0 is valid. Indicates non self pickup."
+1,"When type=3, 1 is valid. Indicate self pickup."

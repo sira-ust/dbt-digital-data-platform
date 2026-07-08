@@ -1,0 +1,8 @@
+event_type_code,event_name,payload_fields
+1,Page access,"title, second"
+2,Add to cart,"sku, qty, title"
+3,Submit order,"method, quote_id, address, source, notes"
+4,Click product category icon,"icon, categories_name"
+5,Delete product,"sku, page, categories_name"
+6,Enter product detail page,"sku, page, categories_name"
+7,Search button,"keyword, page"

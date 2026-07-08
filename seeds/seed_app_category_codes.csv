@@ -1,0 +1,15 @@
+app_category_code,app_id,ust_category_id,category_name,icon,code_type,notes
+100,6,6,Rice & Noodles,Rice,real_category,App alias code for a real L3 category
+300,19,19,Canned Goods & Vegetables,Canned,real_category,App alias code for a real L3 category
+500,20,20,Seafood & Meat,Seafood,real_category,App alias code for a real L3 category
+600,43,43,Sauces & Seasonings,Sauces,real_category,App alias code for a real L3 category
+800,21,21,Baking & Mixes,Baking,real_category,App alias code for a real L3 category
+900,24,24,Desserts & Sweets,Desserts,real_category,App alias code for a real L3 category
+1200,25,25,Snacks,Snacks,real_category,App alias code for a real L3 category
+1300,26,26,Beverages,Beverages,real_category,App alias code for a real L3 category
+1600,27,27,Fresh & Frozen,Fresh,real_category,App alias code for a real L3 category
+1700,28,28,Household,Households,real_category,App alias code for a real L3 category
+1111,-2,,New,New,virtual_slot,Home-page section / icon (father_category)
+8888,-3,,Promo,Promo,virtual_slot,Home-page section / icon (father_category)
+9990,,,New Recommendation,Recommendation,virtual_slot,'New recommendation' feed (api.v2)
+9991,-6,,Recommend by Service,Recommendation,virtual_slot,Recommendation template (api.v2 + Z%)

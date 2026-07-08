@@ -7,7 +7,13 @@ seeds:
       (SystemEventLog_API_Documentation_0327, v1.0 March 2026 — source
       info-Event_Type_Definition.xlsx, last updated 2026-03-23), extended
       2026-07-07 with 193 codes from the dev team's updated dictionary
-      (adds L1 category 20 = Vender and parent/menu-level codes).
+      (adds L1 category 20 = Vender and parent/menu-level codes) and
+      2026-07-08 with 17 codes answered via the seed-gap review (incl. the
+      18130000-18220000 PDA order-workflow family, whose payload is
+      "customer,order_type" with order_type 0=customer, 1=Q2O, 2=NAV,
+      4=Sales). Intentionally NOT seeded per the dev team: 00000000
+      (test mark / invalid data) and obsolete codes 03110400, 10051500,
+      10691200, 11124000 — these stay visible in dq_unmapped_event_codes.
       Grain — one row per 8-digit description_code (digits 1-2 L1 Category,
       3-4 L2 Sub-category, 5-6 L3 Action, 7-8 L4 Result: 01=Success,
       02=Fail, 00=N/A). Covers all L1 categories 01-20.
@@ -49,8 +55,11 @@ seeds:
 
   - name: seed_app_sources
     description: >
-      App source registry from API documentation Section 2.3 — all 9 source
-      codes. Convention App Name - Platform (I=iOS, A=Android);
+      App source registry from API documentation Section 2.3 — the 9
+      documented source codes plus 2 bare legacy codes (CatalogFC, Vegas)
+      confirmed by the dev team (2026-07-08) to be aliases of the iOS
+      variants CatalogFC-I / Vegas-I, sent by older app builds without the
+      platform suffix. Convention App Name - Platform (I=iOS, A=Android);
       single-platform apps omit the suffix.
 
 
@@ -73,10 +82,21 @@ seeds:
 
   - name: seed_categories
     description: >
-      Complete catalog category id -> name map from API documentation §8.4
-      (18 categories, including virtual sections 1111=New, 7777=HOT,
-      8888=Promo, 9999=Recommend, 4444=Back Order, 5555=Purchase History).
-      Used to decode the category key in kv payloads (19010000 Catalog View).
+      Website category taxonomy: the API-doc §8.4 top-level categories plus
+      the 65 ust_category subcategories (ids 44-171) added 2026-07-08 per
+      the dev team's tab-5 decision ("Suggested add? = Yes", all active with
+      products). Id 169 "T3" is held back (active but 0 products, under
+      review). Per the dev team's App Category Code Dictionary, 1111=New and
+      8888=Promo were REMOVED from this seed ("Exclude from category seed" —
+      they are home-page sections, not product categories) and live in
+      seed_app_category_codes as virtual slots; the remaining virtual
+      sections (4444=Back Order, 5555=Purchase History, 7777=HOT,
+      9999=Recommend) were not covered by that dictionary and stay here
+      pending the same classification. App-side payload codes live in
+      seed_app_category_codes — the two numbering systems collide (app code
+      100 = Rice & Noodles via ust_category id 6, but website id 100 =
+      Seafood Specialty & Other). Decode order for category keys in
+      payloads: try seed_app_category_codes first, then this seed.
 
 
       {{ doc("categories_glossary") }}
@@ -89,6 +109,172 @@ seeds:
       - name: category_name
         tests:
           - not_null
+
+  - name: seed_app_category_codes
+    description: >
+      App Category Code Dictionary from the dev team (2026-07-08): decodes
+      the category codes the PDA/customer apps write into Catalog View kv
+      payloads (19010000) and user_activity_report_event.category. Two code
+      systems per row: app_category_code (hundreds-style payload code) and
+      app_id (the app's internal id, negative for virtual slots) — decode by
+      matching EITHER column. code_type real_category rows are aliases of a
+      real L3 website category (join ust_category_id -> seed_categories /
+      ust_category, e.g. app 100 -> website id 6 Rice & Noodles); virtual_slot
+      rows (1111=New app_id -2, 8888=Promo app_id -3, 9990=New Recommendation,
+      9991=Recommend by Service app_id -6) are home-page sections/feeds, NOT
+      product categories. Kept separate from seed_categories because the
+      numbering overlaps the website ids (app 100 != website 100). App ids
+      -1, -5, -123 are intentionally NOT seeded — "No source record found;
+      treat as pseudo data" per dev team.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: app_category_code
+        tests:
+          - unique
+          - not_null
+      - name: ust_category_id
+        description: FK to seed_categories/ust_category for real_category rows; empty for virtual slots
+      - name: code_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: [real_category, virtual_slot]
+      - name: category_name
+        tests:
+          - not_null
+
+  - name: seed_category_name_aliases
+    description: >
+      Decodes raw tracking_report_event.categories_name strings to category
+      ids, built 2026-07-08 from the dev team's tab-4 answers in the seed-gap
+      review (dev_definition column is their text verbatim, sic). Grain — one
+      row per observed raw name variant (casing/spelling variants are separate
+      rows on purpose; match on exact raw string). alias_type:
+      aggregate_view_all = "All X" view-all entries mapping to the parent L3
+      category; category_match = brand/subcategory names matching a
+      ust_category row; ui_label = navigation labels (Cart, Categories,
+      Product Detail, ...) with category_id NULL — intentionally excluded
+      from category mapping per the dev team. IMPORTANT: 144 of the
+      category_match ids reference ust_category rows MISSING from the
+      Databricks replica (it holds only 78 of 460+ rows) — they are seeded
+      from the dev team's answers and pending verification via the
+      warn-level relationships test below; flip it to error once the dev
+      team fixes the replication. On the DuckDB target the test warns by
+      design (mock ust_category is generated from seed_categories, which
+      lacks the brand ids). 16 raw names remain unseeded — no definition
+      from the dev team yet (Ask 2 in seed_mapping_for_dev_team_260708.xlsx).
+      Decode order for categories_name: this seed first (exact raw string),
+      then seed_categories by name.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: raw_name
+        description: Exact raw string as observed in the data (verbatim, incl. casing)
+        tests:
+          - unique
+          - not_null
+      - name: category_id
+        description: Target ust_category / seed_categories id; NULL for ui_label rows
+        tests:
+          - relationships:
+              arguments:
+                to: source('mysql', 'category')
+                field: category_id
+              config:
+                severity: warn
+      - name: alias_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [aggregate_view_all, category_match, ui_label]
+
+  # ── Customer tracking (tracking_report_event) code tables ──
+  # All definitions from the dev team's seed-gap review, tab "6 No seed
+  # exists", returned 2026-07-08. Definitions transcribed verbatim (sic).
+
+  - name: seed_tracking_event_types
+    description: >
+      tracking_report_event.type code map (dev team, 2026-07-08).
+      payload_fields lists which event columns carry the payload for that
+      type. Code 0 is intentionally NOT seeded — "WEB 1.5 Web User Page
+      Visit Tracking", deprecated.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: event_type_code
+        tests: [unique, not_null]
+      - name: event_name
+        tests: [not_null]
+
+  - name: seed_tracking_methods
+    description: >
+      tracking_report_event.method code map (dev team, 2026-07-08).
+      Only meaningful when type=3 (Submit order): 0 = non self pickup,
+      1 = self pickup.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: method_code
+        tests: [unique, not_null]
+
+  - name: seed_tracking_sources
+    description: >
+      tracking_report_event.source code map (dev team, 2026-07-08):
+      APP = Vegas APP, CAT = Catalog FC. Mostly empty in the data.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: source_code
+        tests: [unique, not_null]
+
+  - name: seed_tracking_icons
+    description: >
+      tracking_report_event.icon label map (dev team, 2026-07-08). Note the
+      spelling variants are real data: "Back Order" and "Backorder" both mean
+      the backorder icon (click_backorder_icon); "Recommended" and
+      "Recommend" both mean click_suggest_icon.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: icon_label
+        tests: [unique, not_null]
+
+  # ── Sales activity (user_activity_report_event) code tables ──
+
+  - name: seed_activity_types
+    description: >
+      user_activity_report_event.act_type code map (dev team, 2026-07-08).
+      Codes 1-15 and 99 are the main activity types; the 1xx/2xx codes are
+      rare strays (likely method codes written into act_type). Code 0
+      (483 rows) came back with no definition — still open with the dev team.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: activity_type_code
+        tests: [unique, not_null]
+      - name: activity_name
+        tests: [not_null]
+
+  - name: seed_activity_methods
+    description: >
+      user_activity_report_event.method code map (dev team, 2026-07-08).
+      IMPORTANT — low codes (0-5) are context-dependent: their meaning
+      depends on act_type ("Must be used in conjunction with act_type"),
+      e.g. method 1 = Delete order under act_type 9 but top-menu category
+      navigation under act_type 12. The 1xx codes are login/account actions,
+      2xx are download/sync actions. Codes 112 and 299 are intentionally
+      NOT seeded (deprecated per dev team). user_activity_report_event.layout
+      also remains UNSEEDED — the dev team's exact 0/1/2 mapping
+      (New Layout / Standard Layout) is still to be confirmed.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: method_code
+        tests: [unique, not_null]
+      - name: meaning
+        tests: [not_null]
 
   - name: seed_jdawms_data_dictionary
     description: >

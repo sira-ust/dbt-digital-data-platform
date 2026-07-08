@@ -9,11 +9,74 @@ category_id,category_name
 27,Fresh & Frozen
 28,Household
 43,Sauces & Seasonings
+44,Rice
+45,Noodles
+46,Rice Paper
+47,Instant Noodles & Porridge
+48,Lotus Rootlet
+49,Bamboo Shoots & Mixes
+50,Quail & Duck Eggs
+51,Mushrooms
+52,Vegetarian
+53,Corn & Waterchestnuts
+54,Preserved & Pickled
+55,Canned Seafood
+56,Dried Seafood
+57,Canned & Packaged Meats
+58,Fish Sauce
+59,Seasoning Sauces
+60,Soup Base & Powders
+61,Marinades & Dips
+62,Seasoning Mix & Curries
+63,Oil & Vinegar
+64,Condiments
+65,Nuts & Beans
+66,Tapioca & Dessert Mixes
+67,Dried Vegetables & Spices
+68,Flour & Batter Mixes
+69,Syrups & Agar
+70,Canned Fruits
+71,Ready Desserts
+72,Sugar & Condensed Milk
+73,Coconut Milk
+74,Candies
+75,Cookies & Crackers
+76,Salty Snacks
+77,Dehydrated Fruits
+78,Packaged Teas
+79,Instant Coffee & Drinks
+80,Juices & Teas
+81,Carbonated & Energy Drinks
+82,Cookware
+83,Utensils
+84,Joss Items
+85,Plastic Bags & Rolls
+86,Household & Cleaning
+87,Personal Care
+88,Medicinal
+89,Mats & Rattan
+90,Food Coloring & Essence
+91,Shrimp & Prawn
+92,Shellfish
+93,Squid & Cuttlefish
+94,Drinks
+95,Fruits & Vegetables
+96,Noodles & Wrappers
+97,Fish Whole
+98,Fish Specialty
+99,Desserts & Sweet
+100,Seafood Specialty & Other
 134,Special Items
+143,Jelly & Pudding
+149,Meats
+150,Meat Specialty & Other
+152,Appetizers & Meals
+153,Fresh
+163,Bakery
 168,Scraping music
-1111,New
+170,Tableware
+171,Cleaning Products
 4444,Back Order
 5555,Purchase History
 7777,HOT
-8888,Promo
 9999,Recommend

@@ -1,4 +1,5 @@
 description_code,function_name,l1_category_name,payload_format,has_geo,is_system_event,event_type,log_level,platforms
+01000000,System (app open / network status change),System Environment,,false,false,,,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web"
 01010100,Network: Enable,System Environment,none,false,true,System Event,INFO,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE"
 01010200,Network: Disable,System Environment,none,false,true,System Event,INFO,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE"
 01020100,Battery,System Environment,bare_value,false,false,,INFO,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE"
@@ -11,6 +12,7 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 02010200,Sales Equipment Permission - Fail,Login & Logout,none,false,true,System Event,WARN,"PDA,CatalogFS,CatalogSE"
 02020100,Sending Local Log - Successful,Login & Logout,none,false,true,System Event,INFO,PDA
 02020200,Sending Local Log - Failed,Login & Logout,none,false,true,System Event,WARN,PDA
+02030000,Login (generic),Login & Logout,,false,false,,,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web"
 02030101,Login: Username - Success,Login & Logout,none,true,true,System Event,INFO,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web"
 02030102,Login: Username - Fail,Login & Logout,none,true,true,System Event,WARN,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web"
 02030201,Login: SSO - Success,Login & Logout,none,true,true,System Event,INFO,"PDA,CatalogFS"
@@ -40,6 +42,9 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 03090300,Show FD Skip - Customer List,Data Download & Sync,kv,false,true,System Event,INFO,CatalogFS
 03100100,Home Download - Success,Data Download & Sync,duration,false,true,System Event,INFO,PDA
 03100200,Home Download - Fail,Data Download & Sync,fail_marker,false,true,System Event,WARN,PDA
+03110100,Full Download image - Success,Data Download & Sync,duration,false,true,System Event,INFO,CatalogFS
+03110200,Full Download image - Cancel,Data Download & Sync,duration,false,true,System Event,INFO,CatalogFS
+03110300,Full Download image - Fail,Data Download & Sync,fail_marker,false,true,System Event,WARN,CatalogFS
 04010100,Order List: Customer - Success,Send Order,positional_order,true,true,System Event,INFO,"PDA,CatalogFS"
 04010200,Order List: Customer - Fail,Send Order,positional_order,true,true,System Event,WARN,"PDA,CatalogFS"
 04020100,Order List: Sales - Success,Send Order,positional_order,true,true,System Event,INFO,"PDA,CatalogFS"
@@ -50,6 +55,7 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 04040200,Order Detail: Sales - Fail,Send Order,none,true,true,System Event,WARN,"PDA,CatalogFS"
 04050100,submit_quote_cart_page - Success,Send Order,bare_value,true,true,System Event,INFO,"Vegas,CatalogFC,CatalogSE"
 04050200,submit_quote_cart_page - Fail,Send Order,bare_value,true,true,System Event,WARN,"Vegas,CatalogFC,CatalogSE"
+04060000,submit_sales_unreviewed_order,Send Order,bare_value,false,false,,,PDA
 05010100,Request Review: Order List - Success,Request Review,positional_order,false,true,System Event,INFO,"PDA,CatalogFS"
 05010200,Request Review: Order List - Fail,Request Review,bare_value,false,true,System Event,WARN,"PDA,CatalogFS"
 05020100,Request Review: Order Detail - Success,Request Review,positional_order,false,true,System Event,INFO,"PDA,CatalogFS"
@@ -77,6 +83,7 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 09060000,(BLE Only) Use Existing Order on Catalog,Create Order,none,true,false,,INFO,PDA
 09070000,(BLE Only) Merge Orders,Create Order,none,true,false,,INFO,PDA
 09080000,Item Long Press +: Create New Order,Create Order,none,true,false,,INFO,CatalogFS
+10000000,Order operation (generic),Order Operations,,false,false,,,
 10010100,Change Shipping Address,Order Operations,positional,false,false,,INFO,PDA
 10010200,Choose Shipping Address Dialog,Order Operations,bare_value,false,false,,INFO,PDA
 10010300,Change Address: Order Detail,Order Operations,none,false,false,,INFO,CatalogFS
@@ -384,6 +391,16 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 18100000,promo_to_buttom,Activity (Customer Interactions),none,false,false,EVENT,EVENT,"Vegas,Web"
 18110000,new_to_buttom,Activity (Customer Interactions),none,false,false,EVENT,EVENT,"Vegas,Web"
 18120000,rec_to_buttom,Activity (Customer Interactions),none,false,false,EVENT,EVENT,Vegas
+18130000,Accessing the nearby page,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18140000,Accessing the summary page,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18150000,Accessing the review page,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18160000,Expanding lineitem - AC/QPC details,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18170000,Expanding lineitem - AC input,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18180000,Expanding lineitem - QPC input,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18190000,Expanding lineitem - OH details,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18200000,Expanding lineitem - Expected arrival details,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18210000,Accessing Check OOS,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
+18220000,Accessing Edit Shipping,Activity (Customer Interactions),positional,false,false,EVENT,EVENT,PDA
 19010000,Catalog View,Catalog View Analytics,kv,true,false,EVENT,EVENT,"CatalogFS,CatalogFC"
 20000000,Vender,Vender,bare_value,false,false,,EVENT,Web
 20010100,Vender - Login - Success,Vender,none,false,false,,EVENT,Web
