@@ -9,8 +9,8 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 01040200,Location-Fail,System Environment,fail_marker,false,true,System Event,INFO,"PDA,CatalogFS,CatalogSE"
 02010100,Sales Equipment Permission - Success,Login & Logout,bare_value,false,true,System Event,INFO,"PDA,CatalogFS,CatalogSE"
 02010200,Sales Equipment Permission - Fail,Login & Logout,none,false,true,System Event,WARN,"PDA,CatalogFS,CatalogSE"
-02020100,Sending Local Log - Successful,Login & Logout,none,false,true,System Event,INFO,"PDA"
-02020200,Sending Local Log - Failed,Login & Logout,none,false,true,System Event,WARN,"PDA"
+02020100,Sending Local Log - Successful,Login & Logout,none,false,true,System Event,INFO,PDA
+02020200,Sending Local Log - Failed,Login & Logout,none,false,true,System Event,WARN,PDA
 02030101,Login: Username - Success,Login & Logout,none,true,true,System Event,INFO,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web"
 02030102,Login: Username - Fail,Login & Logout,none,true,true,System Event,WARN,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web"
 02030201,Login: SSO - Success,Login & Logout,none,true,true,System Event,INFO,"PDA,CatalogFS"
@@ -18,8 +18,8 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 02040000,Logout,Login & Logout,none,false,true,System Event,INFO,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web"
 02040100,Timeout,Login & Logout,none,false,true,System Event,INFO,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE"
 02040200,Voluntarily Exit,Login & Logout,none,false,true,System Event,INFO,"PDA,CatalogFS,Vegas,CatalogFC,CatalogSE"
-03010100,Auto Download - Success,Data Download & Sync,duration,false,true,System Event,INFO,"PDA"
-03010200,Auto Download - Fail,Data Download & Sync,fail_marker,false,true,System Event,WARN,"PDA"
+03010100,Auto Download - Success,Data Download & Sync,duration,false,true,System Event,INFO,PDA
+03010200,Auto Download - Fail,Data Download & Sync,fail_marker,false,true,System Event,WARN,PDA
 03020100,Settings > FD - Success,Data Download & Sync,duration,false,true,System Event,INFO,"PDA,CatalogFS,CatalogFC,CatalogSE"
 03020200,Settings > FD - Fail,Data Download & Sync,fail_marker,false,true,System Event,WARN,"PDA,CatalogFS,CatalogFC,CatalogSE"
 03030100,Full Download Popup - Success,Data Download & Sync,duration,false,true,System Event,INFO,"PDA,CatalogFS,CatalogSE"
@@ -37,9 +37,9 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 03080200,Customer List Sync - Fail,Data Download & Sync,fail_marker,false,true,System Event,WARN,"CatalogFS,CatalogSE"
 03090100,Show FD Skip - Login,Data Download & Sync,kv,false,true,System Event,INFO,"CatalogFS,CatalogSE"
 03090200,Show FD Skip - Home,Data Download & Sync,kv,false,true,System Event,INFO,"PDA,CatalogFS,CatalogSE"
-03090300,Show FD Skip - Customer List,Data Download & Sync,kv,false,true,System Event,INFO,"CatalogFS"
-03100100,Home Download - Success,Data Download & Sync,duration,false,true,System Event,INFO,"PDA"
-03100200,Home Download - Fail,Data Download & Sync,fail_marker,false,true,System Event,WARN,"PDA"
+03090300,Show FD Skip - Customer List,Data Download & Sync,kv,false,true,System Event,INFO,CatalogFS
+03100100,Home Download - Success,Data Download & Sync,duration,false,true,System Event,INFO,PDA
+03100200,Home Download - Fail,Data Download & Sync,fail_marker,false,true,System Event,WARN,PDA
 04010100,Order List: Customer - Success,Send Order,positional_order,true,true,System Event,INFO,"PDA,CatalogFS"
 04010200,Order List: Customer - Fail,Send Order,positional_order,true,true,System Event,WARN,"PDA,CatalogFS"
 04020100,Order List: Sales - Success,Send Order,positional_order,true,true,System Event,INFO,"PDA,CatalogFS"
@@ -60,6 +60,8 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 06020200,Sales Review: Order List - Fail,Send Sales Review,bare_value,false,true,System Event,WARN,"PDA,CatalogFS"
 06030100,Sales Review: Auto Upload - Success,Send Sales Review,positional_order,false,true,System Event,INFO,"PDA,CatalogFS"
 06030200,Sales Review: Auto Upload - Fail,Send Sales Review,bare_value,false,true,System Event,WARN,"PDA,CatalogFS"
+06040100,Order List -Review Success,Send Sales Review,positional_order,false,true,,,
+06040200,Order List -Review Fail,Send Sales Review,none,false,false,,,
 07010100,Restore: Order Detail - Success,Restore Order,bare_value,false,true,System Event,INFO,"PDA,CatalogFS"
 07010200,Restore: Order Detail - Fail,Restore Order,bare_value,false,true,System Event,WARN,"PDA,CatalogFS"
 07020100,Restore: Recycle Bin - Success,Restore Order,bare_value,false,true,System Event,INFO,"PDA,CatalogFS"
@@ -68,25 +70,48 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 08020000,Delete: Sales Order List,Delete Order,bare_value,false,false,,INFO,"PDA,CatalogFS"
 08030000,Auto Delete Order,Delete Order,bare_value,false,false,,INFO,"PDA,CatalogFS"
 09010000,Create Order,Create Order,bare_value,true,false,,INFO,"PDA,CatalogFS"
-09020000,Copy to New Order: Sales List,Create Order,none,true,false,,INFO,"PDA"
-09030000,Copy to New Order: Office List,Create Order,none,true,false,,INFO,"PDA"
-09040000,Copy to New Order: Recycle Bin,Create Order,none,true,false,,INFO,"PDA"
-09050000,(BLE Only) Create New Order,Create Order,none,true,false,,INFO,"PDA"
-09060000,(BLE Only) Use Existing Order on Catalog,Create Order,none,true,false,,INFO,"PDA"
-09070000,(BLE Only) Merge Orders,Create Order,none,true,false,,INFO,"PDA"
-09080000,Item Long Press +: Create New Order,Create Order,none,true,false,,INFO,"CatalogFS"
-10010100,Change Shipping Address,Order Operations,positional,false,false,,INFO,"PDA"
-10010300,Change Address: Order Detail,Order Operations,none,false,false,,INFO,"CatalogFS"
-10010400,Change Address: Place Your Order,Order Operations,none,false,false,,INFO,"Vegas"
-10020100,Change Freight,Order Operations,none,false,false,,INFO,"PDA"
-10040100,Delete Item: Order Detail,Order Operations,sku,false,false,EVENT,EVENT,"CatalogFS"
+09020000,Copy to New Order: Sales List,Create Order,none,true,false,,INFO,PDA
+09030000,Copy to New Order: Office List,Create Order,none,true,false,,INFO,PDA
+09040000,Copy to New Order: Recycle Bin,Create Order,none,true,false,,INFO,PDA
+09050000,(BLE Only) Create New Order,Create Order,none,true,false,,INFO,PDA
+09060000,(BLE Only) Use Existing Order on Catalog,Create Order,none,true,false,,INFO,PDA
+09070000,(BLE Only) Merge Orders,Create Order,none,true,false,,INFO,PDA
+09080000,Item Long Press +: Create New Order,Create Order,none,true,false,,INFO,CatalogFS
+10010100,Change Shipping Address,Order Operations,positional,false,false,,INFO,PDA
+10010200,Choose Shipping Address Dialog,Order Operations,bare_value,false,false,,INFO,PDA
+10010300,Change Address: Order Detail,Order Operations,none,false,false,,INFO,CatalogFS
+10010400,Change Address: Place Your Order,Order Operations,none,false,false,,INFO,Vegas
+10020100,Change Freight,Order Operations,none,false,false,,INFO,PDA
+10020200,Enter Freight Dialog,Order Operations,bare_value,false,false,,INFO,PDA
+10020300,Order Detail,Order Operations,bare_value,false,false,,INFO,CatalogFS
+10030000,Copy to new order,Order Operations,none,false,false,,INFO,
+10030100,Order List: Sales,Order Operations,none,false,false,,INFO,PDA
+10030200,Order List: Office,Order Operations,none,false,false,,INFO,PDA
+10030300,Recycle Bin for Orders,Order Operations,none,false,false,,INFO,PDA
+10030400,Order List,Order Operations,none,false,false,,INFO,Vegas
+10030500,Order Detail,Order Operations,none,false,false,,INFO,Vegas
+10040000,Delete Order Item,Order Operations,none,false,false,,INFO,
+10040100,Delete Item: Order Detail,Order Operations,sku,false,false,EVENT,EVENT,CatalogFS
+10040200,Catalog List,Order Operations,bare_value,false,false,,EVENT,CatalogFS
+10040300,Line Item,Order Operations,bare_value,false,false,,EVENT,PDA
+10040400,Review,Order Operations,bare_value,false,false,,EVENT,PDA
+10040500,Order Detail Enter,Order Operations,bare_value,false,false,,EVENT,PDA
+10040600,Order Detail Search List,Order Operations,bare_value,false,false,,EVENT,PDA
 10040700,remove_item_suggest_page,Order Operations,sku,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10040800,remove_item_promo_page,Order Operations,sku,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10040900,remove_item_new_page,Order Operations,sku,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10041000,remove_item_backorder_page,Order Operations,sku,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10041100,remove_item_category_page,Order Operations,positional,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10041200,remove_item_list_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10041300,remove_item_history_page,Order Operations,sku,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 10041400,remove_item_cart_page,Order Operations,sku,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10041500,remove_item_detail_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10041600,remove_product_quick_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas"
+10041700,remove_new_and_promo_page,Order Operations,bare_value,false,false,EVENT,EVENT,"PDA,CatalogFS,Web"
+10041800,remove_item_wish_list_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10041900,remove_item_brand_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10042000,remove_item_recommend_services_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10050000,Item Add,Order Operations,none,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10050100,add_item_list_page,Order Operations,positional,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10050200,add_item_suggest_page,Order Operations,positional,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 10050300,add_item_promo_page,Order Operations,positional,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
@@ -95,35 +120,151 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 10050600,add_item_history_page,Order Operations,positional,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 10050700,add_item_detail_page,Order Operations,positional,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10050800,add_item_quick_page,Order Operations,positional,false,false,EVENT,EVENT,"CatalogFS,Vegas,Web"
+10050900,add_line_item_page,Order Operations,bare_value,false,false,EVENT,EVENT,PDA
+10051000,add_new_and_promo_page,Order Operations,bare_value,false,false,EVENT,EVENT,"PDA,Web"
+10051100,add_item_wish_list_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10051200,add_item_brand_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10051300,add_item_recommend_services_page,Order Operations,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10051400,add_item_category_page,Order Operations,positional,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10060000,Calculator,Order Operations,none,false,false,,INFO,
+10060100,Order Detail,Order Operations,none,false,false,,INFO,PDA
+10070000,Keyboard Mode,Order Operations,none,false,false,,INFO,
+10070100,Order Detail-On,Order Operations,none,false,false,,INFO,PDA
+10070200,Order Detail-Off,Order Operations,none,false,false,,INFO,PDA
+10080000,Show OH,Order Operations,none,false,false,,INFO,
+10080100,Line Item,Order Operations,bare_value,false,false,,INFO,PDA
+10090000,Salesperson Notes,Order Operations,bare_value,false,false,,INFO,
+10090100,Summary,Order Operations,bare_value,false,false,,INFO,PDA
+10090200,Order Detail,Order Operations,none,false,false,,INFO,CatalogFS
+10100000,PO NUMBER,Order Operations,bare_value,false,false,,INFO,
+10100100,Summary,Order Operations,bare_value,false,false,,INFO,PDA
+10100200,Order Detail,Order Operations,bare_value,false,false,,INFO,CatalogFS
+10110000,Customer Notes,Order Operations,none,false,false,,INFO,
+10110100,Place Your Order,Order Operations,bare_value,false,false,,INFO,Vegas
+10120000,Show Customer Notes,Order Operations,none,false,false,,INFO,
+10120100,Order Detail,Order Operations,none,false,false,,INFO,PDA
+10120200,Office Order Detail,Order Operations,none,false,false,,INFO,PDA
+10130000,Check OOS,Order Operations,none,false,false,,INFO,
+10130100,Review,Order Operations,none,false,false,,INFO,PDA
+10130200,Order Detail,Order Operations,none,false,false,,INFO,CatalogFS
+10140100,Enter order detail,Order Operations,bare_value,false,false,,INFO,PDA
+10150000,Change item qty,Order Operations,none,false,false,,EVENT,"Vegas,CatalogFC,Web"
 10150100,change_qty_item_list_page,Order Operations,positional,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 10150200,change_qty_item_suggest_page,Order Operations,positional,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 10150300,change_qty_item_promo_page,Order Operations,positional,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
+10150400,change_qty_item_backorder_page,Order Operations,bare_value,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 10150500,change_qty_item_new_page,Order Operations,positional,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
+10150600,change_qty_item_history_page,Order Operations,bare_value,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 10150700,change_qty_item_detail_page,Order Operations,positional,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10150800,change_qty_item_quick_page,Order Operations,bare_value,false,false,EVENT,EVENT,"Vegas,CatalogFC"
+10150900,change_qty_line_item_page,Order Operations,bare_value,false,false,EVENT,EVENT,PDA
+10151000,change_qty_review_page,Order Operations,bare_value,false,false,,EVENT,PDA
+10151100,change_qty_new_and_promo_page,Order Operations,positional,false,false,,EVENT,PDA
+10151200,change_item_qty_wish_list_page,Order Operations,bare_value,false,false,,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10151300,change_item_qty_brand_page,Order Operations,bare_value,false,false,,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10151400,change_item_qty_recommend_services_page,Order Operations,bare_value,false,false,,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10151500,change_item_qty_category_page,Order Operations,bare_value,false,false,,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10151600,change_item_qty_cart_page,Order Operations,bare_value,false,false,,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+10151700,change_item_order_detail_page,Order Operations,bare_value,false,false,,,CatalogFS
 10160100,change_price_for_sales,Order Operations,positional,false,false,EVENT,EVENT,"PDA,CatalogFS"
-11010100,Filter By Category: New & Promo,Filtering & Sorting,bare_value,false,false,,INFO,"PDA"
+11010000,Filter By Category,Filtering & Sorting,none,false,false,,INFO,
+11010100,Filter By Category: New & Promo,Filtering & Sorting,bare_value,false,false,,INFO,PDA
 11010200,Filter By Category: Recommend,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS,Vegas,CatalogFC"
+11010300,Purchase History,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11010400,All Items,Filtering & Sorting,bare_value,false,false,,INFO,PDA
 11010500,Filter By Category: Catalog,Filtering & Sorting,bare_value,false,false,,INFO,"CatalogFS,CatalogFC"
-11020100,Filter By Country: New & Promo,Filtering & Sorting,bare_value,false,false,,INFO,"PDA"
+11010600,Item List,Filtering & Sorting,bare_value,false,false,,INFO,Vegas
+11020000,Filter By Country,Filtering & Sorting,none,false,false,,INFO,
+11020100,Filter By Country: New & Promo,Filtering & Sorting,bare_value,false,false,,INFO,PDA
 11020200,Filter By Country: Recommend,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS,Vegas,CatalogFC"
+11020300,Purchase History,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11020400,Catalog,Filtering & Sorting,bare_value,false,false,,INFO,CatalogFS
+11020500,Item List,Filtering & Sorting,bare_value,false,false,,INFO,CatalogFS
+11030000,Filter By Recommendation Reason,Filtering & Sorting,none,false,false,,INFO,
+11030100,Recommend,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11030200,Catalog,Filtering & Sorting,bare_value,false,false,,INFO,CatalogFS
+11040000,Filter By Brands,Filtering & Sorting,none,false,false,,INFO,
+11040100,All Items,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11050000,Filter By Status,Filtering & Sorting,none,false,false,,INFO,
 11050100,Filter By Status: Order List Customer,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
 11050200,Filter By Status: Order List Sales,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11050300,Order List: Office,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
 11050400,Filter By Status: Order List (Vegas/FC),Filtering & Sorting,bare_value,false,false,,INFO,"Vegas,CatalogFC"
+11060000,Filter By Customer,Filtering & Sorting,none,false,false,,INFO,
 11060100,Filter By Customer: Order List Customer,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11060200,Order List: Sales,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11060300,Order List: Office,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11060400,Recycle Bin for Orders,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11070000,Filter By Date,Filtering & Sorting,none,false,false,,INFO,
 11070100,Filter By Date: Order List Customer,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11070200,Order List: Sales,Filtering & Sorting,kv,false,false,,INFO,"PDA,CatalogFS"
+11070300,Order List: Office,Filtering & Sorting,kv,false,false,,INFO,"PDA,CatalogFS"
+11080000,Reset All Order Filter,Filtering & Sorting,none,false,false,,INFO,
+11080100,Order List: Customer,Filtering & Sorting,none,false,false,,INFO,"PDA,CatalogFS"
+11080200,Order List: Sales,Filtering & Sorting,none,false,false,,INFO,"PDA,CatalogFS"
+11080300,Order List: Office,Filtering & Sorting,none,false,false,,INFO,"PDA,CatalogFS"
+11080400,Recycle Bin for Orders,Filtering & Sorting,none,false,false,,INFO,PDA
+11090000,Reset All: Item Filter & Item Sort,Filtering & Sorting,none,false,false,,INFO,
+11090100,Line Item,Filtering & Sorting,none,false,false,,INFO,PDA
+11090200,New & Promo,Filtering & Sorting,none,false,false,,INFO,PDA
 11090300,Reset Filter: Recommend,Filtering & Sorting,none,false,false,,INFO,"PDA,CatalogFS,Vegas,CatalogFC"
+11090400,Purchase History,Filtering & Sorting,none,false,false,,INFO,PDA
+11090500,Review,Filtering & Sorting,none,false,false,,INFO,PDA
+11090600,Catalog,Filtering & Sorting,none,false,false,,INFO,"CatalogFS,CatalogFC"
+11090700,Item List,Filtering & Sorting,none,false,false,,INFO,"CatalogFS,CatalogFC"
+11100000,Reset Item Sort,Filtering & Sorting,none,false,false,,INFO,
+11100100,Line Item,Filtering & Sorting,none,false,false,,INFO,PDA
+11100200,New & Promo,Filtering & Sorting,none,false,false,,INFO,PDA
+11100300,Recommend,Filtering & Sorting,none,false,false,,INFO,PDA
+11100400,Purchase History,Filtering & Sorting,none,false,false,,INFO,PDA
+11100500,Review,Filtering & Sorting,none,false,false,,INFO,PDA
+11110000,Reset: Item Filter,Filtering & Sorting,none,false,false,,INFO,
+11110100,Line Item,Filtering & Sorting,none,false,false,,INFO,PDA
+11110200,New & Promo,Filtering & Sorting,none,false,false,,INFO,PDA
+11110300,Recommend,Filtering & Sorting,none,false,false,,INFO,PDA
+11110400,Purchase History,Filtering & Sorting,none,false,false,,INFO,PDA
+11110500,Review,Filtering & Sorting,none,false,false,,INFO,PDA
+11110600,All Items,Filtering & Sorting,none,false,false,,INFO,PDA
+11120000,Sort,Filtering & Sorting,none,false,false,,INFO,
 11120100,Sort: Order List Customer,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11120200,Order List: Sales,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11120300,Order List: Office,Filtering & Sorting,bare_value,false,false,,INFO,"PDA,CatalogFS"
+11120400,All Items,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11120500,Allocations,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11120600,Office Order Detail: Line Item,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11120700,New & Promo,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11120800,Recommend,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11120900,Purchase History,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11121000,Review,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11121100,Nearby,Filtering & Sorting,bare_value,false,false,,INFO,PDA
+11121200,Order Detail,Filtering & Sorting,bare_value,false,false,,INFO,CatalogFS
 11121300,Sort: Recommended,Filtering & Sorting,bare_value,false,false,,INFO,"CatalogFS,Vegas,CatalogFC"
-11121500,Sort: Cart,Filtering & Sorting,bare_value,false,false,,INFO,"Vegas"
+11121400,Recommend by Service,Filtering & Sorting,bare_value,false,false,,INFO,"CatalogFS,Vegas,CatalogFC"
+11121500,Sort: Cart,Filtering & Sorting,bare_value,false,false,,INFO,Vegas
 12010100,Search: Order List Customer,Search,bare_value,false,false,,INFO,"PDA,CatalogFS"
 12010200,Search: Order List Sales,Search,bare_value,false,false,,INFO,"PDA,CatalogFS"
+12010300,Order List: Office,Search,bare_value,false,false,,INFO,"PDA,CatalogFS"
+12010400,Create Order,Search,bare_value,false,false,,INFO,PDA
+12010500,All Items,Search,bare_value,false,false,,INFO,PDA
+12010600,Allocations,Search,none,false,false,,INFO,PDA
+12010700,New & Promo,Search,bare_value,false,false,,INFO,PDA
 12010800,Search: Recommend,Search,bare_value,false,false,,INFO,"PDA,CatalogFS,Vegas,CatalogFC"
+12010900,Purchase History,Search,bare_value,false,false,,INFO,PDA
+12011000,Review,Search,bare_value,false,false,,INFO,PDA
 12011100,Search: Order Detail,Search,bare_value,false,false,,INFO,"CatalogFS,CatalogFC"
 12011200,Search: Home Bar,Search,bare_value,false,false,,INFO,"CatalogFS,Vegas,CatalogFC,Web"
-12011300,Search: Search Page,Search,bare_value,false,false,,INFO,"Vegas"
-12011600,Search: Back Order,Search,bare_value,false,false,,INFO,"Vegas"
-12011700,Search: Cart,Search,bare_value,false,false,,INFO,"Vegas"
+12011300,Search: Search Page,Search,bare_value,false,false,,INFO,Vegas
+12011400,Product List,Search,bare_value,false,false,,INFO,Vegas
+12011500,My Lists,Search,bare_value,false,false,,INFO,Vegas
+12011600,Search: Back Order,Search,bare_value,false,false,,INFO,Vegas
+12011700,Search: Cart,Search,bare_value,false,false,,INFO,Vegas
+12020000,Show Search,Search,none,false,false,,INFO,
+12020100,Order List,Search,none,false,false,,INFO,PDA
+12020101,Order List - Show,Search,none,false,false,,INFO,PDA
+12020102,Order List - Hide,Search,none,false,false,,INFO,PDA
+12020200,Recycle Bin for Orders,Search,none,false,false,,INFO,PDA
+12020201,Recycle Bin for Orders - Show,Search,none,false,false,,INFO,PDA
+12020202,Recycle Bin for Orders - Hide,Search,none,false,false,,INFO,PDA
 13010100,Invoice - Success,Send Email / Fax,bare_value,false,true,System Event,INFO,"PDA,Vegas"
 13010200,Invoice - Fail,Send Email / Fax,bare_value,false,true,System Event,WARN,"PDA,Vegas"
 13020100,Statement/Balance - Success,Send Email / Fax,bare_value,false,true,System Event,INFO,"PDA,CatalogFS,Vegas,CatalogFC"
@@ -131,68 +272,106 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 14010000,Item Detail: New & Promo,Item Detail Navigation,sku,false,false,EVENT,EVENT,"PDA,Web"
 14020000,Item Detail: Recommend,Item Detail Navigation,sku,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 14030000,Item Detail: Purchase History,Item Detail Navigation,sku,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
-14040000,Item Detail: Review,Item Detail Navigation,sku,false,false,EVENT,EVENT,"PDA"
-14050000,Item Detail: Line Item,Item Detail Navigation,sku,false,false,EVENT,EVENT,"PDA"
+14040000,Item Detail: Review,Item Detail Navigation,sku,false,false,EVENT,EVENT,PDA
+14050000,Item Detail: Line Item,Item Detail Navigation,sku,false,false,EVENT,EVENT,PDA
+14060000,All Items,Item Detail Navigation,bare_value,false,false,EVENT,EVENT,PDA
+14070000,Office Line Item,Item Detail Navigation,bare_value,false,false,EVENT,EVENT,PDA
 14080000,Item Detail: Order Detail,Item Detail Navigation,sku,false,false,EVENT,EVENT,"CatalogFS,CatalogFC"
 14090000,Item Detail: My Lists,Item Detail Navigation,sku,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 14100000,Item Detail: Back Order,Item Detail Navigation,sku,false,false,EVENT,EVENT,"Vegas,Web"
 14110000,Item Detail: Cart,Item Detail Navigation,sku,false,false,EVENT,EVENT,"Vegas,Web"
+14120000,Other,Item Detail Navigation,bare_value,false,false,EVENT,EVENT,
+14130000,Product List,Item Detail Navigation,bare_value,false,false,EVENT,EVENT,"Vegas,Web"
 14140000,Item Detail: Catalog,Item Detail Navigation,sku,false,false,EVENT,EVENT,"CatalogFS,CatalogFC"
 14150000,Item Detail: Recommend by Service,Item Detail Navigation,sku,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+14160000,click_new_item,Item Detail Navigation,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
+14170000,click_promo_item,Item Detail Navigation,bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 15010000,Item Enlarge: Product Detail,Item Image Enlarge,sku,false,false,,INFO,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 15020000,Item Enlarge: Catalog,Item Image Enlarge,sku,false,false,,INFO,"CatalogFS,CatalogFC"
-16010000,Settings: Location,Settings & Account,none,false,false,,INFO,"PDA"
-16030000,Settings: Address Confirmation ON,Settings & Account,none,false,false,,INFO,"PDA"
-16040000,Settings: Address Confirmation OFF,Settings & Account,none,false,false,,INFO,"PDA"
-16050000,Settings: On-Screen Keyboard ON,Settings & Account,none,false,false,,INFO,"PDA"
-16060000,Settings: On-Screen Keyboard OFF,Settings & Account,none,false,false,,INFO,"PDA"
+16010000,Settings: Location,Settings & Account,none,false,false,,INFO,PDA
+16020000,See Data,Settings & Account,none,false,false,,INFO,PDA
+16030000,Settings: Address Confirmation ON,Settings & Account,none,false,false,,INFO,PDA
+16040000,Settings: Address Confirmation OFF,Settings & Account,none,false,false,,INFO,PDA
+16050000,Settings: On-Screen Keyboard ON,Settings & Account,none,false,false,,INFO,PDA
+16060000,Settings: On-Screen Keyboard OFF,Settings & Account,none,false,false,,INFO,PDA
+16070000,Customer Order - Modification Reminder-ON,Settings & Account,none,false,false,,INFO,PDA
+16080000,Customer Order - Modification Reminder-OFF,Settings & Account,none,false,false,,INFO,PDA
+16090000,Legend,Settings & Account,none,false,false,,INFO,"PDA,CatalogFS,CatalogFC"
 16100000,Check APP Version,Settings & Account,none,false,false,,INFO,"PDA,CatalogFS,CatalogFC"
-16110000,Settings: BLE Settings,Settings & Account,none,false,false,,INFO,"PDA"
-16120100,Setting: Face ID ON,Settings & Account,none,false,false,,,"CatalogFS"
-16120200,Setting: Face ID OFF,Settings & Account,none,false,false,,,"CatalogFS"
-16130000,Setting: Manage Categories,Settings & Account,none,false,false,,,"CatalogFS"
-16140100,Setting: Show Price ON,Settings & Account,none,false,false,,,"CatalogFS"
-16140200,Setting: Show Price OFF,Settings & Account,none,false,false,,,"CatalogFS"
-16150100,Setting: Only Show In Stock ON,Settings & Account,none,false,false,,,"CatalogFS"
-17010100,BLE: Home ON,BLE,none,false,false,,INFO,"PDA"
-17010200,BLE: Home OFF,BLE,none,false,false,,INFO,"PDA"
-17010300,BLE: Menu ON,BLE,none,false,false,,INFO,"PDA"
-17010400,BLE: Menu OFF,BLE,none,false,false,,INFO,"PDA"
-17010500,BLE: Setting ON,BLE,none,false,false,,INFO,"PDA"
-17010600,BLE: Setting OFF,BLE,none,false,false,,INFO,"PDA"
-17010700,BLE MODE Timeout,BLE,none,false,false,,INFO,"PDA"
-17020101,BLE: Pair - Success,BLE,none,false,false,,INFO,"PDA"
-17020102,BLE: Pair - Fail,BLE,none,false,false,,INFO,"PDA"
-17020200,BLE: Unpair,BLE,none,false,false,,INFO,"PDA"
-17020301,BLE: Auto Connection - Success,BLE,none,false,false,,INFO,"PDA"
-17020302,BLE: Auto Connection - Fail,BLE,none,false,false,,INFO,"PDA"
-17030000,BLE: Forget Device,BLE,none,false,false,,INFO,"PDA"
-17040101,BLE Scan: Home - Found,BLE,none,false,false,,INFO,"PDA"
-17040102,BLE Scan: Home - Not Found,BLE,none,false,false,,WARN,"PDA"
-17040201,BLE Scan: Setting - Found,BLE,none,false,false,,INFO,"PDA"
-17040202,BLE Scan: Setting - Not Found,BLE,none,false,false,,WARN,"PDA"
-17040301,BLE Scan: BLE Link ON - Found,BLE,none,false,false,,INFO,"PDA"
-17040302,BLE Scan: BLE Link ON - Not Found,BLE,none,false,false,,WARN,"PDA"
-17040401,BLE Scan: Menu - Found,BLE,none,false,false,,INFO,"PDA"
-17040402,BLE Scan: Menu - Not Found,BLE,none,false,false,,WARN,"PDA"
-17040501,BLE Auto Scan - Found,BLE,none,false,false,,INFO,"PDA"
-17040502,BLE Auto Scan - Not Found,BLE,none,false,false,,WARN,"PDA"
-17050101,BLE Op: Lock/Unlock Catalog,BLE,bare_value,false,false,,INFO,"PDA"
-17050201,BLE Op: Jump to Back,BLE,none,false,false,,INFO,"PDA"
-17050301,BLE Op: Jump to Categories,BLE,positional,false,false,,INFO,"PDA"
-17050401,BLE Op: Jump to Backorder,BLE,none,false,false,,INFO,"PDA"
-17050501,BLE Op: Jump to Purchase History,BLE,none,false,false,,INFO,"PDA"
-17050601,BLE Op: Jump to Recommend,BLE,none,false,false,,INFO,"PDA"
-17050701,BLE Op: Jump to Cart,BLE,none,false,false,,INFO,"PDA"
-17050801,BLE Op: Jump to Item Family,BLE,sku,false,false,,INFO,"PDA"
-17050901,BLE Op: Catalog Left Slide,BLE,none,false,false,,INFO,"PDA"
-17051001,BLE Op: Catalog Right Slide,BLE,none,false,false,,INFO,"PDA"
-17051101,BLE Op: Jump to Search Results,BLE,bare_value,false,false,,INFO,"PDA"
-17051301,BLE Op: Item Highlight - Line Item,BLE,sku,false,false,,INFO,"PDA"
-17051302,BLE Op: Item Highlight - New & Promo,BLE,sku,false,false,,INFO,"PDA"
-17051303,BLE Op: Item Highlight - Recommend,BLE,sku,false,false,,INFO,"PDA"
-17051401,BLE Op: Jump to Detail - Product Detail,BLE,sku,false,false,,INFO,"PDA"
-17051402,BLE Op: Jump to Detail - Hard Keys,BLE,sku,false,false,,INFO,"PDA"
+16110000,Settings: BLE Settings,Settings & Account,none,false,false,,INFO,PDA
+16120100,Setting: Face ID ON,Settings & Account,none,false,false,,,CatalogFS
+16120200,Setting: Face ID OFF,Settings & Account,none,false,false,,,CatalogFS
+16130000,Setting: Manage Categories,Settings & Account,none,false,false,,,CatalogFS
+16140100,Setting: Show Price ON,Settings & Account,none,false,false,,,CatalogFS
+16140200,Setting: Show Price OFF,Settings & Account,none,false,false,,,CatalogFS
+16150100,Setting: Only Show In Stock ON,Settings & Account,none,false,false,,,CatalogFS
+16150200,Setting: Only show in Stock  OFF,Settings & Account,none,false,false,,,
+17010000,Enable BLE,BLE,none,false,false,,INFO,PDA
+17010100,BLE: Home ON,BLE,none,false,false,,INFO,PDA
+17010200,BLE: Home OFF,BLE,none,false,false,,INFO,PDA
+17010300,BLE: Menu ON,BLE,none,false,false,,INFO,PDA
+17010400,BLE: Menu OFF,BLE,none,false,false,,INFO,PDA
+17010500,BLE: Setting ON,BLE,none,false,false,,INFO,PDA
+17010600,BLE: Setting OFF,BLE,none,false,false,,INFO,PDA
+17010700,BLE MODE Timeout,BLE,none,false,false,,INFO,PDA
+17020000,Pair/Unpair,BLE,none,false,false,,INFO,PDA
+17020101,BLE: Pair - Success,BLE,none,false,false,,INFO,PDA
+17020102,BLE: Pair - Fail,BLE,none,false,false,,INFO,PDA
+17020200,BLE: Unpair,BLE,none,false,false,,INFO,PDA
+17020301,BLE: Auto Connection - Success,BLE,none,false,false,,INFO,PDA
+17020302,BLE: Auto Connection - Fail,BLE,none,false,false,,INFO,PDA
+17030000,BLE: Forget Device,BLE,none,false,false,,INFO,PDA
+17040000,Scan,BLE,none,false,false,,INFO,PDA
+17040101,BLE Scan: Home - Found,BLE,none,false,false,,INFO,PDA
+17040102,BLE Scan: Home - Not Found,BLE,none,false,false,,WARN,PDA
+17040201,BLE Scan: Setting - Found,BLE,none,false,false,,INFO,PDA
+17040202,BLE Scan: Setting - Not Found,BLE,none,false,false,,WARN,PDA
+17040301,BLE Scan: BLE Link ON - Found,BLE,none,false,false,,INFO,PDA
+17040302,BLE Scan: BLE Link ON - Not Found,BLE,none,false,false,,WARN,PDA
+17040401,BLE Scan: Menu - Found,BLE,none,false,false,,INFO,PDA
+17040402,BLE Scan: Menu - Not Found,BLE,none,false,false,,WARN,PDA
+17040501,BLE Auto Scan - Found,BLE,none,false,false,,INFO,PDA
+17040502,BLE Auto Scan - Not Found,BLE,none,false,false,,WARN,PDA
+17050000,BLE event operation,BLE,none,false,false,,INFO,PDA
+17050100,(BLE Only) Lock Catalog Screen,BLE,none,false,false,,INFO,PDA
+17050101,BLE Op: Lock/Unlock Catalog,BLE,bare_value,false,false,,INFO,PDA
+17050200,(BLE Only) Jump to Back,BLE,none,false,false,,INFO,PDA
+17050201,BLE Op: Jump to Back,BLE,none,false,false,,INFO,PDA
+17050300,(BLE Only) Jump to Categories,BLE,none,false,false,,INFO,PDA
+17050301,BLE Op: Jump to Categories,BLE,positional,false,false,,INFO,PDA
+17050400,(BLE Only) Jump to Backorder,BLE,none,false,false,,INFO,PDA
+17050401,BLE Op: Jump to Backorder,BLE,none,false,false,,INFO,PDA
+17050500,(BLE Only) Jump to Purchase History,BLE,none,false,false,,INFO,PDA
+17050501,BLE Op: Jump to Purchase History,BLE,none,false,false,,INFO,PDA
+17050600,(BLE Only) Jump to Recommend,BLE,none,false,false,,INFO,PDA
+17050601,BLE Op: Jump to Recommend,BLE,none,false,false,,INFO,PDA
+17050700,(BLE Only) Jump to Cart,BLE,none,false,false,,INFO,PDA
+17050701,BLE Op: Jump to Cart,BLE,none,false,false,,INFO,PDA
+17050800,(BLE Only) Jump to Item Family,BLE,none,false,false,,INFO,PDA
+17050801,BLE Op: Jump to Item Family,BLE,sku,false,false,,INFO,PDA
+17050900,(BLE Only) Catalog Left slide,BLE,none,false,false,,INFO,PDA
+17050901,BLE Op: Catalog Left Slide,BLE,none,false,false,,INFO,PDA
+17051000,(BLE Only) Catalog Right slide,BLE,none,false,false,,INFO,PDA
+17051001,BLE Op: Catalog Right Slide,BLE,none,false,false,,INFO,PDA
+17051100,(BLE Only) Jump Search Results,BLE,bare_value,false,false,,INFO,PDA
+17051101,BLE Op: Jump to Search Results,BLE,bare_value,false,false,,INFO,PDA
+17051300,(BLE Only) Item Highlight,BLE,none,false,false,,INFO,PDA
+17051301,BLE Op: Item Highlight - Line Item,BLE,sku,false,false,,INFO,PDA
+17051302,BLE Op: Item Highlight - New & Promo,BLE,sku,false,false,,INFO,PDA
+17051303,BLE Op: Item Highlight - Recommend,BLE,sku,false,false,,INFO,PDA
+17051304,Purchase History,BLE,sku,false,false,,INFO,PDA
+17051305,Review,BLE,sku,false,false,,INFO,PDA
+17051306,Product Detail,BLE,bare_value,false,false,,INFO,PDA
+17051307,All Items,BLE,bare_value,false,false,,INFO,PDA
+17051308,Order Detail:Product Name,BLE,bare_value,false,false,,INFO,PDA
+17051400,(BLE Only) Jump to Detail,BLE,none,false,false,,INFO,PDA
+17051401,BLE Op: Jump to Detail - Product Detail,BLE,sku,false,false,,INFO,PDA
+17051402,BLE Op: Jump to Detail - Hard Keys,BLE,sku,false,false,,INFO,PDA
+17051403,New & Promo,BLE,sku,false,false,,INFO,PDA
+17051404,Recommend,BLE,sku,false,false,,INFO,PDA
+17051405,Purchase History,BLE,bare_value,false,false,,INFO,PDA
+17051406,Order Detail: Keyboard,BLE,sku,false,false,,INFO,PDA
+17051407,Order Detail:Product Name,BLE,bare_value,false,false,,INFO,PDA
 18010000,Scan Barcode,Activity (Customer Interactions),kv,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC"
 18020000,click_backorder_icon,Activity (Customer Interactions),title,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
 18030000,click_history_icon,Activity (Customer Interactions),title,false,false,EVENT,EVENT,"PDA,CatalogFS,Vegas,CatalogFC,Web"
@@ -204,5 +383,19 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 18090000,click_categories_icon,Activity (Customer Interactions),bare_value,false,false,EVENT,EVENT,"CatalogFS,Vegas,CatalogFC,Web"
 18100000,promo_to_buttom,Activity (Customer Interactions),none,false,false,EVENT,EVENT,"Vegas,Web"
 18110000,new_to_buttom,Activity (Customer Interactions),none,false,false,EVENT,EVENT,"Vegas,Web"
-18120000,rec_to_buttom,Activity (Customer Interactions),none,false,false,EVENT,EVENT,"Vegas"
+18120000,rec_to_buttom,Activity (Customer Interactions),none,false,false,EVENT,EVENT,Vegas
 19010000,Catalog View,Catalog View Analytics,kv,true,false,EVENT,EVENT,"CatalogFS,CatalogFC"
+20000000,Vender,Vender,bare_value,false,false,,EVENT,Web
+20010100,Vender - Login - Success,Vender,none,false,false,,EVENT,Web
+20010200,Vender - Login- Fail,Vender,bare_value,false,false,,WARN,Web
+20010300,Vender - Login - Success(Internal Allow login),Vender,none,false,false,,EVENT,Web
+20010400,Vender - Log Out,Vender,none,false,false,,,
+20020100,ISF - Add,Vender,none,false,false,,EVENT,Web
+20020200,ISF - Edit Draft,Vender,none,false,false,,EVENT,Web
+20020301,ISF - Save Draft - Success,Vender,none,false,false,,EVENT,Web
+20020302,ISF - Save Draft - Fail,Vender,none,false,false,,EVENT,Web
+20020401,ISF - Submit- Success,Vender,none,false,false,,EVENT,Web
+20020402,ISF - Submit- Fail,Vender,bare_value,false,false,,WARN,Web
+20020500,ISF - Delete Draft,Vender,none,false,false,,EVENT,Web
+20030100,Vender Request password reset,Vender,none,false,false,,EVENT,Web
+20040100,Download ISF PDF,Vender,bare_value,false,false,,EVENT,Web

@@ -5,14 +5,20 @@ seeds:
     description: >
       Complete event dictionary from API documentation Section 5
       (SystemEventLog_API_Documentation_0327, v1.0 March 2026 — source
-      info-Event_Type_Definition.xlsx, last updated 2026-03-23).
+      info-Event_Type_Definition.xlsx, last updated 2026-03-23), extended
+      2026-07-07 with 193 codes from the dev team's updated dictionary
+      (adds L1 category 20 = Vender and parent/menu-level codes).
       Grain — one row per 8-digit description_code (digits 1-2 L1 Category,
       3-4 L2 Sub-category, 5-6 L3 Action, 7-8 L4 Result: 01=Success,
-      02=Fail, 00=N/A). Covers all L1 categories 01-19.
+      02=Fail, 00=N/A). Covers all L1 categories 01-20.
       payload_format encodes the documented Event Payload column:
       none | kv (key:value CSV) | positional_order (order metadata CSV) |
       positional (other multi-field CSV, e.g. sku,qty) | duration (Time:s) |
       sku | title | bare_value | fail_marker.
+      NOTE: for the 207 original codes payload_format keeps the March-doc
+      taxonomy; the 2026-07 dictionary collapses most of these to bare_value,
+      so its values were NOT taken for existing codes — reconcile with the
+      dev team before trusting payload_format for parsing decisions.
       Known doc-vs-reality drift: sample data shows 01020200 (Low Battery)
       carrying response "1" despite the doc listing no payload — the
       profiling script (§3) flags such mismatches rather than failing.
