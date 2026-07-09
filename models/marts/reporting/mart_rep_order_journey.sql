@@ -1,14 +1,14 @@
 {{ config(materialized='table') }}
 
--- mart_order_journey — per-cycle behaviour at order-cycle grain.
--- One row per matched open→close cycle (from int_order_cycle). All events
+-- mart_rep_order_journey — per-cycle behaviour at order-cycle grain.
+-- One row per matched open→close cycle (from int_rep_order_cycle). All events
 -- that fall within the cycle window are joined from fct_events and aggregated
 -- into cart, navigation, feature-flag, and submit-quality metrics.
 -- behavior_segment requires add_count (High Editor) so is fully computed here.
 
 with cycles as (
 
-    select * from {{ ref('int_order_cycle') }}
+    select * from {{ ref('int_rep_order_cycle') }}
 
 ),
 

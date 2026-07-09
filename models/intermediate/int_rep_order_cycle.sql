@@ -1,4 +1,4 @@
--- int_order_cycle — order-cycle reconstruction at cycle grain.
+-- int_rep_order_cycle — order-cycle reconstruction at cycle grain.
 -- One row per matched open → close pair (username × increment_id).
 -- Only successful submissions (l3=01) are used as close events — a failed
 -- send does not constitute a completed cycle.
