@@ -1,0 +1,619 @@
+code_domain,code_value,long_description,short_description
+abccod,A,A Items - EXPENSIVE,A Items
+abccod,B,B Items,B Items
+abccod,C,C Items,C Items
+arecod,ADJS,Adjustments,ADJS
+arecod,AUDIT ,Auditing Prior to Stage ,AUDIT 
+arecod,BULK,Bulk Items ,BULK
+arecod,CADJ,Cycle Count Adjustment,CADJ
+arecod,CWBULK,Clawiter Road Bulk Storage Area,CWBULK
+arecod,CWPND,Clawiter Road PND Transfer Location,CWPND
+arecod,CWRCVSTG,Clawiter Road Receiving Staging ,CWRCVSTG
+arecod,CWRDCK,Clawiter Road Receiving Dock,CWRDCK
+arecod,CWTRNSTG,Clawiter Road Transfer Staging Lanes,CWTRNSTG
+arecod,DADJ,Dekit Adjustment,DADJ
+arecod,DKIT,Dekit,DKIT
+arecod,DSPCH,Dispatch Area,DSPCH
+arecod,EXPR,Expected Receipts,EXPR
+arecod,FCTPND,"PND area at 1799 Factor Avenue, San Leandro, CA",FCTPND
+arecod,FDA HOLD,FDA Holding ,FDA HOLD
+arecod,FREEZER,Frozen Products ,FREEZER
+arecod,FZ RACK,Frozen Racks ,FZ RACK
+arecod,FZ STAGING,Frozen Staging ,FZ STAGING
+arecod,HAND STACK,Hand Stack,HAND STACK
+arecod,LINE,Production Line,LINE
+arecod,LOCAL_STG,Local Ship Staging ,LOCAL_STG
+arecod,LTL_TL,LTL/TL Ship Staging ,LTL_TL
+arecod,OSTG,Outbound Staging,OSTG
+arecod,OVRFLW_STG,Over-Flow Ship Staging ,OVRFLW_STG
+arecod,OVRP,Outbound Order Overpack Area,OVRP
+arecod,PICK FACE,Pick Face for Products ,PICK FACE
+arecod,PND,Pick and Deposit ,PND
+arecod,PROBLEM,Problems :(,PROBLEM
+arecod,QUARANTINE,Suspect Non-Conforming Inventory,QUARANTINE
+arecod,RACK ,Rack Storage ,RACK 
+arecod,RCV STAGE,Receiving Staging ,RCV STAGE
+arecod,RDCK,Receiving Dock,RDCK
+arecod,RDTS,Devices,Devices
+arecod,RETPR,Returns Processing Area,Returns Processing
+arecod,REWORK,Rework Area ,REWORK
+arecod,SACO,Shipment Adjustment Consolidation,SACO
+arecod,SADJ,Shipment Adjustments,SADJ
+arecod,SDCK,Shipping Dock,SDCK
+arecod,SHIP,Shipments,SHIP
+arecod,SHP STAGE,Ship Staging ,SHP STAGE
+arecod,SHP_RCV_DK,Shipping/Receiving Dock ,SHP_RCV_DK
+arecod,SRDCK,Shipping & Receiving Dock,SRDCK
+arecod,STOTRLR,Storage Transport Equipment,STOTRLR
+arecod,SXFR,Staged Shipment Transfer,SXFR
+arecod,TUNNEL,TUNNEL,TUNNEL
+arecod,WEXP,WIP Expected Receipts,WEXP
+arecod,WILL_CALL,Will Call Ship Staging ,WILL_CALL
+arecod,WIPSUP,WIP Supply Area,WIP Supply
+arecod,WNTRCVSTG,RECEIVING STAGE AREA AT WINTON WAREHOUSE,WNTRCVSTG
+arecod,WRKS,Workstation Processing Area,WRKS
+arecod,XDCK,Ship Staging Cross Dock Area,XDCK
+arecod,XDDR,Direct Cross Dock Area,XDDR
+arecod,YARD,Yard,YARD
+asset_typ,CHEP,Chep Pallet,
+asset_typ,TRL48C,48' INTRMDL NO WHEEL,48' INTRMDL NO WHEEL
+asset_typ,TRL48T,48' INTERMDL W/WHEEL,48' INTERMDL W/WHEEL
+asset_typ,TRL53C,53' INTRMDL NO WHEEL,53' INTRMDL NO WHEEL
+asset_typ,TRLBT24,24' BOBTAIL,24' BOBTAIL
+asset_typ,TRLCN20,20' CONTAINER,20' CONTAINER
+asset_typ,TRLCN24,24' REFER CONTAINER,24' REFER CONTAINER
+asset_typ,TRLCN40,40' CONTAINER,40' CONTAINER
+asset_typ,TRLIN53,53' INSULATED,53' INSULATED
+asset_typ,TRLLTLA,LTL/AIR SHIPMENT,LTL/AIR SHIPMENT
+asset_typ,TRLR48I,48' REFER-INTRUDING,48' REFER-INTRUDING
+asset_typ,TRLRF30,30' REFER,30' REFER
+asset_typ,TRLRF48,48' REFER VAN,48' REFER VAN
+asset_typ,TRLRF50,50' REFER TRAILER,50' REFER TRAILER
+asset_typ,TRLRF51,51' REFER-ROLLTOP DR,51' REFER-ROLLTOP DR
+asset_typ,TRLRF53,53' REFER TRAILER,53' REFER TRAILER
+asset_typ,TRLRT28,28' ROLLTOP,28' ROLLTOP
+asset_typ,TRLRT50,50' REFER ROLLTOP,50' REFER ROLLTOP
+asset_typ,TRLV53S,53' DRY VAN SW INTR,53' DRY VAN SW INTR
+asset_typ,TRLV53T,53' DRY VAN 110 TALL,53' DRY VAN 110 TALL
+asset_typ,TRLVN45,48' DRY TRAILER,45' DRY TRAILER
+asset_typ,TRLVN48,48' DRY TRAILER,48' DRY TRAILER
+asset_typ,TRLVN53,53' DRY TRAILER,53' DRY TRAILER
+dte_win_typ,E,Expiration Date Window,Expiration Date
+dte_win_typ,F,FIFO Window,FIFO
+dte_win_typ,M,Manufactured Date Window,Manufactured Date
+invsts,2,Off Quality,Low Quality
+invsts,3,Off Quality - Unshippable,Unshippable
+invsts,4,Off Quality - Unusable,Unusable
+invsts,A,Available,Available
+invsts,C,Critical Hold,Critical Hold
+invsts,D,Damaged Product,Damaged Product
+invsts,E,Expired Product,Expired Product
+invsts,FDA,FDA HOLD STATUS ,FDA HOLD STATUS 
+invsts,H,Hold Product,Hold Product
+invsts,I,Inspect Product,Inspect
+invsts,M,MISSING,Missing
+invsts,P,Put Aside Inventory,Put Aside
+invsts,R,Release - Shipping,Release - Shipping
+invsts,RET,Returned - Unpickable,Returned
+invsts,S,Salvaged Product,Salvaged
+invsts,SPL,Special Order,Special Order Hold
+invsts,SSL,Short Shelf Life ,Short Shelf Life 
+invsts,T,Time Hold Product,Time Hold
+linsts,B,Canceled,Canceled
+linsts,C,Shipment Complete,Complete
+linsts,D,Docks Out,Docks Out
+linsts,E,Allocation Error,Alloc Err
+linsts,I,In Process,In Process
+linsts,K,Work Order Complete,Complete
+linsts,P,Pending,Pending
+linsts,R,Replenishments Requested,Repl Req
+linsts,W,Waiting,Waiting
+loccod,C,Case Dimensions,Case Dimensions
+loccod,E,Each,Each
+loccod,L,Length,Length
+loccod,P,Pallet,Pallet
+loccod,V,Volume,Volume
+locsts,E,Empty,Empty
+locsts,F,Full,Full
+locsts,I,Inventory Error,Error
+locsts,L,Locked,Locked
+locsts,N,Pending,Pending
+locsts,P,Partially Full,Partial
+lodlvl,D,Detail LPN,Detail LPN
+lodlvl,L,LPN,LPN
+lodlvl,S,Sub-LPN,Sub-LPN
+oprcod,AUD,Audit Count,
+oprcod,BPCK,Bulk Pick,Bulk Pick
+oprcod,CAPCW,Capture Catch Weight On Deposit,
+oprcod,CASCNF,Case Confirm,
+oprcod,CASSTG,Case Staging,
+oprcod,CNT,Cycle Count,
+oprcod,CNTAUD,Count Audit,
+oprcod,CNTBCK,Count Back,
+oprcod,CNTDTL,Detail Cycle Count,
+oprcod,CNTPCK,Cancel Pick Count,Pick
+oprcod,CNTPHY,Physical Count,Physical
+oprcod,CNTZERO,Count Near Zero,Zero
+oprcod,CPK,Case Pick,
+oprcod,CRP,Case Replen,
+oprcod,CTN,Case Transfer,
+oprcod,DSTTRN,Distribution Transfer,Distro Transfer
+oprcod,DSTTRNCMP,Completed Distribution Transfer,CMPL Distro Trans
+oprcod,EMER-PRP,Emergency Replenishment,
+oprcod,IDN,Identify,
+oprcod,INBSERV,Inbound Workflow,
+oprcod,INVADJ,Inventory Adjustment,
+oprcod,KPK,Carton Pick,
+oprcod,LOD,Truck Load,
+oprcod,LPCK,List Pick,Work Assignment
+oprcod,LPCKORD,Outbound Order Work Assignment,Ord Work Assignment
+oprcod,LPCKRPL,Replenishment Work Assignment,Repl Work Assignment
+oprcod,LPCKWKO,Work Order Work Assignment, Wko Work Assignment
+oprcod,LPNCNT,LPN Cycle Count,
+oprcod,MANAUD,Manual Audit,
+oprcod,PALBLD,Pallet Build,
+oprcod,PALBLDPCK,Pallet Build Pick,
+oprcod,PCK,Pallet Pick,
+oprcod,PHY,Physical Inventory,
+oprcod,PIARPL,Demand Replenishment,Demand Replenishment
+oprcod,PPK,Piece Pick,
+oprcod,PRP,Pallet Replenishment,Pallet Replenishment
+oprcod,PUTDIR,Directed,
+oprcod,RCNT,Re-count,Re-count
+oprcod,RCV,Receive,
+oprcod,RFOUTAUD,Rf Outbound Audit,
+oprcod,RKQ,Rack Quiz,
+oprcod,RLPCK,Resume List Pick,Resume Work Asgnmnt
+oprcod,RPLSPLT,Replenishment Split,Replenishment Split
+oprcod,STG,Stage,
+oprcod,STN,Shipment Transfer,
+oprcod,STO,Store,
+oprcod,TAUD,Yard Audit,
+oprcod,TBPCK,Threshold Bulk Pick,Threshold Bulk Pick
+oprcod,TPCK,Threshold Picking,
+oprcod,TRCT,Tractor,
+oprcod,TRL,Transport Equipment Move,
+oprcod,TRN,Transfer,
+oprcod,UCT,Undirected Case Transfer,
+oprcod,UID,Undirected Identify,
+oprcod,UNLD,Transport Equipment Unload,Unload
+oprcod,UNSLOT,Unslot Location,
+oprcod,UPA,Undirected Putaway,
+oprcod,UPK,Undirected Pick,
+oprcod,URC,Undirected Receive,
+oprcod,UST,Undirected Serial Transfer,
+oprcod,UTR,Undirected Load Transfer,
+orgcod,AD,Andorra,
+orgcod,AE,United Arab Emirates,
+orgcod,AF,Afghanistan,
+orgcod,AG,Antigua and Barbuda,
+orgcod,AI,Anguilla,
+orgcod,AL,Albania,
+orgcod,AM,Armenia,
+orgcod,AN,Netherlands Antilles,
+orgcod,AO,Angola,
+orgcod,AQ,Antarctica,
+orgcod,AR,Argentina,
+orgcod,ARPA,Old style Arpanet,
+orgcod,AS,American Samoa,
+orgcod,AT,Austria,
+orgcod,AU,Australia,
+orgcod,AW,Aruba,
+orgcod,AZ,Azerbaidjan,
+orgcod,BA,Bosnia-Herzegovina,
+orgcod,BB,Barbados,
+orgcod,BD,Bangladesh,
+orgcod,BE,Belgium,
+orgcod,BF,Burkina Faso,
+orgcod,BG,Bulgaria,
+orgcod,BH,Bahrain,
+orgcod,BI,Burundi,
+orgcod,BJ,Benin,
+orgcod,BM,Bermuda,
+orgcod,BN,Brunei Darussalam,
+orgcod,BO,Bolivia,
+orgcod,BR,Brazil,
+orgcod,BS,Bahamas,
+orgcod,BT,Bhutan,
+orgcod,BV,Bouvet Island,
+orgcod,BW,Botswana,
+orgcod,BY,Belarus,
+orgcod,BZ,Belize,
+orgcod,CA,Canada,
+orgcod,CC,Cocos (Keeling) Islands,
+orgcod,CF,Central African Republic,
+orgcod,CG,Congo,
+orgcod,CH,Switzerland,
+orgcod,CI,Ivory Coast (Cote D'Ivoire),
+orgcod,CK,Cook Islands,
+orgcod,CL,Chile,
+orgcod,CM,Cameroon,
+orgcod,CN,China,
+orgcod,CO,Colombia,
+orgcod,COM,Commercial,
+orgcod,CR,Costa Rica,
+orgcod,CS,Former Czechoslovakia,
+orgcod,CU,Cuba,
+orgcod,CV,Cape Verde,
+orgcod,CX,Christmas Island,
+orgcod,CY,Cyprus,
+orgcod,CZ,Czech Republic,
+orgcod,DE,Germany,
+orgcod,DJ,Djibouti,
+orgcod,DK,Denmark,
+orgcod,DM,Dominica,
+orgcod,DO,Dominican Republic,
+orgcod,DZ,Algeria,
+orgcod,EC,Ecuador,
+orgcod,EDU,USA Educational,
+orgcod,EE,Estonia,
+orgcod,EG,Egypt,
+orgcod,EH,Western Sahara,
+orgcod,ER,Eritrea,
+orgcod,ES,Spain,
+orgcod,ET,Ethiopia,
+orgcod,FI,Finland,
+orgcod,FJ,Fiji,
+orgcod,FK,Falkland Islands,
+orgcod,FM,Micronesia,
+orgcod,FO,Faroe Islands,
+orgcod,FR,France,
+orgcod,FX,France (European Territory),
+orgcod,GA,Gabon,
+orgcod,GB,Great Britain,
+orgcod,GD,Grenada,
+orgcod,GE,Georgia,
+orgcod,GF,French Guyana,
+orgcod,GH,Ghana,
+orgcod,GI,Gibraltar,
+orgcod,GL,Greenland,
+orgcod,GM,Gambia,
+orgcod,GN,Guinea,
+orgcod,GOV,USA Government,
+orgcod,GP,Guadeloupe (French),
+orgcod,GQ,Equatorial Guinea,
+orgcod,GR,Greece,
+orgcod,GS,S. Georgia & S. Sandwich Isls.,
+orgcod,GT,Guatemala,
+orgcod,GU,Guam (USA),
+orgcod,GW,Guinea Bissau,
+orgcod,GY,Guyana,
+orgcod,HK,Hong Kong,
+orgcod,HM,Heard and McDonald Islands,
+orgcod,HN,Honduras,
+orgcod,HR,Croatia,
+orgcod,HT,Haiti,
+orgcod,HU,Hungary,
+orgcod,ID,Indonesia,
+orgcod,IE,Ireland,
+orgcod,IL,Israel,
+orgcod,IN,India,
+orgcod,INT,International,
+orgcod,IO,British Indian Ocean Territory,
+orgcod,IQ,Iraq,
+orgcod,IR,Iran,
+orgcod,IS,Iceland,
+orgcod,IT,Italy,
+orgcod,JM,Jamaica,
+orgcod,JO,Jordan,
+orgcod,JP,Japan,
+orgcod,KE,Kenya,
+orgcod,KG,Kyrgyzstan,
+orgcod,KH,Cambodia,
+orgcod,KI,Kiribati,
+orgcod,KM,Comoros,
+orgcod,KN,Saint Kitts & Nevis Anguilla,
+orgcod,KP,North Korea,
+orgcod,KR,South Korea,
+orgcod,KW,Kuwait,
+orgcod,KY,Cayman Islands,
+orgcod,KZ,Kazakhstan,
+orgcod,LA,Laos,
+orgcod,LB,Lebanon,
+orgcod,LC,Saint Lucia,
+orgcod,LI,Liechtenstein,
+orgcod,LK,Sri Lanka,
+orgcod,LR,Liberia,
+orgcod,LS,Lesotho,
+orgcod,LT,Lithuania,
+orgcod,LU,Luxembourg,
+orgcod,LV,Latvia,
+orgcod,LY,Libya,
+orgcod,MA,Morocco,
+orgcod,MC,Monaco,
+orgcod,MD,Moldavia,
+orgcod,MG,Madagascar,
+orgcod,MH,Marshall Islands,
+orgcod,MIL,USA Military,
+orgcod,MK,Macedonia,
+orgcod,ML,Mali,
+orgcod,MM,Myanmar,
+orgcod,MN,Mongolia,
+orgcod,MO,Macau,
+orgcod,MP,Northern Mariana Islands,
+orgcod,MQ,Martinique (French),
+orgcod,MR,Mauritania,
+orgcod,MS,Montserrat,
+orgcod,MT,Malta,
+orgcod,MU,Mauritius,
+orgcod,MV,Maldives,
+orgcod,MW,Malawi,
+orgcod,MX,Mexico,
+orgcod,MY,Malaysia,
+orgcod,MZ,Mozambique,
+orgcod,NA,Namibia,
+orgcod,NATO,NATO (this was purged in 1996 - see hq.nato.int),
+orgcod,NC,New Caledonia (French),
+orgcod,NE,Niger,
+orgcod,NET,Network,
+orgcod,NF,Norfolk Island,
+orgcod,NG,Nigeria,
+orgcod,NI,Nicaragua,
+orgcod,NL,Netherlands,
+orgcod,NO,Norway,
+orgcod,NP,Nepal,
+orgcod,NR,Nauru,
+orgcod,NT,Neutral Zone,
+orgcod,NU,Niue,
+orgcod,NZ,New Zealand,
+orgcod,OM,Oman,
+orgcod,ORG,Non-Profit Making Organisations (sic),
+orgcod,PA,Panama,
+orgcod,PE,Peru,
+orgcod,PF,Polynesia (French),
+orgcod,PG,Papua New Guinea,
+orgcod,PH,Philippines,
+orgcod,PK,Pakistan,
+orgcod,PL,Poland,
+orgcod,PM,Saint Pierre and Miquelon,
+orgcod,PN,Pitcairn Island,
+orgcod,PR,Puerto Rico,
+orgcod,PT,Portugal,
+orgcod,PW,Palau,
+orgcod,PY,Paraguay,
+orgcod,QA,Qatar,
+orgcod,RE,Reunion (French),
+orgcod,RO,Romania,
+orgcod,RU,Russian Federation,
+orgcod,RW,Rwanda,
+orgcod,SA,Saudi Arabia,
+orgcod,SB,Solomon Islands,
+orgcod,SC,Seychelles,
+orgcod,SD,Sudan,
+orgcod,SE,Sweden,
+orgcod,SG,Singapore,
+orgcod,SH,Saint Helena,
+orgcod,SI,Slovenia,
+orgcod,SJ,Svalbard and Jan Mayen Islands,
+orgcod,SK,Slovak Republic,
+orgcod,SL,Sierra Leone,
+orgcod,SM,San Marino,
+orgcod,SN,Senegal,
+orgcod,SO,Somalia,
+orgcod,SR,Suriname,
+orgcod,ST,Saint Tome (Sao Tome) and Principe,
+orgcod,SU,Former USSR,
+orgcod,SV,El Salvador,
+orgcod,SY,Syria,
+orgcod,SZ,Swaziland,
+orgcod,TC,Turks and Caicos Islands,
+orgcod,TD,Chad,
+orgcod,TF,French Southern Territories,
+orgcod,TG,Togo,
+orgcod,TH,Thailand,
+orgcod,TJ,Tadjikistan,
+orgcod,TK,Tokelau,
+orgcod,TM,Turkmenistan,
+orgcod,TN,Tunisia,
+orgcod,TO,Tonga,
+orgcod,TP,East Timor,
+orgcod,TR,Turkey,
+orgcod,TT,Trinidad and Tobago,
+orgcod,TV,Tuvalu,
+orgcod,TW,Taiwan,
+orgcod,TZ,Tanzania,
+orgcod,UA,Ukraine,
+orgcod,UG,Uganda,
+orgcod,UK,United Kingdom,
+orgcod,UM,USA Minor Outlying Islands,
+orgcod,US,United States,
+orgcod,UY,Uruguay,
+orgcod,UZ,Uzbekistan,
+orgcod,VA,Vatican City State,
+orgcod,VC,Saint Vincent & Grenadines,
+orgcod,VE,Venezuela,
+orgcod,VG,Virgin Islands (British),
+orgcod,VI,Virgin Islands (USA),
+orgcod,VN,Vietnam,
+orgcod,VU,Vanuatu,
+orgcod,WF,Wallis and Futuna Islands,
+orgcod,WS,Samoa,
+orgcod,YE,Yemen,
+orgcod,YT,Mayotte,
+orgcod,YU,Yugoslavia,
+orgcod,ZA,South Africa,
+orgcod,ZM,Zambia,
+orgcod,ZR,Zaire,
+orgcod,ZW,Zimbabwe,
+pcksts,C,Complete,Complete
+pcksts,E,Error,Error
+pcksts,H,Hold,Hold
+pcksts,L,Ready For List,Ready For List
+pcksts,P,Pending,Pending
+pcksts,R,Released,Released
+pcksts,RM,Remaining,Remaining
+pcksts,U,Un-Assigned,Un-Assigned
+pcksts,W,Pending Cancel,Pending Cancel
+reacod,3PL,Customer picked up,
+reacod,ADJ,Lost/Found Adjustment,Lost/Found
+reacod,ADJ-ACCEPT,Acceptable Adjustment,Accept Adjust
+reacod,AUTO_SKIP,Auto Skip,Auto Skip
+reacod,BAD-TRL-CNT,Bad Transport Equipment Count,Bad Trlr Cnt
+reacod,BAD-TRL-DATA,Bad Transport Equipment Data,Bad Trlr Data
+reacod,BCKGRD-WRKFLW-ERR,Carton Workflow Failed,Carton Wrkflw Failed
+reacod,CA,Count Audit,
+reacod,CAN-ORD-UPD,CANONICAL Order Update,CAN Ord Upd
+reacod,CCAN,Customer cancelled ,
+reacod,CUSTRETURN,Customer Return,
+reacod,D,Item Damaged,Item Damaged
+reacod,DAMAGED,Damaged Inventory,Damaged
+reacod,DAMAGED_PROD,Damaged Product,Damaged Product
+reacod,DEKIT-AUDIT,Dekit Audit,Dekit Audit
+reacod,DFCT,Manufacture Defect,
+reacod,DONO,Donation,
+reacod,DUP,Duplicated Order,
+reacod,EQUIP_CHECK,Equipment Checking,Equipment Checking
+reacod,F,Found Inventory,
+reacod,FDA,FDA Hold,
+reacod,FILL-TRLR,Fill Transport Equipment,Fill Equip
+reacod,H,Customer Wasn't Home,Nobody Home
+reacod,I,Incorrect Item,Incorrect Item
+reacod,IC,Item Correction,
+reacod,INV-SHORT,Inventory Short,Inventory Short
+reacod,INVALID-RATIO,Invalid Ratio,INVALID RATIO
+reacod,KIT,Kitting or VAS Area Adjustment,Kitting/VAS
+reacod,L,Lost Inventory,
+reacod,LOC_FULL,Location Full,Location Full
+reacod,MANUAL_SKIP,Manual Skip,Manual Skip
+reacod,MOVE,Inventory Move Adjustment,Inv Move
+reacod,MSP,Mispick,
+reacod,MULTI-PROBLEM,Multiple Problems,Mult Problems
+reacod,NDS,NAV DIRECT SALES,
+reacod,OUT-AUD-HLD,RF Outbount Audit Hold,RF Out Aud Hld
+reacod,OUT_OF_SEQ,Out of Sequence,Out of Sequence
+reacod,OVERAGE,Overage of Inventory,Overage
+reacod,PAL-OVR-LOC-FULL,Location Is Full,Loc Full
+reacod,PAL-OVR-OUT-SEQ,Pallet Loaded Out of Sequence,Out Seq
+reacod,PAL-OVR-POS-SML,Assigned Pallet Position Was To Small,Pos to Sml
+reacod,PAL-OVR-SUPV-RQST,Supvsr Requested Pal Pos Override,Sup Rqst
+reacod,PAL-OVR-USR,User Pallet Position Override,Usr Ovrrde
+reacod,PRDLIN-HOLD,Production Line Hold,Prod Line Hold
+reacod,PROD,Production Line Receiving,Prod Line
+reacod,QUAL,Quality Hold,Qlty Hld
+reacod,R,Customer Refused Delivery,Customer Refused
+reacod,RBGD,Rice has been rebagged to a smaller size,
+reacod,RCV_DAMG,Received Damaged,Received Damaged
+reacod,REA000000000001,New Location,
+reacod,RELEASE,RELEASE HOLD,
+reacod,RPE,Replen input error,
+reacod,SAMPLE,Sample,
+reacod,SHIPCMPL-WRKFLW-ERR,Shipment Workflow Failed,Shipment Wrkflw Fail
+reacod,SHORT SHIPPED ,WH short shipped item ,
+reacod,SHORTAGE,Shortage of Inventory,Shortage
+reacod,SPL,Special Order,
+reacod,TRL-AUD-PASS,Yard Audit Passed,Audit Pass
+reacod,UNXP_RCPT,Unexpected Receipt,Unexpected Receipt
+reacod,WGT_DISCR,Weight Discrepancy,Weight Discrepancy
+reacod,WIP_PCK,WIP Pick,WIP Pick
+reacod,WKO-CLOSE,Work Order Close,Work Order Close
+reacod,WRONG-INV,Wrong Inventory,Wrong Inv
+shpsts,B,Cancelled,Cancelled
+shpsts,C,Load Complete,Load Complete
+shpsts,D,Loaded,Loaded
+shpsts,I,In-Process,In-Process
+shpsts,L,Loading,Loading
+shpsts,R,Ready,Ready
+shpsts,S,Staged,Staged
+shpsts,X,Transfer,Transfer
+uomcod,BO,Box,Box
+uomcod,CS,Case,Case
+uomcod,DR,Drum,Drum
+uomcod,EA,Each,Each
+uomcod,IP,Inner Pack,Inner Pack
+uomcod,LA,Layer,Layer
+uomcod,LB,LB,LB
+uomcod,PA,Pallet,Pallet
+uomcod,PL,PL,PL
+uomcod,TL,Total,Total
+wgtcod,1,Canned and Heavy Items,Canned-Heavy
+wgtcod,2,"Rice Bags, Big Bags, Tall Glass Jars",Rice-misc heavy
+wgtcod,3,Short Glass Jars,Short Glass Jars
+wgtcod,4,"Light Boxes, Packaged Powders",Light
+wgtcod,5,Super Light Boxes,Super Light
+wgtcod,6,Eaches and Units,Each-Unit
+wgtcod,7,Special Item Pick Last,Special-Pick Last
+wrktyp,B,Bulk Pick,Bulk Pick
+wrktyp,D,Demand Replenishment,Demand Replen
+wrktyp,E,Emergency Replenishment,Emergency Replen
+wrktyp,G,Triggered Replenishment,Triggered Replen
+wrktyp,K,Kit,Kit
+wrktyp,M,Manual Replenishment,Manual Replen
+wrktyp,P,Pick,Pick
+wrktyp,R,Replenishment,Replenishment
+wrktyp,S,Stage Transfer,Stage Transfer
+wrktyp,T,Top Off Replenishment,Top off Replen
+actcod,SLCHG,Shipment Line Changed,Ship Line Changed
+actcod,FL_XFR,Undirected Full Inventory Move,Full Inv Move
+actcod,LSTPCK,List Pick,List Pick
+actcod,SDSGWAV,Shipment Line De-assigned from Wave,ShipLine Dsgn Wave
+actcod,SLNEW,Shipment Line Created,Ship Line Created
+actcod,OLNEW,Outbound Order Line Created,Order Line Created
+actcod,SASGWAV,Shipment Line Assigned to Wave,ShipLine Asgn Wave
+actcod,OLCHG,Outbound Order Line Changed,Order Line Changed
+actcod,TRLR_LOAD,Trailer load,Trailer load
+actcod,SRPL,Shipment Repl Created,Ship Rpl Created
+actcod,SCHG,Shipment Changed,Shipment Changed
+actcod,SALC,Shipment Allocated,Shipment Allocated
+actcod,SLDEL,Shipment Line Removed,Ship Line Removed
+actcod,OLDEL,Outbound Order Line Removed,Order Line Removed
+actcod,RCV,Receiving,Receiving
+actcod,CANPCK,Cancel Pick,Cancel Pick
+actcod,IDNTFY,Identify,Identify
+actcod,PALPCK,Pallet Pick,Pallet Pick
+actcod,PALRPL,Pallet Replenishment,Pallet Repl
+actcod,TCHG,Transport Equipment/Planned Inbound Order Changed,Trlr/MR Changed
+actcod,SNEW,Shipment Created,Shipment Created
+actcod,SASGSTP,Shipment Assigned to Stop,Ship Assigned Stop
+actcod,SCMPL,Shipment Loaded,Shipment Loaded
+actcod,SSTG,Shipment Staged,Shipment Staged
+actcod,LOCSTSCHG,Location Status Change,Loc Status Chg
+actcod,ONEW,Outbound Order Created,Order Created
+actcod,GENMOV,Logical Movement,Logical Move
+actcod,TLDG,Transport Equipment Loading,Equip Loading
+actcod,SRPLCAN,Replenishment Cancelled,Repl Cancelled
+actcod,LOCOVRRID,Location Override,Location Override
+actcod,TNEW,Transport Equipment Created,Equip Created
+actcod,TDSP,Transport Equipment Dispatched,Equip Dispatched
+actcod,TCHKIN,Transport Equipment Checked In,Equip Checked In
+actcod,TCLOSE,Transport Equipment Closed,Equip Closed
+actcod,SASGCAR,Stop Assigned to Load,Stop Asgn Load
+actcod,SDEL,Shipment Removed,Shipment Removed
+actcod,CASPCKMOV,Case Pick Movement,Case Pick Movement
+actcod,INVDEL,Inventory Delete,Inventory Delete
+actcod,MSTR_RCP_CL,Master Receipt Close,Mst Rcp Cl
+actcod,ASN_REMOVE,Remaining ASN Removed,ASN Removed
+actcod,ODEL,Outbound Order Removed,Order Removed
+actcod,TL,Transport Equipment Loaded,Equip Loaded
+actcod,PL_XFR,Undirected Partial Inventory Move,Part Inv Move
+actcod,SDSGSTP,Shipment De-assigned from Stop,Ship Dessigned Stop
+actcod,WRKSUSP,Work Suspended,Work Suspended
+actcod,INVSTSCHG,Inventory Status Change,Inventory Sts Change
+actcod,INVATTCHG,Inventory Attribute Change,Attribute Change
+actcod,ASSUMEDPCK,Assumed Pick,Assumed Pick
+actcod,PRT_FTPDTL_REMOVE,Item Footprint UOM Removal,Footprint UOM Remove
+actcod,IDNTFY_AJ,Adjustment Identify,Adjustment Identify
+actcod,RVRCP,Reverse Receipt,Reverse Receipt
+actcod,UPCK,Unpick,Unpick
+actcod,ORDMIXPAL,Mixed Pallet Move,Mixed Pallet Move
+actcod,SLCAN,Shipment Line Cancelled,Ship Line Cancelled
+actcod,FLDLD,Fluid Load,Fluid Load
+actcod,SLPLT,Shipment Line Split,Shipment Line Split
+actcod,RELABEL,Inventory Identifier Changed,Identifier Changed
+actcod,SPLIT,Shipment Split,Shipment Split
+actcod,SCAN,Shipment Cancelled,Shipment Cancelled
+actcod,TRLR_UNLD,Trailer Unload,Trailer Unload
+actcod,OCAN,Order Cancel,Ord Cancel
+actcod,OLCAN,Order Line Cancel,Ord Line Cancel
+actcod,TROPN,Transport Equipment Reopened,Equip Reopened
+actcod,OCHG,Outbound Order Changed,Order Changed
+actcod,TREMOVE,Transport Equipment Removed,Equip Removed
+actcod,OVRREP,Overpick Replenishment,Ovrpck Rpl
+actcod,PALPCKMOV,Pallet Pick Movement,Pallet Pick Movement
+actcod,TMOVE,Transport Equipment Moved,Equip Moved
+oprcod,TRLR,Trailer Activity,
+arecod,RACK,Rack Storage,
+abccod,D,D item for ABCD analysis,
+reacod,BL,Better Location,
+reacod,INV-AGE,inventory aging,
+reacod,CYCL,cycle count,
+reacod,08/08/2026,0,

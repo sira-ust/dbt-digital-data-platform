@@ -299,6 +299,46 @@ seeds:
       - name: column_name
         tests: [not_null]
 
+  - name: seed_jdawms_code_descriptions
+    description: >
+      JDA/Blue Yonder WMS coded-value translations (source:
+      UST-WMS-DescriptionMaster.xlsx, the WMS dscmst/LextEdit export,
+      received 2026-07-09). Descriptions copied verbatim (sic, incl.
+      trailing spaces). Grain — one row per (code_domain, code_value).
+      code_domain is the WMS dictionary colnam; staging columns map to it
+      by convention: fr_arecod/to_arecod -> arecod, *uom
+      (dspuom/pck_uom/res_uom/rptuom/stkuom) -> uomcod. Covers the 17
+      domains resolvable from the export; includes ALL master values per
+      domain (not just those observed in Databricks) so new codes decode
+      without a seed change. oprcod came from the composite colnam
+      oprcod|wh_id_tmpl and arecod from arecod|wh_id — where the CABOT
+      warehouse override differed from the '----' template default (LPCK,
+      RLPCK), the CABOT value was kept. '----' and null are intentionally
+      NOT seeded ('----' = WMS default for a not-tracked field). Ten enum
+      columns have NO domain in the export and stay open in
+      jdawms_mapping_gaps.xlsx tab 3: carcod/lstcod/devcod (carrier, list
+      and device masters — extracts requested from the dev team instead of
+      manual fill) plus lvl, prcpri, rcv_rescod, rcvsts, rescod, revlvl,
+      srvlvl.
+    config:
+      tags: ["jdawms", "reference"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [code_domain, code_value]
+    columns:
+      - name: code_domain
+        description: WMS dictionary colnam (base name for composite keys)
+        tests: [not_null]
+      - name: code_value
+        description: Raw code as stored in the WMS columns (verbatim)
+        tests: [not_null]
+      - name: long_description
+        description: dscmst lngdsc, verbatim
+        tests: [not_null]
+      - name: short_description
+        description: dscmst short_dsc, verbatim; may be empty
+
   - name: seed_jdawms_comtyp
     description: >
       Legend for the comtyp data-type codes used in seed_jdawms_data_dictionary
