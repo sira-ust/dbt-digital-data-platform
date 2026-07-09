@@ -33,14 +33,20 @@ apps as (
 
     select * from {{ ref('seed_app_sources') }}
 
+),
+
+system_accounts as (
+
+    select username from {{ ref('seed_system_accounts') }}
+
 )
 
 select
     e.*,
     c.function_name,
     c.l1_category_name,
-    c.payload_format as expected_payload_format,
-    c.has_geo as expects_geo,
+    c.payload_format                as expected_payload_format,
+    c.has_geo                       as expects_geo,
     c.is_system_event,
     c.event_type,
     c.log_level,
@@ -107,3 +113,7 @@ left join codes as c
     on e.description_code = c.description_code
 left join apps as a
     on e.source_code = a.source_code
+
+where e.sales_code not in ('000')
+  and (e.username is null or e.username not in (select username from system_accounts))
+  and e.event_at_utc is not null

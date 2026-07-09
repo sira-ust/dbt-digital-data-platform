@@ -1,0 +1,12 @@
+username,account_type,note
+cndev,dev,developer test account
+Cndev,dev,developer test account (mixed-case variant)
+cndev2,dev,developer test account
+emilyma,dev,developer test account
+itadmin,it,IT admin account
+jennifertov,dev,developer test account
+michaelyap,dev,developer test account
+patterklomjit,dev,developer test account
+vincetov,dev,developer test account
+Unlogged,system,placeholder for unauthenticated sessions
+SME001,test,SME test account
