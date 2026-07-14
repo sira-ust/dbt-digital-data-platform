@@ -128,3 +128,127 @@ models:
         description: Cart remove event (codes 1004xxxx, dictionary-mapped only).
       - name: is_qty_change
         description: Cart quantity-change event (codes 1015xxxx, dictionary-mapped only).
+
+  - name: int_item_demand_daily
+    description: >
+      App-side item demand, one row per sku x day x source_system. The single
+      owner of SKU extraction from event payloads (positional cart payloads
+      "sku,qty[,category]" and bare-sku item-detail/enlarge payloads); only
+      skus shaped like a WMS item number (3-8 digits) are kept. sku values
+      equal jdawms prtnum (verified 2026-07-13, 99.9% on clean columns).
+      Materialized as a view over int_events_enriched — thin projection read
+      once per mart build. source_system is 'event_log' today; the legacy
+      tracking tables (history to 2023-09) union in here if pre-2026 history
+      is ever needed. Demand history starts 2026-01-22 (event log go-live).
+    config:
+      tags: ["demand"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [sku, activity_date, source_system]
+    columns:
+      - name: activity_date
+        description: UTC calendar day of the events.
+        tests: [not_null]
+      - name: sku
+        description: Item number extracted from the payload. Equals jdawms prtnum.
+        tests: [not_null]
+      - name: source_system
+        description: Which log stream produced the row (event_log for now).
+      - name: item_detail_views
+        description: Item Detail opens (feature_name item_detail).
+      - name: image_enlarge_views
+        description: Item image enlarges (feature_name image_enlarge).
+      - name: cart_adds
+        description: Cart add events for the sku.
+      - name: cart_removes
+        description: Cart remove events for the sku.
+      - name: cart_qty_changes
+        description: Cart quantity-change events for the sku.
+      - name: cart_add_qty
+        description: Units added to cart (positional payload part 2; 0 when unparseable).
+      - name: distinct_customers
+        description: Distinct customer_key values interacting with the sku that day.
+      - name: distinct_self_customers
+        description: Distinct customers acting for themselves (actor_type customer).
+
+  - name: int_jdawms_inventory_daily
+    description: >
+      WMS stock position, one row per item x warehouse x snapshot day —
+      inv_snap deduped to the last snapshot per day with a proper
+      snapshot_date. Day grain on purpose; weekly rollups belong to marts.
+      CABOT warehouse only (the replica mirrors a single wh_id). Snapshots
+      generate ~23:00 UTC, verified daily (51/60 days). ordered_qty,
+      planned_qty and pnd_rcvqty keep their WMS names — in/outbound
+      semantics not yet dev-confirmed. Materialized as a view.
+    config:
+      tags: ["jdawms", "wms"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [prtnum, prt_client_id, wh_id, snapshot_date]
+    columns:
+      - name: prtnum
+        description: WMS item number. Equals the app-side sku.
+        tests: [not_null]
+      - name: prt_client_id
+        description: Item owner (3PL client) — part of the WMS composite item key.
+      - name: wh_id
+        description: Warehouse (CABOT only in the current replica).
+      - name: snapshot_date
+        description: Calendar day the snapshot was generated.
+        tests: [not_null]
+      - name: snapshot_at
+        description: Exact snapshot generation timestamp (gendte).
+      - name: shippable_qty
+        description: Units shippable that day — the availability measure.
+      - name: on_hand_qty
+        description: Units physically on hand.
+      - name: ordered_qty
+        description: WMS ordered quantity (verbatim; exact semantics unconfirmed).
+      - name: planned_qty
+        description: WMS planned quantity (verbatim; exact semantics unconfirmed).
+      - name: pnd_rcvqty
+        description: Pending-receipt quantity (verbatim; exact semantics unconfirmed).
+
+  - name: int_jdawms_items
+    description: >
+      The WMS item master made readable — one row per item (prtnum +
+      prt_client_id): prtmst attributes, English names from prtdsc, decoded
+      ABC class from seed_jdawms_code_descriptions (the seed's first
+      consumer). CABOT template rows override the '----' default, same
+      convention as the seed. Generic item spine for SKU-level marts and
+      the future dim_items surface for Unity Catalog / Genie. Materialized
+      as a view (~5.7k rows).
+    config:
+      tags: ["jdawms", "wms"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [prtnum, prt_client_id]
+    columns:
+      - name: prtnum
+        description: WMS item number. Equals the app-side sku (verified 99.9%).
+        tests: [not_null]
+      - name: prt_client_id
+        description: Item owner (3PL client) — part of the WMS composite item key.
+      - name: dsp_prtnum
+        description: Display item number (equals prtnum in practice).
+      - name: item_name
+        description: US_ENGLISH long description from prtdsc.
+      - name: item_short_name
+        description: US_ENGLISH short description from prtdsc.
+      - name: item_family
+        description: WMS product family (prtfam).
+      - name: abc_class
+        description: ABC velocity class code (abccod).
+      - name: abc_class_description
+        description: Decoded ABC class from seed_jdawms_code_descriptions.
+      - name: velocity_zone
+        description: WMS velocity zone (velzon; no decode domain available yet).
+      - name: stock_uom
+        description: Stock-keeping unit of measure.
+      - name: display_uom
+        description: Display unit of measure.
+      - name: receive_status
+        description: Default receive inventory status (rcvsts; decode still open in the seed gaps).

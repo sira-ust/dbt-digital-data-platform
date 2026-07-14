@@ -46,3 +46,28 @@ models:
         description: Earliest server time the code appeared.
       - name: last_seen_utc
         description: Latest server time the code appeared.
+
+  - name: dq_unmatched_demand_skus
+    description: >
+      Demand-payload skus that match no WMS item (int_jdawms_items), most
+      demand first. Malformed payloads never get here (dropped by the shape
+      filter in int_item_demand_daily); these are well-formed numeric skus
+      absent from prtmst — discontinued items, items of an unmirrored
+      warehouse, or master-data gaps. Keeps the measured ~11% payload loss
+      visible instead of silently shrinking mart_item_demand_supply.
+    columns:
+      - name: sku
+        description: The unmatched sku as extracted from the payload.
+        tests: [unique, not_null]
+      - name: first_seen
+        description: Earliest demand day for the sku.
+      - name: last_seen
+        description: Latest demand day for the sku (recent = worth triage).
+      - name: item_views
+        description: Lifetime item views for the sku.
+      - name: cart_adds
+        description: Lifetime cart adds for the sku.
+      - name: cart_add_qty
+        description: Lifetime units added to cart.
+      - name: demand_events
+        description: item_views + cart_adds — triage sort key.

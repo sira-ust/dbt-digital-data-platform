@@ -35,6 +35,19 @@ vars:
   cycle_abandon_days: 7       # open cycle with no activity this long = abandoned
   churn_consecutive_weeks: 3  # removes > adds this many weeks running = churn signal
 
+  # system_event_log production go-live: event_at_utc is device time, so a
+  # few rows carry clock-skewed dates before this — int_item_demand_daily
+  # clamps to [go-live, now].
+  event_log_go_live_date: '2026-01-22'
+
+  # mart_item_demand_supply signal thresholds — starting points, tune against
+  # real dashboard feedback. All counts are per item-week.
+  demand_supply_min_demand_events: 10   # views+cart_adds needed to call a missed opportunity
+  demand_supply_oos_min_days: 4         # zero-shippable snapshot days = "dry most of the week"
+  demand_supply_promote_max_events: 2   # views+cart_adds at or below this + stock on hand = promote candidate
+  demand_supply_trend_ratio: 1.5        # this week's views vs prior-4-week avg = trending
+  demand_supply_trend_min_base_views: 5 # prior-4-week avg floor so tiny bases don't trend
+
 
 
 # Layering:

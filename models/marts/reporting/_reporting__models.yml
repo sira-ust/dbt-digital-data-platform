@@ -88,3 +88,97 @@ models:
         description: co_occurrence_days / days feature_a was used at all that week.
       - name: wow_change
         description: Week-over-week change in co_occurrence_days for the pair.
+
+  - name: mart_item_demand_supply
+    description: >
+      App demand vs CABOT warehouse supply, one row per item x ISO week.
+      Built for three questions: missed opportunities (interest while stock
+      was dry), promote candidates (stock but no interest), restock risk
+      (interest trending, inventory flat). Demand = interest at browse time
+      (views + cart adds), NOT fulfilled sales — no order-level WMS link
+      exists yet. Stock comparison is same-day: "when the customer looked,
+      could CABOT have shipped it?". CAVEATS every consumer must know:
+      supply covers warehouse CABOT ONLY (an item out of stock here may
+      ship from an unmirrored site); demand history starts 2026-01-22;
+      cart quantities come from ~89%-parseable payloads (losses visible in
+      dq_unmatched_demand_skus). Signal thresholds are vars
+      (demand_supply_* in dbt_project.yml).
+    config:
+      tags: ["demand", "wms"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [prtnum, week_start]
+    columns:
+      - name: prtnum
+        description: WMS item number (= app sku).
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_jdawms_items')
+                field: prtnum
+      - name: week_start
+        description: Monday of the ISO week.
+        tests: [not_null]
+      - name: item_name
+        description: US_ENGLISH item description.
+      - name: item_family
+        description: WMS product family.
+      - name: abc_class
+        description: ABC velocity class code.
+      - name: abc_class_description
+        description: Decoded ABC class.
+      - name: velocity_zone
+        description: WMS velocity zone.
+      - name: item_views
+        description: Item Detail opens + image enlarges that week.
+      - name: cart_adds
+        description: Cart add events that week.
+      - name: cart_removes
+        description: Cart remove events that week.
+      - name: cart_add_qty
+        description: Units added to cart (parseable payloads only).
+      - name: peak_daily_customers
+        description: Highest single-day distinct-customer count that week.
+      - name: demand_active_days
+        description: Days that week with any demand activity for the item.
+      - name: demand_events
+        description: item_views + cart_adds — the working demand measure.
+      - name: views_prior_4wk_avg
+        description: Average weekly item_views over the item's prior 4 observed weeks.
+      - name: avg_shippable_qty
+        description: Average daily shippable units at CABOT that week.
+      - name: min_shippable_qty
+        description: Lowest daily shippable units that week.
+      - name: avg_on_hand_qty
+        description: Average daily on-hand units that week.
+      - name: shippable_eow
+        description: Shippable units at the last snapshot of the week.
+      - name: shippable_eow_prior_4wk_avg
+        description: Average end-of-week shippable over the prior 4 observed weeks.
+      - name: days_out_of_stock
+        description: Snapshot days that week with zero shippable units.
+      - name: snapshot_days
+        description: Snapshot days observed that week (denominator for days_out_of_stock).
+      - name: inbound_qty_peak
+        description: Peak planned_qty + pnd_rcvqty that week (replenishment possibly in flight; semantics unconfirmed).
+      - name: cart_adds_while_oos
+        description: Cart adds landing on zero-shippable snapshot days — the core missed-opportunity count.
+      - name: views_while_oos
+        description: Item views landing on zero-shippable snapshot days.
+      - name: is_trending_interest
+        description: Views beat the prior-4-week average by demand_supply_trend_ratio (with a base floor).
+      - name: signal
+        description: >
+          Weekly classification: missed_opportunity (demand hit a dry
+          shelf), restock_risk (interest trending, stock not building),
+          promote_candidate (stock but no interest), healthy. Thresholds
+          from the demand_supply_* vars; precedence in that order. The mart
+          is demand-driven: weeks before the event log went live are
+          excluded entirely (supply-only history lives in
+          int_jdawms_inventory_daily).
+        tests:
+          - accepted_values:
+              arguments:
+                values: [missed_opportunity, restock_risk, promote_candidate, healthy]
