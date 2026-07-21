@@ -617,3 +617,58 @@ reacod,BL,Better Location,
 reacod,INV-AGE,inventory aging,
 reacod,CYCL,cycle count,
 reacod,08/08/2026,0,
+carcod,2DD,DD OUT OF STATES,2DD
+carcod,ALF02,ALF INC.,ALF02
+carcod,CPU01,CUSTOMER PICKUP,CPU01
+carcod,CSA02,"CANADIAN SALES AGENCY, INC.",CSA02
+carcod,CUS02,"CUSTOM FREIGHT SYSTEMS, INC.",CUS02
+carcod,DAY02,"DAYLIGHT TRANSPORT, LLC",DAY02
+carcod,DTS02,DIVERSIFIED TRANSFER & STORAGE,DTS02
+carcod,EGA01,E.G. AYERS DISTRIBUTING INC.,EGA01
+carcod,GLS01,"GLS US FREIGHT, INC.",GLS01
+carcod,HAI01,"HAI'S TRUCKING, INC.",HAI01
+carcod,HTI01,HTI LOGISTICS,HTI01
+carcod,JHT01,J&H TRUCKING INC,JHT01
+carcod,JIM02,JIM FRUITT TRUCKING,JIM02
+carcod,JKF01,J K FREIGHT CARRIER INC.,JKF01
+carcod,KNT01,"KNT TRUCKING, INC.",KNT01
+carcod,ROA01,ROADRUNNER TRANSPORTATION SERVICES,ROA01
+carcod,SAV01,SAV TRANSPORTATION GROUP,SAV01
+carcod,TFO01,T FORCE WORLDWIDE INC.,TFO01
+carcod,THI99,THIRD PARTY TRUCKING,THI99
+carcod,TRI04,TRINITY LOGISTICS INC.,TRI04
+carcod,TTS01,"TTS, LLC",TTS01
+carcod,UNI07,"UNITED EXPRESS LOGISTICS, LLC",UNI07
+carcod,UST,UST TRUCKING,UST
+carcod,UST01,UST TRUCKING,UST01
+carcod,UST02,UST TRUCKING,UST02
+carcod,YOU02,YOUNG'S REFRIGERATED SERVICE,YOU02
+lstcod,CASRPL,Case Replenishment,CASRPL
+lstcod,CNTAUD,Count Audit,CNTAUD
+lstcod,FL_XFR,Undirected Full Inventory Move,FL_XFR
+lstcod,GENMOV,Logical Movement,GENMOV
+lstcod,IDNTFY,Identify,IDNTFY
+lstcod,IDNTFY_AJ,Adjustment Identify,IDNTFY_AJ
+lstcod,IDNTFY_RET_UNXP,Process Unexpected Return Item,IDNTFY_RET_UNXP
+lstcod,INVDEL,Inventory Delete,INVDEL
+lstcod,LSTPCK,List Pick,LSTPCK
+lstcod,PALPCK,Pallet Pick,PALPCK
+lstcod,PALRPL,Pallet Replenishment,PALRPL
+lstcod,PL_XFR,Undirected Partial Inventory Move,PL_XFR
+lstcod,RCV,Receiving,RCV
+lstcod,SUMCNT,Summary Count,SUMCNT
+lstcod,TRLR_LOAD,Trailer load,TRLR_LOAD
+lstcod,UPCK,Unpick,UPCK
+lstcod,Z,Count Near Zero,Z
+lvl,A,"ground level , pickface",A
+lvl,B,second level storage,B
+lvl,BULK1,Bulk area,BULK1
+lvl,C,third level storage,C
+lvl,CWBULK,Bulk area at Transfer warehouse,CWBULK
+lvl,CWPND,pnding are at Transfer warehouse,CWPND
+lvl,D,fouth level storage,D
+lvl,E,fifth level storage,E
+lvl,T,top level storage,T
+srvlvl,LTL,Less than truck load Service level,LTL
+srvlvl,TL,Full Truck load Service level,TL
+rcvsts,A,Available Inventory Status,A

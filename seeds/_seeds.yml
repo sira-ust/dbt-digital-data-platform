@@ -315,11 +315,14 @@ seeds:
       warehouse override differed from the '----' template default (LPCK,
       RLPCK), the CABOT value was kept. '----' and null are intentionally
       NOT seeded ('----' = WMS default for a not-tracked field). Ten enum
-      columns have NO domain in the export and stay open in
-      jdawms_mapping_gaps.xlsx tab 3: carcod/lstcod/devcod (carrier, list
-      and device masters — extracts requested from the dev team instead of
-      manual fill) plus lvl, prcpri, rcv_rescod, rcvsts, rescod, revlvl,
-      srvlvl.
+      columns had NO domain in the export; five were supplied directly by
+      the dev team (jdawms_mapping_gaps.xlsx "Dev Input" tab, 2026-07-21)
+      and added here verbatim — carcod (carriers), lstcod (last-activity
+      codes), lvl (storage levels), srvlvl (LTL/TL) and rcvsts; for these,
+      short_description repeats the code value (no short form was supplied).
+      Five stay open (still tracked in jdawms_mapping_gaps.xlsx tab 3):
+      devcod (warehouse device/workstation names, left blank), plus prcpri,
+      rcv_rescod, rescod and revlvl (left blank pending dev confirmation).
     config:
       tags: ["jdawms", "reference"]
     tests:
