@@ -168,3 +168,19 @@ Product Detail,,ui_label,UI / navigation label collected in categories_name (not
 Recommend by Service,,ui_label,UI / navigation label collected in categories_name (not a product category).
 Recommended,,ui_label,UI / navigation label collected in categories_name (not a product category).
 Search,,ui_label,UI / navigation label collected in categories_name (not a product category).
+Juices,80,category_match,"Corresponds to ""Juices & Teas"" (ID 80, under Beverages)."
+Tableware & Utensils,170,category_match,"This is a label created by the application by combining two actual subclasses—Tableware (170) and Utensils (83)—both of which fall under the ""Household"" category."
+Tapioca & Desserts Mixes,66,category_match,"Should be ""Tapioca & Dessert Mixes"""
+Fish,97,category_match,Dev team: maps to ust_category 'Fish Whole' (id 97).
+Shimp & Prawn,91,category_match,Dev team: maps to ust_category 'Shrimp & Prawn' (id 91).
+Corn & Water Chestnuts,53,category_match,Dev team: maps to ust_category 'Corn & Waterchestnuts' (id 53).
+Household & Cleaning Supplies,86,category_match,Dev team: maps to ust_category 'Household & Cleaning' (id 86).
+Search:Oyster,,search_query,"Dev team: search query captured in categories_name, not a category. Route to search analytics; exclude from category analytics."
+Search:Oyster sauce,,search_query,"Dev team: search query captured in categories_name, not a category. Route to search analytics; exclude from category analytics."
+Search:Hi chew,,search_query,"Dev team: search query captured in categories_name, not a category. Route to search analytics; exclude from category analytics."
+Obaba,,brand_keyword,"Dev team: ""obaba"" is likely the brand name keyword; route to brand tracking if one exists; exclude from category analytics."
+More,,ui_label,"Dev team: UI action (load-more / menu), not a category."
+"Sorry, this item is currently unavailable.",,error_payload,Dev team: app error payload captured at WARN log level (network-layer error); not a category.
+An SSL error has occurred and a secure connection to the server cannot be made.,,error_payload,Dev team: app error payload captured at WARN log level (network-layer error); not a category.
+网络连接已中断。,,error_payload,Dev team: app error payload captured at WARN log level (network-layer error); not a category.
+The network connection was lost.,,error_payload,Dev team: app error payload captured at WARN log level (network-layer error); not a category.

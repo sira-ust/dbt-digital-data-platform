@@ -154,16 +154,28 @@ seeds:
       aggregate_view_all = "All X" view-all entries mapping to the parent L3
       category; category_match = brand/subcategory names matching a
       ust_category row; ui_label = navigation labels (Cart, Categories,
-      Product Detail, ...) with category_id NULL — intentionally excluded
-      from category mapping per the dev team. IMPORTANT: 144 of the
+      Product Detail, More, ...); search_query = a user's search string
+      (Search:Oyster, ...); brand_keyword = a brand name (Obaba);
+      error_payload = app/network error text captured at WARN log level
+      (Sorry, this item is currently unavailable / SSL / network lost, ...).
+      This seed CLASSIFIES rather than filters: it is meant to be LEFT-joined
+      so every raw value flows downstream carrying its alias_type + (NULL-able)
+      category_id; each consumer routes by alias_type (product-category marts
+      keep category_match/aggregate_view_all; search/brand analytics use
+      search_query/brand_keyword; error_payload is ignored/monitored). Only
+      category_match/aggregate_view_all carry a category_id; the rest are NULL
+      by design. The 16 previously-unseeded raw names were classified by the
+      dev team in the seed-gap workbook "Dev Input" tabs (2026-07-22): 7
+      category_match (all ids <= 171, present in the replica), 3 search_query,
+      1 brand_keyword, 1 ui_label, 4 error_payload. IMPORTANT: 144 of the
       category_match ids reference ust_category rows MISSING from the
       Databricks replica (it holds only 78 of 460+ rows) — they are seeded
       from the dev team's answers and pending verification via the
       warn-level relationships test below; flip it to error once the dev
       team fixes the replication. On the DuckDB target the test warns by
       design (mock ust_category is generated from seed_categories, which
-      lacks the brand ids). 16 raw names remain unseeded — no definition
-      from the dev team yet (Ask 2 in seed_mapping_for_dev_team_260708.xlsx).
+      lacks the brand ids). All observed raw names are now classified (the
+      last 16 were returned by the dev team 2026-07-22).
       Decode order for categories_name: this seed first (exact raw string),
       then seed_categories by name.
     config:
@@ -188,7 +200,37 @@ seeds:
           - not_null
           - accepted_values:
               arguments:
-                values: [aggregate_view_all, category_match, ui_label]
+                values: [aggregate_view_all, category_match, ui_label, search_query, brand_keyword, error_payload]
+
+  - name: seed_layout_codes
+    description: >
+      user_activity_report_event.layout code map (dev team, 2026-07-22):
+      0 = Standard Layout, 1 = Builder Layout, 2 = New Layout. The in-app
+      layout selector has been deprecated (most users are on the new layout).
+      Reference only — user_activity_report_event is not staged in dbt yet.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: layout_code
+        tests: [unique, not_null]
+      - name: layout_name
+        tests: [not_null]
+
+  - name: seed_warn_event_codes
+    description: >
+      system_event_log description_codes that fire at the WARN log level
+      (network-layer errors), supplied by the dev team 2026-07-22. These
+      surface as error strings in the category field (e.g. "The network
+      connection was lost.", "An SSL error has occurred ..."); filter events
+      whose description_code is in this list to drop that noise. 33 codes.
+      See the matching error_payload rows in seed_category_name_aliases.
+    config:
+      tags: ["mysql", "reference"]
+    columns:
+      - name: description_code
+        tests: [unique, not_null]
+      - name: log_level
+        tests: [not_null]
 
   # ── Customer tracking (tracking_report_event) code tables ──
   # All definitions from the dev team's seed-gap review, tab "6 No seed
@@ -248,7 +290,9 @@ seeds:
       user_activity_report_event.act_type code map (dev team, 2026-07-08).
       Codes 1-15 and 99 are the main activity types; the 1xx/2xx codes are
       rare strays (likely method codes written into act_type). Code 0
-      (483 rows) came back with no definition — still open with the dev team.
+      (483 rows) is intentionally NOT seeded — dev team (2026-07-22) confirmed
+      it is not in the spec (valid values are 1-15 and 99); it was an old
+      website DAU-collection field, now deprecated.
     config:
       tags: ["mysql", "reference"]
     columns:

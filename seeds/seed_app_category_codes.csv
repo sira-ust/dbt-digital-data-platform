@@ -13,3 +13,7 @@ app_category_code,app_id,ust_category_id,category_name,icon,code_type,notes
 8888,-3,,Promo,Promo,virtual_slot,Home-page section / icon (father_category)
 9990,,,New Recommendation,Recommendation,virtual_slot,'New recommendation' feed (api.v2)
 9991,-6,,Recommend by Service,Recommendation,virtual_slot,Recommendation template (api.v2 + Z%)
+4444,,,Back Order,,virtual_slot,"Dev team 2026-07-22: virtual / UI-navigation slot (app page/filter), not a catalog product category; exclude from product-category analytics."
+5555,,,Purchase History,,virtual_slot,"Dev team 2026-07-22: virtual / UI-navigation slot (app page/filter), not a catalog product category; exclude from product-category analytics."
+7777,,,HOT,,virtual_slot,"Dev team 2026-07-22: virtual / UI-navigation slot (app page/filter), not a catalog product category; exclude from product-category analytics."
+9999,,,Recommend,,virtual_slot,"Dev team 2026-07-22: virtual / UI-navigation slot (app page/filter), not a catalog product category; exclude from product-category analytics."
