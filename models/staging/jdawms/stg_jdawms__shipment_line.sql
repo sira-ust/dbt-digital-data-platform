@@ -1,5 +1,7 @@
 -- Staging for jdawms.shipment_line — 1:1 lossless view over the raw WMS replica.
 -- All 49 source columns preserved as-is (types already clean in Delta).
+-- Cross-source join keys (prtnum, prt_client_id) are whitespace-trimmed to
+-- match the trimmed MySQL side; WMS CHAR columns can be space-padded.
 -- Databricks reads the real replica; DuckDB reads mock parquet (see data/README.md).
 
 with source as (
@@ -46,8 +48,8 @@ select
     moddte,
     mod_usr_id,
     dstr_qty,
-    prtnum,
-    prt_client_id,
+    trim(prtnum) as prtnum,
+    trim(prt_client_id) as prt_client_id,
     est_time,
     picked_qty,
     instgqty,

@@ -75,23 +75,15 @@ typed as (
 
 numbered as (
 
+    -- entity_id is the source primary key: keep the latest-updated row per id.
+    -- updated_at desc is the documented rule ("latest wins"); created_at desc is
+    -- a deterministic tiebreak. Partitioning by entity_id (not by the business
+    -- columns) is what guarantees the unique(entity_id) test downstream.
     select
         *,
         row_number() over (
-            partition by
-                sales_code,
-                username,
-                ust_customer_no,
-                location,
-                timezone,
-                event_time,
-                source,
-                description_code,
-                response,
-                device_name,
-                nullif(trim(event_id), ''),  -- treat empty as null so blanks group together
-                version
-            order by updated_at desc
+            partition by entity_id
+            order by updated_at desc, created_at desc
         ) as _rn
     from typed
 

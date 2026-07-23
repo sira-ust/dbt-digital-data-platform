@@ -1,5 +1,7 @@
 -- Staging for jdawms.prtftp_dtl — 1:1 lossless view over the raw WMS replica.
 -- All 27 source columns preserved as-is (types already clean in Delta).
+-- Cross-source join keys (prtnum, prt_client_id) are whitespace-trimmed to
+-- match the trimmed MySQL side; WMS CHAR columns can be space-padded.
 -- Databricks reads the real replica; DuckDB reads mock parquet (see data/README.md).
 
 with source as (
@@ -7,9 +9,9 @@ with source as (
 )
 
 select
-    prtnum,
+    trim(prtnum) as prtnum,
     ftpcod,
-    prt_client_id,
+    trim(prt_client_id) as prt_client_id,
     wh_id,
     uomcod,
     uomlvl,
