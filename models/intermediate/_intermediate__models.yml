@@ -252,3 +252,85 @@ models:
         description: Display unit of measure.
       - name: receive_status
         description: Default receive inventory status (rcvsts; decode still open in the seed gaps).
+
+  - name: int_jdawms_sale_picks_daily
+    description: >
+      Sale-shipment picking demand, one row per item x pick date x temperature
+      zone (pick_type), quantity in CASES — the item-movement signal that feeds
+      the weekly forecast pipeline (SKU_movement.xlsx today). Source is the
+      pick-work record (pckwrk_hdr + pckwrk_dtl), not the dlytrn ledger: a
+      pckdte marks a CONFIRMED pick, so demand is already net of cancels.
+      Cases = picked units / units-per-case (untcas), never multiplied; rows
+      that cannot convert (untcas null/0) are counted in bad_untcas_rows.
+      pick_type comes from oprcod + locmst.sto_zone_id (10002=DRY, 10004=FRZ,
+      dev-confirmed). prt_client_id is carried for the WMS composite key. No
+      rolling-window filter — trailing windows belong to the reader.
+    config:
+      tags: ["jdawms", "wms", "forecast"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [prtnum, prt_client_id, pck_date, pick_type]
+    columns:
+      - name: prtnum
+        description: WMS item number. Equals the app-side sku.
+        tests: [not_null]
+      - name: prt_client_id
+        description: Item owner (3PL client) — part of the WMS composite item key.
+      - name: pck_date
+        description: Calendar day the pick was confirmed (pckdte).
+        tests: [not_null]
+      - name: pick_type
+        description: >
+          Temperature zone of the pick: DRY / FRZ derived from oprcod +
+          storage zone, UNCLASSIFIED when the pick's source location had no
+          locmst match.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [DRY, FRZ, UNCLASSIFIED]
+      - name: total_cases
+        description: Picked quantity in cases (the forecast unit) — sum of pckqty / untcas.
+      - name: bad_untcas_rows
+        description: Pick rows that could not convert to cases (untcas null or 0).
+
+  - name: int_jdawms_stock_weekly
+    description: >
+      Weekly in-stock signal per item, Monday-anchored — one row per item x
+      warehouse x week. Rolls up int_jdawms_inventory_daily to the week the
+      forecast pipeline consumes as its mandatory in-stock mask
+      (SKU_stock_weekly.xlsx today). Mask reducer is shippable on ANY day:
+      in_stock = 1 if shippable on at least one snapshot day. on_hand_qty /
+      shippable_qty are end-of-week (last snapshot day), matching
+      mart_item_demand_supply. n_days counts snapshot days present (inventory
+      is already one row per day). CABOT warehouse only. No rolling-window
+      filter — trailing windows belong to the reader.
+    config:
+      tags: ["jdawms", "wms", "forecast"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [prtnum, prt_client_id, wh_id, week_start]
+    columns:
+      - name: prtnum
+        description: WMS item number. Equals the app-side sku.
+        tests: [not_null]
+      - name: prt_client_id
+        description: Item owner (3PL client) — part of the WMS composite item key.
+      - name: wh_id
+        description: Warehouse (CABOT only in the current replica).
+      - name: week_start
+        description: Monday of the ISO week the snapshots fall in.
+        tests: [not_null]
+      - name: on_hand_qty
+        description: End-of-week on-hand units (last snapshot day in the week).
+      - name: shippable_qty
+        description: End-of-week shippable units (last snapshot day in the week).
+      - name: instock_frac
+        description: Fraction of snapshot days in the week that were shippable (>0).
+      - name: in_stock
+        description: 1 if shippable on ANY snapshot day in the week (the forecast mask).
+      - name: in_stock_all
+        description: 1 only if shippable on EVERY snapshot day in the week.
+      - name: n_days
+        description: Snapshot days present in the week (inventory is one row per day).
