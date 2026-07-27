@@ -126,6 +126,8 @@ seeds:
       numbering overlaps the website ids (app 100 != website 100). App ids
       -1, -5, -123 are intentionally NOT seeded — "No source record found;
       treat as pseudo data" per dev team.
+
+      {{ doc("app_category_codes_glossary") }}
     config:
       tags: ["mysql", "reference"]
     columns:
@@ -178,6 +180,8 @@ seeds:
       last 16 were returned by the dev team 2026-07-22).
       Decode order for categories_name: this seed first (exact raw string),
       then seed_categories by name.
+
+      {{ doc("category_name_aliases_glossary") }}
     config:
       tags: ["mysql", "reference"]
     columns:
@@ -208,6 +212,8 @@ seeds:
       0 = Standard Layout, 1 = Builder Layout, 2 = New Layout. The in-app
       layout selector has been deprecated (most users are on the new layout).
       Reference only — user_activity_report_event is not staged in dbt yet.
+
+      {{ doc("layout_codes_glossary") }}
     config:
       tags: ["mysql", "reference"]
     columns:
@@ -224,6 +230,8 @@ seeds:
       connection was lost.", "An SSL error has occurred ..."); filter events
       whose description_code is in this list to drop that noise. 33 codes.
       See the matching error_payload rows in seed_category_name_aliases.
+
+      {{ doc("warn_event_codes_glossary") }}
     config:
       tags: ["mysql", "reference"]
     columns:
@@ -367,6 +375,8 @@ seeds:
       Five stay open (still tracked in jdawms_mapping_gaps.xlsx tab 3):
       devcod (warehouse device/workstation names, left blank), plus prcpri,
       rcv_rescod, rescod and revlvl (left blank pending dev confirmation).
+
+      {{ doc("jdawms_code_descriptions_glossary") }}
     config:
       tags: ["jdawms", "reference"]
     tests:
