@@ -1,16 +1,17 @@
-# ustrading System Event Log — dbt project
+# ustrading Digital Data Platform — dbt project
 
-Models the **System Event Log**: a MySQL table of system/event logs written by
-all company apps (PDA, CatalogFS, CatalogFC, Vegas, CatalogSE, Web) via a
-unified API. ~600k events/month. **MySQL is read-only for dbt** — nothing
-here ever writes back to the source.
+Models the **System Event Log** (MySQL — system/event logs written by all
+company apps: PDA, CatalogFS, CatalogFC, Vegas, CatalogSE, Web via a unified
+API, ~600k events/month) together with the **JDA / Blue Yonder WMS replica**
+(`jdawms`, 16 tables), joined for cross-source demand-vs-supply analytics.
+**Both sources are read-only for dbt** — nothing here ever writes back.
 
-**Phase 1 scope:** source mapping (staging) + parsed intermediate models (event
-grain, views) + data quality checks. Aggregated analytics (`fct_*` incremental,
-`mart_*` rollups) deferred until BI requirements land.
+The pipeline runs staging → intermediate (event / day grain) → facts +
+reporting marts, with data-quality tests and DQ monitoring tables throughout
+(see [TESTING.md](TESTING.md)).
 
-Local development runs entirely on **DuckDB** against a sample export — no
-live MySQL connection, zero cloud cost.
+Local development runs entirely on **DuckDB** against sample/mock data — no
+live MySQL or Databricks connection, zero cloud cost.
 
 ## Prerequisites
 
@@ -33,16 +34,17 @@ pip install -r requirements.txt
 copy profiles.example.yml profiles.yml
 dbt deps
 
-# Flatten raw API JSON -> parquet (pure SQL — no DuckDB CLI needed)
-python -c "import duckdb; duckdb.sql(open('scripts/flatten_api_json.sql', encoding='utf-8').read())"
-
 # Generate mock parquet for the jdawms (WMS) source + the two sample-less
-# mysql tables — schema-exact, from the git-tracked UC snapshot; no
-# Databricks/Unity Catalog access or cost (see data/README.md)
+# mysql tables (admin_users, category) — schema-exact, from the git-tracked
+# UC snapshot; no Databricks/Unity Catalog access or cost (see data/README.md).
 python scripts/generate_jdawms_mock.py
 
 dbt build
 ```
+
+`stg_mysql__system_event_log` reads the real API sample JSON directly (no
+flatten step) — the sample must be present under
+`data/mock/mysql/raw_api/` (git-ignored; see data/README.md).
 
 ## Querying the local database
 
@@ -80,43 +82,52 @@ directly if a GUI is preferred.
 
 ## Layers
 
+Two source systems flow through staging → intermediate → marts:
+
 ```
-data/mock/mysql/raw_api/*.json  →  scripts/flatten_api_json.sql (optional)  →  data/system_events.parquet
-                                                                                    │ (feeds analyses/ only — not read by dbt models)
-staging/mysql/ (view)   stg_mysql__* — reads raw_api/*.json directly; dedup, types, code split, UTC
-seeds/ (CSV)            seed_event_codes · seed_app_sources · seed_categories
-                        seed_jdawms_data_dictionary · seed_jdawms_comtyp (WMS reference)
-                              │
-intermediate/ (view)    int_events_enriched (+ dictionary & app registry)
-                        int_logins · int_downloads · int_catalog_views
-                        int_item_interactions
-                              │
-marts/core/facts/       fct_orders_submitted (send-order events)
-                              │
-marts/reporting/        mart_sales_agent_performance (daily rep scorecard)
-                              │
-dq/                     audit_event_record_errors · audit_error_summary
-tests/                  assert_sales_agents_have_sales_code (+ YAML tests)
+SOURCES
+  mysql               system_event_log · admin_users · category
+  jdawms (WMS)        16 replica tables (dlytrn, inv_snap, invdtl, invlod, invsub,
+                      invsum, locmst, pckwrk_dtl, pckwrk_hdr, prtdsc, prtftp,
+                      prtftp_dtl, prtmst, rplcfg, shipment, shipment_line)
+        │
+staging/ (view)       stg_mysql__*  (3)  ·  stg_jdawms__*  (16)
+                      1:1 lossless: cast, trim, dedup only — no decoding
+        │
+seeds/ (CSV)          event dictionary · app registry · categories ·
+                      jdawms code descriptions  (reference data)
+        │
+intermediate/ (view)  int_events_decoded         decode 8-digit code, event_time→UTC, location/source parse
+                      int_events_enriched        feature / outcome / page_context enrichment
+                      int_rep_order_cycle        reconstruct sales-rep order cycles from event bursts
+                      int_item_demand_daily      demand per sku × day from view/cart events
+                      int_jdawms_items           WMS item master (prtmst + prtdsc names / ABC / velocity)
+                      int_jdawms_inventory_daily daily on-hand / shippable per item × warehouse
+        │
+marts/core/facts/     fct_orders                 one row per submitted order (increment_id)
+                      fct_events                 one row per event, decoded + enriched
+                      fct_order_cycles           one row per order cycle (rep journey)
+        │
+marts/reporting/      mart_rep_weekly            weekly sales-rep scorecard
+                      mart_customer_weekly       weekly customer activity + churn signal
+                      mart_feature_pairing       weekly feature co-occurrence
+                      mart_rep_order_journey     rep order-journey detail
+                      mart_item_demand_supply    weekly demand × WMS supply per item
+        │
+dq/                   dq_quarantine_invalid_source · dq_unmapped_event_codes · dq_unmatched_demand_skus
+tests/                assert_sales_agents_have_sales_code (+ YAML tests; see TESTING.md)
 ```
 
 | Layer | Purpose |
 |---|---|
-| **Source** | `models/staging/mysql/_mysql__sources.yml` — declares `mysql.system_events` |
-| **Staging** | `stg_mysql__system_events` — 1:1 source mapping: rename, cast, dedup, timezone, actor rules |
-| **Seeds** | Event dictionary + app registry + categories — reference data for DQ rules |
-| **Intermediate** | Enrichment + per-family payload parsing at **event grain** — foundation for future `fct_*` / `mart_*` |
-| **DQ** | `audit_*` tables — ongoing monitoring of unknown codes, payload drift, etc. |
-| **Tests** | YAML generic tests on staging + singular tests in `tests/` |
-
-### Future analytics path (not built yet)
-
-```
-int_*  →  fct_*  (thin incremental, same grain)  →  mart_*  (daily × agent, etc.)
-```
-
-- **`int_*`** — parsed, enriched, still one row per event. No `GROUP BY`.
-- **`fct_*`** — persisted copy of an `int_*` family for BI performance (incremental on `entity_id`).
-- **`mart_*`** — aggregated scorecards where grain changes (e.g. daily × agent).
+| **Source** | `staging/*/_*__sources.yml` — declares the `mysql` and `jdawms` sources (target-dependent: mock on DuckDB, real tables on Databricks) |
+| **Staging** | `stg_<source>__*` — 1:1 lossless views: cast, trim, dedup. No decoding or business logic |
+| **Seeds** | Event dictionary, app registry, categories, WMS code descriptions — reference data for decoding + DQ |
+| **Intermediate** | Decoding, enrichment, and grain shaping (event / day) — the reusable foundation for facts and marts |
+| **Facts** | `fct_*` — analytics-ready event / order / cycle grain |
+| **Reporting** | `mart_*` — weekly rollups and cross-source (demand × supply) analytics |
+| **DQ** | `dq_*` — queryable quarantine / drift-monitoring tables |
+| **Tests** | YAML generic tests + singular tests in `tests/` — see [TESTING.md](TESTING.md) |
 
 ## Column documentation (glossaries)
 
@@ -152,20 +163,25 @@ inline or get a `jdawms__<col>__<table>` block.
    dictionary is out of date.
 
 The mysql glossary (`models/docs/_mysql_glossary.md`) is hand-maintained under
-the same inline-vs-shared rule.
+the same inline-vs-shared rule. The event dictionary and seed-value glossaries
+are generated by `scripts/generate_event_glossary.py` and
+`scripts/generate_seed_value_glossaries.py`.
 
 ## Data quality
 
+Full rule inventory, severity convention (`error` vs `warn`), and the
+singular-test-vs-DQ-model distinction live in [TESTING.md](TESTING.md).
+
 | Layer | Location | Runs | Purpose |
 |---|---|---|---|
-| **YAML + singular tests** | `_mysql__models.yml` + `tests/` | Every `dbt build` | Pipeline gate — PK, not-null, accepted values |
-| **Audit tables** | `models/dq/audit_*` | Every `dbt build` | Ongoing drift monitoring — row-level violations |
-| **Profiling analysis** | `analyses/profile_mysql_logs.sql` | Manual | One-off exploration of new exports |
+| **YAML + singular tests** | `_*__models.yml`, `_seeds.yml`, `tests/` | Every `dbt build` | Pipeline gate — PK, not-null, accepted values, relationships |
+| **DQ models** | `models/dq/*` | Every `dbt build` | Ongoing drift monitoring / quarantine — queryable bad-row tables |
+| **Profiling analysis** | `analyses/*` | Manual | One-off exploration (demand-vs-supply candidate queries) |
 
 **Decision rule:**
 
 - Blocks/warns the pipeline → YAML test or `tests/` singular test
-- Ongoing source drift to monitor → `audit_event_record_errors` (add a CTE)
+- Ongoing source drift to monitor / quarantine → a model in `models/dq/`
 - One-off investigation → `analyses/`
 
 ## Repo structure
@@ -174,21 +190,22 @@ the same inline-vs-shared rule.
 ├── dbt_project.yml
 ├── profiles.example.yml
 ├── dbt-env.ps1
-├── data/                        # mock/{jdawmsrep,mysql}/ + parquet (git-ignored, see data/README.md)
+├── TESTING.md                          # data-quality rule inventory + conventions
+├── data/                               # mock/{jdawmsrep,mysql}/ + UC snapshot (git-ignored, see data/README.md)
 ├── scripts/
-│   ├── flatten_api_json.sql
-│   ├── generate_event_glossary.py
-│   ├── generate_jdawms_glossary.py
-│   ├── snapshot_uc_schema.py        # one-time UC schema pull (git-tracked CSV)
-│   └── generate_jdawms_mock.py      # mock parquet for local dev (no UC cost)
-├── analyses/profile_mysql_logs.sql
+│   ├── generate_event_glossary.py      # event dictionary {% docs %} blocks
+│   ├── generate_jdawms_glossary.py     # WMS column glossary (from seed dictionary)
+│   ├── generate_seed_value_glossaries.py
+│   ├── snapshot_uc_schema.py           # one-time UC schema pull (git-tracked CSV)
+│   └── generate_jdawms_mock.py         # mock parquet for local dev (no UC cost)
+├── analyses/                           # demand_missed_opportunity · demand_promote_candidates · demand_restock_risk
 ├── seeds/
 ├── macros/
 ├── tests/
 └── models/
     ├── docs/
     ├── staging/mysql/
-    ├── staging/jdawms/           # WMS replica staging (databricks: real tables; duckdb: mock parquet)
+    ├── staging/jdawms/                 # WMS replica staging (databricks: real tables; duckdb: mock parquet)
     ├── intermediate/
     ├── marts/core/facts/
     ├── marts/reporting/
@@ -199,5 +216,5 @@ the same inline-vs-shared rule.
 
 | Phase | Scope |
 |---|---|
-| **Phase 1 (now)** | Source mapping + DQ checks |
-| **Phase 2 (future)** | Analytics marts + BI; Replication table / ERP data |
+| **Phase 1 (done)** | mysql event-log + jdawms WMS staging → intermediate → facts + reporting marts; DQ tests & monitoring; demand-vs-supply analytics |
+| **Phase 2 (future)** | Incremental `fct_*` materialization; additional ERP / replication sources; BI layer |
