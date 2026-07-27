@@ -156,16 +156,19 @@ the same inline-vs-shared rule.
 
 ## Data quality
 
+Full rule inventory, severity convention (`error` vs `warn`), and the
+singular-test-vs-DQ-model distinction live in [TESTING.md](TESTING.md).
+
 | Layer | Location | Runs | Purpose |
 |---|---|---|---|
-| **YAML + singular tests** | `_mysql__models.yml` + `tests/` | Every `dbt build` | Pipeline gate — PK, not-null, accepted values |
-| **Audit tables** | `models/dq/audit_*` | Every `dbt build` | Ongoing drift monitoring — row-level violations |
-| **Profiling analysis** | `analyses/profile_mysql_logs.sql` | Manual | One-off exploration of new exports |
+| **YAML + singular tests** | `_*__models.yml`, `_seeds.yml`, `tests/` | Every `dbt build` | Pipeline gate — PK, not-null, accepted values, relationships |
+| **DQ models** | `models/dq/*` | Every `dbt build` | Ongoing drift monitoring / quarantine — queryable bad-row tables |
+| **Profiling analysis** | `analyses/*` | Manual | One-off exploration of new exports |
 
 **Decision rule:**
 
 - Blocks/warns the pipeline → YAML test or `tests/` singular test
-- Ongoing source drift to monitor → `audit_event_record_errors` (add a CTE)
+- Ongoing source drift to monitor / quarantine → a model in `models/dq/`
 - One-off investigation → `analyses/`
 
 ## Repo structure
