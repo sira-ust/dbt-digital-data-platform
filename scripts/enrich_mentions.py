@@ -23,10 +23,10 @@ Two backends, one core:
 
 Runs on Databricks as a **Python-script task** (spark_python_task) — no notebook:
   - Source: Git, path scripts/enrich_mentions.py; Parameters: --backend databricks
-  - Dependent library (PyPI): anthropic
-  - Inject the serving auth as task env vars — DATABRICKS_HOST (workspace host)
-    and DATABRICKS_TOKEN from a secret (a PAT WITH model-serving scope; the
-    SQL-only dbt token 403s). Env vars are read directly; no dbutils needed.
+  - Dependent libraries (PyPI): anthropic, databricks-sdk
+  - Auth is AMBIENT — the task's run-as identity supplies the serving token via
+    databricks-sdk (no secret, no PAT, no env vars). The run-as user must have
+    model-serving access. (Local runs still use DATABRICKS_HOST/DATABRICKS_TOKEN.)
 
 Incremental: only mention_ids not already enriched are classified. Multi-label
 by design — arrays, never a single category key.
@@ -97,23 +97,25 @@ _REQUIRED_KEYS = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _resolve_host_token(backend):
-    """Databricks workspace host + token. Env vars win; on the databricks backend
-    fall back to the notebook/job context (spark conf + notebook API token)."""
+    """Databricks workspace host + serving token. Env vars win (DATABRICKS_HOST /
+    DATABRICKS_TOKEN — used for local runs with a PAT). Otherwise, on the
+    databricks backend, use AMBIENT auth via databricks-sdk: the compute's run-as
+    identity supplies the token, so no PAT and no secret are needed (the run-as
+    user must have model-serving access)."""
     host = os.environ.get("DATABRICKS_HOST")
     token = os.environ.get("DATABRICKS_TOKEN")
-    if backend == "databricks":
-        if not host:
-            host = _get_spark().conf.get("spark.databricks.workspaceUrl")
+    if backend == "databricks" and (not host or not token):
+        from databricks.sdk.core import Config
+        cfg = Config()
+        host = host or cfg.host
         if not token:
-            try:
-                ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()  # noqa: F821
-                token = ctx.apiToken().get()
-            except Exception:
-                pass
+            bearer = (cfg.authenticate() or {}).get("Authorization", "")
+            if bearer.lower().startswith("bearer "):
+                token = bearer.split(" ", 1)[1]
     if not host or not token:
         raise SystemExit(
-            "Need a Databricks host + token: set DATABRICKS_HOST and DATABRICKS_TOKEN "
-            "(a PAT) for local runs, or run inside a Databricks notebook."
+            "Need a Databricks host + token: set DATABRICKS_HOST / DATABRICKS_TOKEN "
+            "for local runs, or run on Databricks compute (ambient auth)."
         )
     return host.replace("https://", "").rstrip("/"), token
 
