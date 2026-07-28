@@ -19,8 +19,14 @@ Two backends, one core:
                         mention_enrichment.parquet. Needs DATABRICKS_HOST +
                         DATABRICKS_TOKEN env vars (a PAT) to reach the endpoint.
   --backend databricks  reads ust_databricks.social.mentions, writes
-                        ust_databricks.social.mention_enrichment (Delta). In a
-                        notebook, host + token are derived automatically.
+                        ust_databricks.social.mention_enrichment (Delta).
+
+Runs on Databricks as a **Python-script task** (spark_python_task) — no notebook:
+  - Source: Git, path scripts/enrich_mentions.py; Parameters: --backend databricks
+  - Dependent library (PyPI): anthropic
+  - Inject the serving auth as task env vars — DATABRICKS_HOST (workspace host)
+    and DATABRICKS_TOKEN from a secret (a PAT WITH model-serving scope; the
+    SQL-only dbt token 403s). Env vars are read directly; no dbutils needed.
 
 Incremental: only mention_ids not already enriched are classified. Multi-label
 by design — arrays, never a single category key.
