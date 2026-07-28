@@ -48,6 +48,14 @@ vars:
   demand_supply_trend_ratio: 1.5        # this week's views vs prior-4-week avg = trending
   demand_supply_trend_min_base_views: 5 # prior-4-week avg floor so tiny bases don't trend
 
+  # dq_social_mentions thresholds
+  social_sentiment_skew_warn_pct: 90    # warn if positive share of non-null sentiment exceeds this
+  social_posted_at_floor_date: '2020-01-01'  # posted_at before this = implausible/suspect
+
+  # fct_social_mentions filter — drop a mention as spam only when the model is at
+  # least this confident, so a shaky spam call doesn't silently hide a real mention
+  social_spam_confidence_min: 0.7
+
 
 
 # Layering:
@@ -97,6 +105,19 @@ models:
         # scripts/generate_jdawms_mock.py — run it once before dbt build).
         +materialized: view
         +tags: ["staging", "jdawms", "wms"]
+      mentionlytics:
+        # Social-listening feed. Weekly xlsx drop → parquet via
+        # scripts/convert_mentionlytics.py (run before dbt build); duckdb globs
+        # data/mock/mentionlytics/, databricks reads social.mentions. Staging is
+        # a view that dedupes weekly files on mention_id (latest loaded_at wins).
+        #
+        # SEPARATE CADENCE: all mentionlytics models (staging/int/fct/dq) are
+        # tagged 'social' and run WEEKLY, apart from the daily pipeline. The int
+        # and fct models add config(tags=['social']) in-SQL so the whole group
+        # selects together. Daily job: `dbt build --exclude tag:social`. Weekly
+        # job (after parse + enrich populate social.*): `dbt build --select tag:social`.
+        +materialized: view
+        +tags: ["staging", "mentionlytics", "social"]
 
 
 

@@ -47,6 +47,31 @@ models:
       - name: last_seen_utc
         description: Latest server time the code appeared.
 
+  - name: dq_social_mentions
+    description: >
+      DQ scorecard for Mentionlytics staging — one row per named quality check
+      with a flagged count, percentage, and severity (warn / info / ok). Phase 1
+      covers structural / non-LLM checks only: null or duplicate mention_id, null
+      or implausible posted_at (future vs loaded_at, or before the floor date),
+      null channel, null/sentiment skew, null country, and negative metrics. The
+      spam / not-food-relevant / low-confidence / enrichment-coverage checks are
+      added in Phase 2 once mention_enrichment exists. Thresholds come from the
+      social_* vars in dbt_project.yml.
+    columns:
+      - name: check_name
+        description: Name of the quality check.
+        tests: [unique, not_null]
+      - name: severity
+        description: "warn = investigate; info = expected/known characteristic to monitor; ok = clean."
+      - name: flagged_rows
+        description: Number of rows failing (or matching) the check.
+      - name: total_rows
+        description: Denominator for the check (usually staging row count; non-null sentiment count for the skew check; raw row count for the dedupe-collapse check).
+      - name: flagged_pct
+        description: flagged_rows as a percentage of total_rows.
+      - name: detail
+        description: Human-readable explanation of the check.
+
   - name: dq_unmatched_demand_skus
     description: >
       Demand-payload skus that match no WMS item (int_jdawms_items), most
