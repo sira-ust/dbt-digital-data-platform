@@ -53,8 +53,10 @@ from datetime import datetime, timezone
 MODEL = "databricks-claude-haiku-4-5"   # Databricks-hosted; billed via Databricks
 PROMPT_VERSION = "v1"                    # bump when INSTRUCTIONS change (stored in model_version)
 MAX_TOKENS = 512
-CONCURRENCY = 8                          # parallel serving-endpoint calls
-MAX_ATTEMPTS = 2                         # retries on transient error / bad JSON
+CONCURRENCY = 4                          # parallel serving calls — lower if you hit FMAPI rate limits
+MAX_RETRIES = 8                          # SDK-level retries: rides out 429s with backoff + retry-after
+MAX_ATTEMPTS = 2                         # our own retries on bad/empty JSON
+BATCH_SIZE = 300                         # write to the table every N classified (checkpoint / resumable)
 
 LOCAL_MENTIONS_GLOB = "data/mock/mentionlytics/mentions_*.parquet"
 LOCAL_ENRICHMENT_PATH = "data/mock/mentionlytics/mention_enrichment.parquet"
@@ -129,6 +131,7 @@ def get_client(backend):
         api_key="unused",
         base_url=f"https://{host}/serving-endpoints/anthropic",
         default_headers={"Authorization": f"Bearer {token}"},
+        max_retries=MAX_RETRIES,   # backs off + honors retry-after on 429/5xx
     )
 
 
@@ -272,18 +275,16 @@ def classify_one(client, m):
     return None
 
 
-def classify_all(client, mentions):
-    """Concurrent classification. Returns {mention_id: attributes}."""
+def classify_batch(client, mentions, concurrency):
+    """Concurrently classify one batch. Returns {mention_id: attributes}."""
     out = {}
-    with ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = {pool.submit(classify_one, client, m): m for m in mentions}
-        for i, fut in enumerate(futures, 1):
+        for fut in futures:
             m = futures[fut]
             data = fut.result()
             if data is not None:
                 out[m["mention_id"]] = data
-            if i % 200 == 0:
-                print(f"  classified {i}/{len(mentions)}")
     return out
 
 
@@ -311,7 +312,7 @@ def to_records(attrs_by_id, enriched_at):
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
-def main(backend="local", limit=None, dry_run=False):
+def main(backend="local", limit=None, dry_run=False, concurrency=CONCURRENCY):
     mentions, n_enriched = read_mentions_and_enriched(backend, limit)
     print(f"{n_enriched} already enriched; {len(mentions)} new to classify")
     if not mentions:
@@ -324,21 +325,34 @@ def main(backend="local", limit=None, dry_run=False):
         return
 
     client = get_client(backend)
-    attrs_by_id = classify_all(client, mentions)
-    records = to_records(attrs_by_id, datetime.now(timezone.utc))
-    write_enrichment(backend, records)
-    failed = len(mentions) - len(records)
-    print(f"wrote {len(records)} enrichment rows" + (f" ({failed} failed)" if failed else ""))
+    total = len(mentions)
+    written = 0
+    # Process in batches and WRITE each batch — checkpoints progress so nothing is
+    # lost if the run is interrupted, and a re-run resumes (incremental read skips
+    # what's already written).
+    for start in range(0, total, BATCH_SIZE):
+        chunk = mentions[start:start + BATCH_SIZE]
+        attrs = classify_batch(client, chunk, concurrency)
+        write_enrichment(backend, to_records(attrs, datetime.now(timezone.utc)))
+        written += len(attrs)
+        print(f"  batch {start // BATCH_SIZE + 1}: wrote {len(attrs)}/{len(chunk)} "
+              f"(cumulative {written}/{total})")
+
+    failed = total - written
+    print(f"DONE. wrote {written} enrichment rows"
+          + (f"; {failed} failed — re-run to backfill (incremental)" if failed else ""))
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--backend", choices=["local", "databricks"], default="local")
     p.add_argument("--limit", type=int, help="classify at most N new mentions (smoke test)")
+    p.add_argument("--concurrency", type=int, default=CONCURRENCY,
+                   help=f"parallel serving calls (default {CONCURRENCY}); lower if rate-limited")
     p.add_argument("--dry-run", action="store_true", help="build prompts only; no API call")
     args = p.parse_args()
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # mentions carry Thai/Vietnamese text
     except Exception:
         pass
-    main(backend=args.backend, limit=args.limit, dry_run=args.dry_run)
+    main(backend=args.backend, limit=args.limit, dry_run=args.dry_run, concurrency=args.concurrency)
