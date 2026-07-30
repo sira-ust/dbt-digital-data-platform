@@ -1,32 +1,37 @@
 {{ config(tags=['social']) }}
--- mart_social_trending_items — the marketing-facing trending-item board. One row
--- per (period_grain, period_start, concept), kept to the top social_trend_top_n
--- by trend_rank. Answers, per trending thing:
---   1. what's trending on social, and how hard  (rank, mentions, score, sentiment)
---   2. do we carry it                            (result_type + matched item + stock)
---   3. if not, what similar do we recommend      (recommended_items)
---   4. what should marketing DO                  (action_signal)
+-- mart_social_trending_items — the marketing-facing trending-item board. A
+-- CURRENT-WEEK SNAPSHOT: the top social_trend_top_n concepts of the LATEST week
+-- only (period_start = Monday-start ISO week), so it is always ~social_trend_top_n
+-- rows. The weekly job recomputes and REPLACES it each run (full-refresh table);
+-- it does NOT accumulate history — the ranking history lives in
+-- int_social_concept_trends (which momentum needs). Per trending thing it answers:
+--   1. what's trending, and how hard  (rank, mentions, score, sentiment)
+--   2. where to see it                (source_links — loudest posts)
+--   3. do we carry it                 (result_type + matched item + this-week stock)
+--   4. if not, what similar to offer  (recommended_items)
+--   5. what to DO                     (action_signal)
 --
--- Lineage: int_social_concept_trends (deterministic ranking) LEFT JOIN
--- stg_mentionlytics__concept_resolution (offline LLM concept->SKU) LEFT JOIN
--- int_jdawms_items (authoritative name for the matched SKU) LEFT JOIN
--- int_jdawms_stock_weekly (can we ship it, this week). LEFT JOINs throughout: a
--- top concept the gate didn't resolve stays on the board as 'unresolved' rather
--- than vanishing (so the coverage gap is visible, not hidden).
+-- Lineage: int_social_concept_trends (deterministic ranking + source_links) LEFT
+-- JOIN stg_mentionlytics__concept_resolution (offline LLM concept->SKU) LEFT JOIN
+-- int_jdawms_items (authoritative name) LEFT JOIN int_jdawms_stock_weekly (stock,
+-- same week). dbt never calls the LLM. A concept the LLM hasn't scored stays as
+-- result_type 'unresolved' (visible gap, not a silent drop).
 --
--- recommended_items is an ARRAY (a dish -> several ingredient SKUs). It rides
--- through as the LLM's display names; the xlsx export flattens it to text for
--- marketing. Matched-item STOCK is looked up on the SAME week as the trend
--- (weekly grain -> that week; daily grain -> the week containing the day).
---
--- Full-refresh table: the leaderboard re-ranks every run as new mentions land,
--- and it is tiny (top_n rows x periods x 2 grains).
+-- CONFIDENCE FILTER: a match the model was unsure about (match_confidence <
+-- social_resolve_min_confidence, ANY result_type) is suppressed — the matched
+-- item and recommendations are dropped and the row shows as 'none' / source_new.
+-- Better to show a trending item as "not confidently matched, look into it" than
+-- to put a shaky match (french fries -> corn oil @0.35) in front of marketing.
+-- Applied here (deterministic, tunable) so it can be retuned without the LLM.
+-- Matched-item stock is looked up on the SAME week (CABOT warehouse only).
 
 with trends as (
 
+    -- top-N of the LATEST week only — this is a current-week snapshot
     select *
     from {{ ref('int_social_concept_trends') }}
-    where trend_rank <= {{ var('social_trend_top_n') }}
+    where period_start = (select max(period_start) from {{ ref('int_social_concept_trends') }})
+      and trend_rank <= {{ var('social_trend_top_n') }}
 
 ),
 
@@ -43,8 +48,6 @@ items as (
 
 ),
 
--- collapse stock to prtnum x week (staging keys it by prt_client_id / wh_id too,
--- single-valued in practice — mirror mart_item_demand_supply's roll-up)
 stock as (
 
     select
@@ -60,74 +63,82 @@ stock as (
 joined as (
 
     select
-        t.period_grain,
         t.period_start,
         t.concept_norm,
-        -- canonical name from the LLM (merges cross-language dupes); fall back to
-        -- the raw normalised text until the concept is resolved
         coalesce(r.canonical_label, t.concept_norm)                     as concept_label,
-        -- richer item-type from the LLM when resolved, else the ranking source
         coalesce(r.concept_type, t.concept_source)                      as concept_type,
         t.trend_rank,
         t.mention_count,
         t.trend_score,
         t.net_sentiment,
-        r.result_type,
-        r.matched_prtnum,
+        t.source_links,
+        r.result_type                                                   as raw_result_type,
+        r.matched_prtnum                                                as raw_matched_prtnum,
         r.recommended_prtnums,
         r.recommended_item_names,
         r.match_confidence,
-        -- the ISO week the stock lookup uses: weekly grain is already Monday, so
-        -- date_trunc is a no-op there; daily grain maps to its containing week
-        cast({{ dbt.date_trunc('week', 't.period_start') }} as date)    as stock_week
+        -- suppress any match the model was not confident about (all result types)
+        r.result_type in ('carried', 'substitute', 'basket')
+            and coalesce(r.match_confidence, 0)
+                < {{ var('social_resolve_min_confidence') }}            as _low_conf
     from trends as t
     left join resolution as r
         on r.concept_norm = t.concept_norm
 
+),
+
+adjusted as (
+
+    select
+        *,
+        case when _low_conf then 'none' else raw_result_type end        as result_type_adj,
+        -- null the matched SKU when suppressed, so the item/stock joins drop out
+        case when _low_conf then null else raw_matched_prtnum end        as matched_prtnum
+    from joined
+
 )
 
 select
-    -- surrogate key: unique per row (grain + period + concept)
-    j.period_grain || '|' || cast(j.period_start as {{ dbt.type_string() }})
-        || '|' || j.concept_norm                                        as concept_key,
+    -- weekly snapshot: surrogate key = week | concept
+    a.period_start || '|' || a.concept_norm                            as concept_key,
 
-    j.period_grain,
-    j.period_start,
-    j.concept_label,
-    j.concept_norm,
-    j.concept_type,
+    a.period_start,
+    a.concept_label,
+    a.concept_norm,
+    a.concept_type,
 
     -- social trend signal
-    j.trend_rank,
-    j.mention_count,
-    j.trend_score,
-    j.net_sentiment,
+    a.trend_rank,
+    a.mention_count,
+    a.trend_score,
+    a.net_sentiment,
+    a.source_links,
 
     -- do we carry it? (unresolved = the gate hasn't scored this concept yet)
-    coalesce(j.result_type, 'unresolved')                               as result_type,
-    j.matched_prtnum,
-    itm.item_name                                                       as matched_item_name,
+    coalesce(a.result_type_adj, 'unresolved')                          as result_type,
+    a.matched_prtnum,
+    itm.item_name                                                      as matched_item_name,
     st.in_stock,
     st.shippable_qty,
 
-    -- what to recommend (arrays; the export flattens recommended_items to text)
-    j.recommended_prtnums,
-    j.recommended_item_names                                            as recommended_items,
-    j.match_confidence,
+    -- recommendations (dropped when the match was low-confidence)
+    case when a._low_conf then null else a.recommended_prtnums end      as recommended_prtnums,
+    case when a._low_conf then null else a.recommended_item_names end   as recommended_items,
+    case when a._low_conf then null else a.match_confidence end         as match_confidence,
 
     -- what marketing should do
     case
-        when j.result_type = 'carried'    and coalesce(st.in_stock, 0) = 1 then 'promote_now'
-        when j.result_type = 'carried'    and coalesce(st.in_stock, 0) = 0 then 'restock'
-        when j.result_type = 'substitute'                                  then 'offer_substitute'
-        when j.result_type = 'basket'                                      then 'promote_ingredients'
-        when j.result_type = 'none'                                        then 'source_new'
+        when a.result_type_adj = 'carried'    and coalesce(st.in_stock, 0) = 1 then 'promote_now'
+        when a.result_type_adj = 'carried'    and coalesce(st.in_stock, 0) = 0 then 'restock'
+        when a.result_type_adj = 'substitute'                                  then 'offer_substitute'
+        when a.result_type_adj = 'basket'                                      then 'promote_ingredients'
+        when a.result_type_adj = 'none'                                        then 'source_new'
         else 'monitor'
-    end                                                                 as action_signal
+    end                                                                as action_signal
 
-from joined as j
+from adjusted as a
 left join items as itm
-    on itm.prtnum = j.matched_prtnum
+    on itm.prtnum = a.matched_prtnum
 left join stock as st
-    on  st.prtnum = j.matched_prtnum
-    and st.week_start = j.stock_week
+    on  st.prtnum = a.matched_prtnum
+    and st.week_start = a.period_start

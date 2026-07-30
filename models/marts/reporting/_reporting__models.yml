@@ -185,38 +185,34 @@ models:
 
   - name: mart_social_trending_items
     description: >
-      Marketing-facing trending-item board — one row per (period_grain,
-      period_start, concept), kept to the top social_trend_top_n by trend_rank.
+      Marketing-facing trending-item board — a CURRENT-WEEK SNAPSHOT: the top
+      social_trend_top_n concepts of the LATEST week only (period_start =
+      Monday-start ISO week), so it is always ~social_trend_top_n rows. The weekly
+      job recomputes and REPLACES it each run; it does NOT accumulate history (the
+      ranking history lives in int_social_concept_trends, which momentum needs).
       Per trending thing it answers: what's trending and how hard (rank, mentions,
-      score, sentiment); do we carry it (result_type + matched item + this-week
-      stock); if not, what similar to recommend (recommended_items); and what to
-      DO (action_signal). Ranking is deterministic (int_social_concept_trends);
-      the concept->SKU link comes from the OFFLINE LLM resolution
-      (stg_mentionlytics__concept_resolution) — dbt never calls the LLM. Gated: a
-      top concept the LLM hasn't scored yet stays on the board as result_type
-      'unresolved' (visible gap, not a silent drop) with action_signal 'monitor'.
-      recommended_items is an array (a dish -> several ingredient SKUs); the xlsx
-      export flattens it. Matched-item stock is looked up on the SAME week as the
-      trend (CABOT warehouse only, same caveat as mart_item_demand_supply). This
-      iteration's primary consumer is scripts/export_trending_items_xlsx.py.
+      score, sentiment); where to see it (source_links); do we carry it (result_type
+      + matched item + this-week stock); if not, what similar to offer
+      (recommended_items); and what to DO (action_signal). Ranking is deterministic;
+      the concept->SKU link comes from the OFFLINE LLM resolution — dbt never calls
+      the LLM. A concept the LLM hasn't scored stays 'unresolved'. A low-confidence
+      match (match_confidence < social_resolve_min_confidence, ANY result_type) is
+      suppressed — matched item + recommendations dropped, shown as 'none' /
+      source_new — so a shaky match never reaches marketing. Matched-item stock is
+      looked up on the SAME week (CABOT warehouse only). Primary consumer is
+      scripts/export_trending_items_xlsx.py.
     config:
       tags: ["social", "reporting"]
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns: [period_grain, period_start, concept_norm]
+            combination_of_columns: [period_start, concept_norm]
     columns:
       - name: concept_key
-        description: Surrogate key — period_grain | period_start | concept_norm.
+        description: Surrogate key — period_start | concept_norm.
         tests: [unique, not_null]
-      - name: period_grain
-        description: day or week.
-        tests:
-          - accepted_values:
-              arguments:
-                values: [day, week]
       - name: period_start
-        description: The day, or the Monday-start week, this leaderboard row covers.
+        description: The Monday-start ISO week this leaderboard row covers.
         tests: [not_null]
       - name: concept_label
         description: >
@@ -241,6 +237,8 @@ models:
         description: Rank key — volume x momentum x engagement (see int_social_concept_trends).
       - name: net_sentiment
         description: positives − negatives; a loud trend with negative buzz is not a promote.
+      - name: source_links
+        description: Array of the top mention URLs behind the trend (by reach then engagement); the export flattens them.
       - name: result_type
         description: >
           carried (we stock it), substitute (we don't, similar recommended), basket

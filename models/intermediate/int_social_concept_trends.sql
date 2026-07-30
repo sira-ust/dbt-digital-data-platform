@@ -1,31 +1,28 @@
 {{ config(tags=['social']) }}
 -- int_social_concept_trends — the trending-PRODUCT leaderboard, one row per
--- (period_grain, period_start, concept). DETERMINISTIC and LLM-free: it ranks the
--- SPECIFIC-PRODUCT signal on social signal only (volume x momentum x engagement).
--- No WMS key is touched — concept->SKU resolution is a separate offline LLM step.
+-- (period_start, concept). WEEKLY only (period_start = Monday-start ISO week).
+-- DETERMINISTIC and LLM-free: ranks the specific-product signal on social signal
+-- only (volume x momentum x engagement), no WMS key touched.
 --
 -- WHAT COUNTS AS A TRENDING ITEM (learned from the real data, 2026-07-30):
 --   * mentioned_dishes ONLY — the specific dish / product the AI pulled from the
---     content (e.g. "euro cake", "หมูกระจก", "banh mi", "som tam"). This is the
---     clean, specific-product signal.
+--     content (e.g. "euro cake", "หมูกระจก", "banh mi", "som tam"). The clean,
+--     specific-product signal.
 --   * ingredients are NOT ranked — a bare "pork"/"lemon" token is a building
---     block, not the trending thing (it's why the first cut floated generic
---     tokens to the top). They feed the BASKET side in resolution instead.
---   * brands are NOT ranked either — the brands array is dominated by CHANNELS
---     people buy/post through (7-Eleven, Grab, LINE MAN), influencers/reviewers
---     (peach eat laek, hwanjeab channel) and restaurants (The Pizza Company),
---     none of which are items to stock, and they're unbounded so no exclusion
---     list catches them. The LLM resolver still READS brand context from each
---     concept's mention snippets (so "what's trending AT 7-Eleven" surfaces via
---     the dishes people posted), it just doesn't rank brands as items. If a real
---     PRODUCT-brand signal is ever needed, tag brand_kind in enrichment and add
---     only product brands here (v2).
+--     block, not the trending thing. They feed the BASKET side in resolution.
+--   * brands are NOT ranked — the brands array is dominated by CHANNELS people
+--     buy/post through (7-Eleven, Grab, LINE MAN), influencers (peach eat laek)
+--     and restaurants (The Pizza Company), none stockable and unbounded. The LLM
+--     resolver still reads brand context from each concept's mention snippets.
 --
--- Grain: emitted at BOTH day and week; the reader filters. momentum = this
--- period's mentions / prior-N OBSERVED periods' avg, capped; a brand-new concept
--- gets the novelty factor. Cross-language duplicates (som tam / ส้มตำ) still rank
--- separately here — the LLM resolver canonicalises them downstream (returns a
--- canonical_label the mart displays); full re-aggregation by canonical is a v2.
+-- source_links: the top social_trend_link_count mention URLs behind the concept,
+-- picked by reach (follower_count) then engagement — so a reader can jump to the
+-- loudest posts driving the trend. (Array order is not guaranteed; it is the
+-- top-N set.)
+--
+-- momentum = this week's mentions / prior-N OBSERVED weeks' avg, capped; a
+-- brand-new concept gets the novelty factor. Cross-language dupes (som tam /
+-- ส้มตำ) rank separately — the LLM resolver canonicalises them downstream.
 --
 -- Materialized as a table: it is the GATE scripts/resolve_trending_concepts.py
 -- reads to pick which top-N concepts to resolve to SKUs.
@@ -34,9 +31,10 @@ with mentions as (
 
     select
         mention_id,
-        posted_date,
         posted_week,
         coalesce(total_engagement, total_engagement_with_views, 0)      as engagement,
+        follower_count,
+        link,
         sentiment_normalized,
         mentioned_dishes
     from {{ ref('fct_social_mentions') }}
@@ -46,8 +44,8 @@ with mentions as (
 -- explode the dish stream (the specific-product signal). ONE unnest per select.
 concepts_raw as (
 
-    select mention_id, posted_date, posted_week, engagement, sentiment_normalized,
-           'dish' as concept_source, {{ unnest('mentioned_dishes') }} as concept
+    select mention_id, posted_week, engagement, follower_count, link, sentiment_normalized,
+           {{ unnest('mentioned_dishes') }}                             as concept
     from mentions
 
 ),
@@ -56,46 +54,31 @@ concepts as (
 
     select
         mention_id,
-        posted_date,
-        posted_week,
+        posted_week                                                     as period_start,
         engagement,
+        follower_count,
+        link,
         sentiment_normalized,
-        concept_source,
         lower(trim(concept))                                            as concept_norm
     from concepts_raw
     where nullif(trim(concept), '') is not null
 
 ),
 
--- fan the two grains out; carry mention-level facts through unchanged
-periods as (
-
-    select 'week' as period_grain, posted_week as period_start,
-           concept_source, concept_norm, mention_id, engagement, sentiment_normalized
-    from concepts
-
-    union all
-    select 'day'  as period_grain, posted_date as period_start,
-           concept_source, concept_norm, mention_id, engagement, sentiment_normalized
-    from concepts
-
-),
-
--- one row per mention within a (grain, period, concept): a mention naming the
--- same concept as both a dish and a brand must not double-count its engagement
+-- one row per mention within a (week, concept): a mention naming the same
+-- concept twice must not double-count its engagement / links
 concept_mentions as (
 
     select distinct
-        period_grain, period_start, concept_norm,
-        mention_id, engagement, sentiment_normalized
-    from periods
+        period_start, concept_norm, mention_id,
+        engagement, follower_count, link, sentiment_normalized
+    from concepts
 
 ),
 
 agg as (
 
     select
-        period_grain,
         period_start,
         concept_norm,
         count(*)                                                        as mention_count,
@@ -104,63 +87,62 @@ agg as (
                  when sentiment_normalized = 'negative' then -1
                  else 0 end)                                            as net_sentiment
     from concept_mentions
-    group by 1, 2, 3
+    group by 1, 2
 
 ),
 
--- dominant source for the text (dish wins ties over brand: prefer the specific)
-source_rank as (
+-- top-N source links per concept: highest reach first, then engagement
+links_ranked as (
 
     select
-        period_grain, period_start, concept_norm, concept_source,
+        period_start,
+        concept_norm,
+        link,
         row_number() over (
-            partition by period_grain, period_start, concept_norm
-            order by count(distinct mention_id) desc,
-                     case when concept_source = 'dish' then 0 else 1 end
+            partition by period_start, concept_norm
+            order by coalesce(follower_count, 0) desc,
+                     coalesce(engagement, 0) desc,
+                     mention_id
         )                                                               as _rn
-    from periods
-    group by 1, 2, 3, 4
+    from concept_mentions
+    where link is not null
 
 ),
 
-dominant_source as (
+links_agg as (
 
-    select period_grain, period_start, concept_norm, concept_source
-    from source_rank
-    where _rn = 1
+    select
+        period_start,
+        concept_norm,
+        array_agg(link)                                                 as source_links
+    from links_ranked
+    where _rn <= {{ var('social_trend_link_count') }}
+    group by 1, 2
 
 ),
 
 scored as (
 
     select
-        a.period_grain,
         a.period_start,
         a.concept_norm,
-        d.concept_source,
         a.mention_count,
         a.total_engagement,
         a.net_sentiment,
         avg(a.mention_count) over (
-            partition by a.period_grain, a.concept_norm
+            partition by a.concept_norm
             order by a.period_start
             rows between {{ var('social_trend_lookback_periods') }} preceding and 1 preceding
         )                                                               as prior_avg_mentions
     from agg as a
-    inner join dominant_source as d
-        on  d.period_grain = a.period_grain
-        and d.period_start = a.period_start
-        and d.concept_norm = a.concept_norm
 
 ),
 
 final as (
 
     select
-        period_grain,
         period_start,
         concept_norm,
-        concept_source,
         mention_count,
         total_engagement,
         net_sentiment,
@@ -179,25 +161,28 @@ final as (
 )
 
 select
-    period_grain,
-    period_start,
-    concept_norm,
-    concept_source,
-    mention_count,
-    total_engagement,
-    net_sentiment,
-    prior_avg_mentions,
-    momentum,
-    mention_count
-        * momentum
-        * (1 + ln(1 + coalesce(total_engagement, 0)) / 10)              as trend_score,
+    f.period_start,
+    f.concept_norm,
+    'dish'                                                              as concept_source,
+    f.mention_count,
+    f.total_engagement,
+    f.net_sentiment,
+    f.prior_avg_mentions,
+    f.momentum,
+    f.mention_count
+        * f.momentum
+        * (1 + ln(1 + coalesce(f.total_engagement, 0)) / 10)           as trend_score,
+    la.source_links,
     row_number() over (
-        partition by period_grain, period_start
+        partition by f.period_start
         order by
-            mention_count
-                * momentum
-                * (1 + ln(1 + coalesce(total_engagement, 0)) / 10) desc,
-            mention_count desc,
-            concept_norm
+            f.mention_count
+                * f.momentum
+                * (1 + ln(1 + coalesce(f.total_engagement, 0)) / 10) desc,
+            f.mention_count desc,
+            f.concept_norm
     )                                                                   as trend_rank
-from final
+from final as f
+left join links_agg as la
+    on  la.period_start = f.period_start
+    and la.concept_norm = f.concept_norm

@@ -95,13 +95,19 @@ Then return ONE JSON object — no markdown, no prose — exactly:
 
 result_type decides what we show marketing:
   - "carried"   : the concept IS a product/ingredient we stock -> set matched_prtnum.
-  - "substitute": a product we do NOT stock but we carry a close alternative ->
-                  recommended_prtnums = the nearest 1-3 items we DO carry.
+  - "substitute": a product we do NOT stock but we carry a GENUINELY CLOSE
+                  alternative — the SAME KIND of food a shopper would accept
+                  instead -> recommended_prtnums = the nearest 1-3 items we carry.
   - "basket"    : a DISH or high-level CATEGORY (not one SKU), e.g. "som tam",
                   "pad thai" -> recommended_prtnums = the ingredients we carry to
                   make it (up to ~6), reading the snippets for which ones matter.
-  - "none"      : nothing in the catalog is relevant (e.g. a specialty item we
-                  don't and wouldn't stock) -> empty arrays.
+  - "none"      : nothing in the catalog is a real fit -> empty arrays.
+
+PREFER "none" OVER A WEAK MATCH. If no catalog item is genuinely the same kind of \
+food, return "none" — do NOT stretch (french fries is a potato side, NOT corn or \
+corn oil; don't force it). A substitute must be something a shopper would actually \
+accept in place of the trending item. Be honest with match_confidence: a low value \
+is fine and better than a confident-looking wrong match.
 
 Rules: every prtnum you output MUST exist in the catalog exactly; names line up \
 1:1 with prtnums. Judge on MEANING across Thai / Vietnamese / English, never on \

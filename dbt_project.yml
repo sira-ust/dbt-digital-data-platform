@@ -64,11 +64,14 @@ vars:
   social_trend_min_mentions: 2       # ignore concepts below this in a period (single-mention noise)
   social_trend_momentum_cap: 3.0     # cap on the velocity multiplier so one spike can't dominate the board
   social_trend_novelty_factor: 1.5   # momentum for a brand-new concept (no prior baseline to divide by)
+  social_trend_link_count: 5         # source_links per concept — the top links by reach then engagement
+  social_resolve_min_confidence: 0.5 # below this, a 'substitute' is too speculative to show -> treated as 'none'
   # The trending UNIT is mentioned_dishes only (the AI's specific-product signal).
   # Ingredients (too generic) and brands (dominated by retailers / delivery
   # platforms / influencers / restaurants — unbounded, none are items to stock)
   # are deliberately NOT ranked; see int_social_concept_trends. The LLM resolver
-  # still reads brand context from each concept's mention snippets.
+  # still reads brand context from each concept's mention snippets. Ranked WEEKLY
+  # only (period_start = Monday-start ISO week).
 
 
 
