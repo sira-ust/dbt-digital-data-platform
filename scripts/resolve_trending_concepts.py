@@ -21,7 +21,6 @@ Flow position (weekly social job):
     dbt build --select +int_social_concept_trends          (deterministic ranking)
  >> resolve_trending_concepts (THIS) ->  social.concept_resolution
     dbt build --select tag:social                          (mart joins the resolution)
-    export_trending_items_xlsx
 
   --backend local       reads the local duckdb build, writes
                         data/mock/mentionlytics/concept_resolution.parquet
@@ -42,6 +41,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -220,11 +220,23 @@ def read_all(backend, top_n, duckdb_path):
     return new, snippets, catalog, len(resolved)
 
 
+_DMAP = str.maketrans("đĐ", "dd")
+
+
+def _fold(s):
+    """Match macros/fold_concept.sql: lower+trim, strip Vietnamese diacritics,
+    đ->d, collapse spaces — so snippet lookup keys line up with the folded
+    concept_norm the ranking model produces."""
+    s = unicodedata.normalize("NFKD", str(s).strip().lower())
+    s = "".join(c for c in s if not unicodedata.combining(c)).translate(_DMAP)
+    return re.sub(" +", " ", s)
+
+
 def _norm_list(v):
     if v is None:
         return []
     try:
-        return [str(x).strip().lower() for x in list(v) if x is not None and str(x).strip()]
+        return [_fold(x) for x in list(v) if x is not None and str(x).strip()]
     except TypeError:
         return []
 
