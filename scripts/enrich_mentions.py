@@ -140,12 +140,17 @@ def get_client(backend):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _dedup_sql(source: str) -> str:
-    """One row per mention (latest export), mirroring the staging dedupe."""
+    """One row per mention (latest export), mirroring the staging dedupe.
+
+    id is cast to bigint so the "already enriched" check matches: the source
+    mentions.id is a STRING but mention_enrichment.mention_id is a BIGINT — without
+    the cast the set membership below never matches and every run re-enriches
+    everything (and appends duplicate rows)."""
     return f"""
         select mention_id, channel, tracker, keyword, title, content
         from (
             select
-                id as mention_id, channel, tracker, keyword, title, content,
+                cast(id as bigint) as mention_id, channel, tracker, keyword, title, content,
                 row_number() over (partition by id order by loaded_at desc) as rn
             from {source}
         )
@@ -177,7 +182,8 @@ def read_mentions_and_enriched(backend, limit):
         except Exception:
             enriched_ids = set()
 
-    new = [r for r in rows if r["mention_id"] not in enriched_ids]
+    new = [r for r in rows
+           if r["mention_id"] is not None and r["mention_id"] not in enriched_ids]
     if limit:
         new = new[:limit]
     return new, len(enriched_ids)
