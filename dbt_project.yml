@@ -56,6 +56,20 @@ vars:
   # least this confident, so a shaky spam call doesn't silently hide a real mention
   social_spam_confidence_min: 0.7
 
+  # int_social_concept_trends / mart_social_trending_items — trending-item leaderboard.
+  # Ranking is deterministic (pure social signal); the LLM only resolves the top-N
+  # concepts to WMS SKUs, offline (scripts/resolve_trending_concepts.py).
+  social_trend_top_n: 20             # leaderboard size kept per period in the mart
+  social_trend_lookback_periods: 4   # prior OBSERVED periods for the velocity baseline
+  social_trend_min_mentions: 2       # ignore concepts below this in a period (single-mention noise)
+  social_trend_momentum_cap: 3.0     # cap on the velocity multiplier so one spike can't dominate the board
+  social_trend_novelty_factor: 1.5   # momentum for a brand-new concept (no prior baseline to divide by)
+  # The trending UNIT is mentioned_dishes only (the AI's specific-product signal).
+  # Ingredients (too generic) and brands (dominated by retailers / delivery
+  # platforms / influencers / restaurants — unbounded, none are items to stock)
+  # are deliberately NOT ranked; see int_social_concept_trends. The LLM resolver
+  # still reads brand context from each concept's mention snippets.
+
 
 
 # Layering:

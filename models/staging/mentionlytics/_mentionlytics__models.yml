@@ -98,3 +98,38 @@ models:
         description: Classification time (dedup tiebreak).
       - name: model_version
         description: Model + prompt version (e.g. databricks-claude-haiku-4-5/v1).
+
+  - name: stg_mentionlytics__concept_resolution
+    description: >
+      Lossless staging for the concept->SKU resolution (produced by
+      scripts/resolve_trending_concepts.py). One row per concept_norm — the source
+      is append-only, so a re-resolution is deduped here (latest resolved_at wins).
+      Cast + dedupe only; the recommended_* arrays pass through unchanged. dbt
+      never calls the LLM. Only the top-N ranked concepts are resolved (gated), so
+      this covers a small set by design.
+    columns:
+      - name: concept_norm
+        description: Normalised concept text. Unique key; joins to int_social_concept_trends.concept_norm.
+        tests: [unique, not_null]
+      - name: canonical_label
+        description: LLM canonical display name, merging cross-language/spelling variants.
+      - name: concept_type
+        description: LLM item-level type — dish / category / ingredient / product / brand.
+      - name: result_type
+        description: carried / substitute / basket / none.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [carried, substitute, basket, none]
+      - name: matched_prtnum
+        description: WMS part number we carry for this concept (result_type='carried'); null otherwise.
+      - name: recommended_prtnums
+        description: Array of WMS part numbers — substitutes or the ingredient basket.
+      - name: recommended_item_names
+        description: Array of display names parallel to recommended_prtnums.
+      - name: match_confidence
+        description: LLM confidence in the resolution, 0.0–1.0.
+      - name: resolved_at
+        description: When this concept was resolved (dedup tiebreak — latest wins).
+      - name: model_version
+        description: Model + prompt version that produced it.

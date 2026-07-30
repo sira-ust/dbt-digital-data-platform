@@ -381,3 +381,58 @@ models:
         description: LLM confidence 0.0–1.0; null until enriched.
       - name: is_enriched
         description: True when this mention has an enrichment row (coverage flag for DQ).
+
+  - name: int_social_concept_trends
+    description: >
+      Trending-PRODUCT leaderboard — one row per (period_grain, period_start,
+      concept). DETERMINISTIC and LLM-free: ranks the specific-product signal on
+      social signal only (volume x momentum x engagement), no WMS key touched. The
+      trending UNIT is mentioned_dishes (the specific dish/product the AI pulled
+      from content) plus PRODUCT brands; retailers / platforms / marketplaces /
+      restaurants are excluded (var social_trend_excluded_brands) so "7-Eleven"
+      can't rank as an item while the product trending at it does. Bare ingredients
+      are deliberately NOT ranked as items (too generic; they feed the basket side
+      in resolution). Emitted at BOTH grains (day + week). momentum = this period's
+      mentions / prior-N OBSERVED periods' avg, capped; a brand-new concept gets
+      social_trend_novelty_factor. Cross-language dupes (som tam / ส้มตำ) rank
+      separately — the LLM resolver canonicalises them downstream. This table is
+      the GATE scripts/resolve_trending_concepts.py reads to pick top-N concepts.
+    config:
+      tags: ["social"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [period_grain, period_start, concept_norm]
+    columns:
+      - name: period_grain
+        description: day or week — the concept is ranked at both grains; the reader filters.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [day, week]
+      - name: period_start
+        description: The day (daily grain) or Monday-start week (weekly grain) being ranked.
+        tests: [not_null]
+      - name: concept_norm
+        description: Normalised concept text (lower+trim). The join key to concept_resolution.
+        tests: [not_null]
+      - name: concept_source
+        description: Which specific-product stream the text came from — dish (primary) or brand.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [dish, brand]
+      - name: mention_count
+        description: Distinct food-relevant, non-spam mentions naming this concept in the period.
+      - name: total_engagement
+        description: Summed engagement across those mentions (deduped per mention).
+      - name: net_sentiment
+        description: positives − negatives over those mentions (model-judged sentiment).
+      - name: prior_avg_mentions
+        description: Mean mention_count over the prior social_trend_lookback_periods OBSERVED periods; null for a first appearance.
+      - name: momentum
+        description: mention_count / prior_avg_mentions, capped; novelty factor when no prior baseline.
+      - name: trend_score
+        description: mention_count x momentum x (1 + ln(1+total_engagement)/10) — the rank key.
+      - name: trend_rank
+        description: 1..N within (period_grain, period_start) by trend_score desc. The mart keeps rank <= social_trend_top_n.

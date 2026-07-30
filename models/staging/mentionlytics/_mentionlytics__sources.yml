@@ -132,3 +132,42 @@ sources:
             description: When this row was classified (dedup tiebreak — latest wins).
           - name: model_version
             description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v1).
+
+      - name: concept_resolution
+        identifier: "{{ 'concept_resolution' if target.type == 'databricks' else 'temp_concept_resolution' }}"
+        description: >
+          LLM-resolved link from a trending social CONCEPT (a dish / ingredient /
+          brand token from int_social_concept_trends) to WMS item(s), produced
+          OUT-OF-BAND by scripts/resolve_trending_concepts.py. dbt only reads this
+          — it never calls the LLM. Keyed by concept_norm (the normalised concept
+          text), NOT a WMS key on the mention. Gated: the script resolves only the
+          top-N ranked concepts, so the long tail is intentionally absent (surfaces
+          as result_type 'unresolved' in the mart). Append-only; staging dedupes on
+          concept_norm, latest resolved_at wins. On DuckDB reads the local parquet;
+          on Databricks the social.concept_resolution Delta table.
+        config:
+          external_location: "read_parquet('data/mock/mentionlytics/concept_resolution.parquet')"
+        columns:
+          - name: concept_norm
+            description: Normalised concept text (lower+trim). Join key to int_social_concept_trends.concept_norm.
+          - name: canonical_label
+            description: >
+              LLM's canonical display name for the concept, merging cross-language
+              and spelling variants (som tam / ส้มตำ -> "Som Tam (green papaya salad)").
+              What the mart shows to marketing.
+          - name: concept_type
+            description: LLM's item-level judgment — dish / category / ingredient / product / brand (may refine the SQL-derived type).
+          - name: result_type
+            description: carried (we stock it) / substitute (we don't, here's similar) / basket (a dish/category, here are ingredients we carry) / none.
+          - name: matched_prtnum
+            description: WMS part number we carry for this concept (result_type='carried'); null otherwise.
+          - name: recommended_prtnums
+            description: Array of WMS part numbers — substitutes (result_type='substitute') or the ingredient basket (result_type='basket').
+          - name: recommended_item_names
+            description: Array of display names parallel to recommended_prtnums (the LLM saw the catalog, so it carries names for the human-facing export).
+          - name: match_confidence
+            description: LLM's confidence in the resolution, 0.0–1.0.
+          - name: resolved_at
+            description: When this concept was resolved (dedup tiebreak — latest wins).
+          - name: model_version
+            description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v1).
