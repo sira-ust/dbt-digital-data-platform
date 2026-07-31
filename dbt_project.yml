@@ -66,6 +66,13 @@ vars:
   social_trend_top_n: 20             # how many trending items the mart shows
   social_trend_min_mentions: 2       # ignore concepts below this over the window (noise floor)
   social_trend_link_count: 5         # source_links per concept — the top links by reach then engagement
+  # trend_score = mentions x (1 + ln(1+engagement)/eng_weight + ln(1+views)/views_weight).
+  # engagement = active reactions (likes+comments+shares); views tracked separately.
+  # Both log-dampened so one viral post can't dominate; a BIGGER weight = that signal
+  # matters LESS. Views weight > engagement weight: a view (passive) is worth less
+  # than a like/comment/share (active).
+  social_trend_engagement_weight: 10
+  social_trend_views_weight: 20
   social_resolve_min_confidence: 0.7 # below this, a speculative basket/substitute is suppressed (shown as
                                      # none/source_new). Does NOT apply to 'carried' — a direct product we
                                      # stock is a verified SKU and always shows (inventory match wins).

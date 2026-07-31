@@ -412,7 +412,9 @@ models:
       - name: mention_count
         description: Distinct food-relevant, non-spam mentions naming this concept over the window.
       - name: total_engagement
-        description: Summed engagement across those mentions (deduped per mention).
+        description: Summed ACTIVE engagement (likes + comments + shares) across those mentions (deduped per mention).
+      - name: total_views
+        description: Summed views across those mentions (video/post view counts).
       - name: net_sentiment
         description: positives − negatives over those mentions (model-judged sentiment).
       - name: recent_mentions
@@ -422,7 +424,10 @@ models:
       - name: is_rising
         description: recent_mentions > prior_mentions — a secondary "accelerating" flag; does NOT drive the rank.
       - name: trend_score
-        description: mention_count x (1 + ln(1+total_engagement)/10) — the VOLUME-forward rank key.
+        description: >
+          VOLUME-forward rank key: mention_count x (1 + ln(1+total_engagement)/eng_weight
+          + ln(1+total_views)/views_weight). Base is mentions; engagement (active) and
+          views add log-dampened boosts (weights in dbt_project.yml).
       - name: source_links
         description: Array of the top social_trend_link_count mention URLs (by reach then engagement). Top-N set, order not guaranteed.
       - name: trend_rank

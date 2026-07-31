@@ -228,8 +228,14 @@ models:
         tests: [not_null]
       - name: mention_count
         description: Distinct food-relevant, non-spam mentions behind the trend, over the window.
+      - name: total_engagement
+        description: Active engagement (likes + comments + shares) summed over those mentions.
+      - name: total_views
+        description: Views summed over those mentions.
       - name: trend_score
-        description: Rank key — window mentions x engagement (VOLUME-forward; see int_social_concept_trends).
+        description: >
+          Rank key — VOLUME-forward: mentions x (1 + log-dampened engagement boost +
+          views boost). See int_social_concept_trends.
       - name: net_sentiment
         description: positives − negatives; a loud trend with negative buzz is not a promote.
       - name: is_rising

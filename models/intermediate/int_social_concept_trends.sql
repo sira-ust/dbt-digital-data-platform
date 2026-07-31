@@ -27,7 +27,10 @@ with mentions as (
     select
         mention_id,
         cast(posted_date as date)                                       as posted_date,
-        coalesce(total_engagement, total_engagement_with_views, 0)      as engagement,
+        -- engagement = ACTIVE reactions; use the component columns (populated more
+        -- often than Mentionlytics' aggregate total_engagement, which is ~45% null)
+        coalesce(likes, 0) + coalesce(comments, 0) + coalesce(shares, 0) as engagement,
+        coalesce(views, 0)                                              as views,
         follower_count,
         link,
         sentiment_normalized,
@@ -64,7 +67,7 @@ in_window as (
 concepts_raw as (
 
     select
-        mention_id, posted_date, engagement, follower_count, link, sentiment_normalized,
+        mention_id, posted_date, engagement, views, follower_count, link, sentiment_normalized,
         window_start, window_end, recent_cutoff,
         {{ unnest('mentioned_dishes') }}                                as concept
     from in_window
@@ -74,7 +77,7 @@ concepts_raw as (
 concepts as (
 
     select
-        mention_id, posted_date, engagement, follower_count, link, sentiment_normalized,
+        mention_id, posted_date, engagement, views, follower_count, link, sentiment_normalized,
         window_start, window_end, recent_cutoff,
         -- fold Vietnamese diacritic/case/spacing variants to one key so the same
         -- dish (bánh khọt / banh khot) ranks once, not several times
@@ -89,7 +92,7 @@ concept_mentions as (
 
     select distinct
         concept_norm, mention_id, posted_date,
-        engagement, follower_count, link, sentiment_normalized,
+        engagement, views, follower_count, link, sentiment_normalized,
         window_start, window_end, recent_cutoff
     from concepts
 
@@ -103,6 +106,7 @@ agg as (
         max(window_end)                                                as window_end,
         count(*)                                                       as mention_count,
         sum(engagement)                                                as total_engagement,
+        sum(views)                                                     as total_views,
         sum(case when sentiment_normalized = 'positive' then 1
                  when sentiment_normalized = 'negative' then -1
                  else 0 end)                                           as net_sentiment,
@@ -154,17 +158,21 @@ select
     f.window_end,
     f.mention_count,
     f.total_engagement,
+    f.total_views,
     f.net_sentiment,
     f.recent_mentions,
     f.prior_mentions,
     f.recent_mentions > f.prior_mentions                              as is_rising,
+    -- volume-forward: mentions x (1 + log-dampened engagement boost + views boost)
     f.mention_count
-        * (1 + ln(1 + coalesce(f.total_engagement, 0)) / 10)          as trend_score,
+        * (1 + ln(1 + coalesce(f.total_engagement, 0)) / {{ var('social_trend_engagement_weight') }}
+             + ln(1 + coalesce(f.total_views, 0))      / {{ var('social_trend_views_weight') }})  as trend_score,
     la.source_links,
     row_number() over (
         order by
             f.mention_count
-                * (1 + ln(1 + coalesce(f.total_engagement, 0)) / 10) desc,
+                * (1 + ln(1 + coalesce(f.total_engagement, 0)) / {{ var('social_trend_engagement_weight') }}
+                     + ln(1 + coalesce(f.total_views, 0))      / {{ var('social_trend_views_weight') }}) desc,
             f.mention_count desc,
             f.concept_norm
     )                                                                  as trend_rank

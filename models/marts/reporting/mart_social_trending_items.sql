@@ -80,6 +80,8 @@ joined as (
         coalesce(r.concept_type, t.concept_source)                      as concept_type,
         t.trend_rank,
         t.mention_count,
+        t.total_engagement,
+        t.total_views,
         t.trend_score,
         t.net_sentiment,
         t.is_rising,
@@ -158,6 +160,8 @@ select
     -- social trend signal
     a.trend_rank,
     a.mention_count,
+    a.total_engagement,
+    a.total_views,
     a.trend_score,
     a.net_sentiment,
     a.is_rising,
