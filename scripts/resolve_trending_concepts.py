@@ -51,7 +51,7 @@ from datetime import datetime, timezone
 # ─────────────────────────────────────────────────────────────────────────────
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v2"                    # v2 = snippet-aware, canonicalising
+PROMPT_VERSION = "v3"                    # v3 = strict baskets (core ingredients only) + catalog-validated prtnums
 MAX_TOKENS = 700
 CONCURRENCY = 4
 MAX_RETRIES = 8
@@ -99,15 +99,22 @@ result_type decides what we show marketing:
                   alternative — the SAME KIND of food a shopper would accept
                   instead -> recommended_prtnums = the nearest 1-3 items we carry.
   - "basket"    : a DISH or high-level CATEGORY (not one SKU), e.g. "som tam",
-                  "pad thai" -> recommended_prtnums = the ingredients we carry to
-                  make it (up to ~6), reading the snippets for which ones matter.
+                  "pad thai" -> recommended_prtnums = ONLY the CORE, DEFINING
+                  ingredients of THIS specific dish that we carry — the items that
+                  make it that dish, from the SAME cuisine. 2-5 items, not a padded
+                  list. If you can't confidently name core ingredients we stock,
+                  return FEWER or an empty list — an empty basket beats a wrong one.
   - "none"      : nothing in the catalog is a real fit -> empty arrays.
 
-PREFER "none" OVER A WEAK MATCH. If no catalog item is genuinely the same kind of \
-food, return "none" — do NOT stretch (french fries is a potato side, NOT corn or \
-corn oil; don't force it). A substitute must be something a shopper would actually \
-accept in place of the trending item. Be honest with match_confidence: a low value \
-is fine and better than a confident-looking wrong match.
+PREFER "none" OR AN EMPTY BASKET OVER A WEAK MATCH. If no catalog item is genuinely \
+the same kind of food, return "none" — do NOT stretch. Two hard rules: a substitute \
+must be something a shopper would actually accept in place of the trending item; a \
+basket item must be a defining ingredient of THAT dish. NEVER include generic, \
+tangential, or different-cuisine items (do NOT put green jackfruit or Korean beef \
+bulgogi under a Thai/Vietnamese dish just because they are food). Set \
+match_confidence to reflect precision — high ONLY when the items clearly define the \
+dish; lower it when the basket is loose. A low value is fine and far better than a \
+confident-looking wrong match.
 
 Rules: every prtnum you output MUST exist in the catalog exactly; names line up \
 1:1 with prtnums. Judge on MEANING across Thai / Vietnamese / English, never on \
@@ -396,19 +403,31 @@ def resolve_batch(client, catalog_block, concepts, snippets_by_concept, concurre
     return out
 
 
-def to_records(by_concept, resolved_at):
+def to_records(by_concept, resolved_at, catalog_by_prtnum):
+    """Build enrichment rows, VALIDATING every prtnum the LLM returned against the
+    real catalog: drop any recommended/matched prtnum that isn't a real SKU, and
+    take the item name from the catalog (never the LLM's self-reported name — it
+    can drift from the prtnum). This guarantees downstream only ever sees real
+    SKUs with their true names."""
     model_version = f"{MODEL}/{PROMPT_VERSION}"
     records = []
     for concept_norm, a in by_concept.items():
-        prtnums = [str(p) for p in (a.get("recommended_prtnums") or [])]
-        names = [str(n) for n in (a.get("recommended_item_names") or [])]
+        # keep only recommended prtnums that exist; name comes from the catalog
+        prtnums, names = [], []
+        for p in (a.get("recommended_prtnums") or []):
+            p = str(p)
+            if p in catalog_by_prtnum:
+                prtnums.append(p)
+                names.append(str(catalog_by_prtnum[p]))
+        matched = (str(a["matched_prtnum"]) if a.get("matched_prtnum") else None)
+        if matched is not None and matched not in catalog_by_prtnum:
+            matched = None  # LLM hallucinated a SKU that doesn't exist
         records.append({
             "concept_norm": str(concept_norm),
             "canonical_label": str(a.get("canonical_label") or concept_norm),
             "concept_type": str(a["concept_type"]),
             "result_type": str(a["result_type"]),
-            "matched_prtnum": (str(a["matched_prtnum"])
-                               if a.get("matched_prtnum") else None),
+            "matched_prtnum": matched,
             "recommended_prtnums": prtnums,
             "recommended_item_names": names,
             "match_confidence": float(a["match_confidence"]),
@@ -434,6 +453,7 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
         return
 
     catalog_block = build_catalog_block(catalog)
+    catalog_by_prtnum = {str(c["prtnum"]): c.get("item_name") for c in catalog}
 
     if dry_run:
         print(f"[dry-run] would resolve {len(concepts)} concepts with {MODEL}.")
@@ -448,7 +468,8 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
     for start in range(0, total, BATCH_SIZE):
         chunk = concepts[start:start + BATCH_SIZE]
         res = resolve_batch(client, catalog_block, chunk, snippets, concurrency)
-        write_resolution(backend, to_records(res, datetime.now(timezone.utc)))
+        write_resolution(backend, to_records(res, datetime.now(timezone.utc),
+                                             catalog_by_prtnum))
         written += len(res)
         print(f"  batch {start // BATCH_SIZE + 1}: wrote {len(res)}/{len(chunk)} "
               f"(cumulative {written}/{total})")

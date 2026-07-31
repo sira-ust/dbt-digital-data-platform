@@ -253,9 +253,14 @@ models:
       - name: shippable_qty
         description: End-of-week shippable units for the matched item that week.
       - name: recommended_prtnums
-        description: Array of WMS part numbers to recommend (substitutes or ingredient basket).
+        description: >
+          Array of WMS part numbers to recommend (substitutes or ingredient basket),
+          VERIFIED against int_jdawms_items — every entry is a real SKU; any prtnum
+          the LLM returned that isn't in the item master is dropped.
       - name: recommended_items
-        description: Array of display names parallel to recommended_prtnums (flattened in the export).
+        description: >
+          Display names parallel to recommended_prtnums, taken from the item master
+          (authoritative), not the LLM's self-reported names.
       - name: match_confidence
         description: LLM confidence in the resolution, 0.0–1.0; null when unresolved.
       - name: action_signal

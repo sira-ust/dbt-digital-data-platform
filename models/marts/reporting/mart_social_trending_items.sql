@@ -105,6 +105,43 @@ adjusted as (
         case when _low_conf then null else raw_matched_prtnum end        as matched_prtnum
     from joined
 
+),
+
+-- VERIFY recommendations against the real item master. The resolver stores the
+-- LLM's self-reported prtnum+name pairs unchecked, so a hallucinated SKU or a
+-- name that doesn't match its prtnum can slip through (matched_item_name is
+-- already verified via the items join; recommendations were not). Explode, inner
+-- join to int_jdawms_items — dropping any prtnum that isn't a real SKU — and take
+-- the AUTHORITATIVE name from the master, never the LLM's claimed name.
+rec_exploded as (
+
+    select
+        a.concept_norm,
+        {{ unnest('a.recommended_prtnums') }}                           as rec_prtnum
+    from adjusted as a
+    where not a._low_conf
+      and a.recommended_prtnums is not null
+
+),
+
+rec_verified as (
+
+    select re.concept_norm, re.rec_prtnum, itm.item_name
+    from rec_exploded as re
+    inner join items as itm
+        on itm.prtnum = re.rec_prtnum
+
+),
+
+rec_agg as (
+
+    select
+        concept_norm,
+        array_agg(rec_prtnum)                                          as recommended_prtnums,
+        array_agg(item_name)                                           as recommended_items
+    from rec_verified
+    group by 1
+
 )
 
 select
@@ -129,9 +166,10 @@ select
     st.in_stock,
     st.shippable_qty,
 
-    -- recommendations (dropped when the match was low-confidence)
-    case when a._low_conf then null else a.recommended_prtnums end      as recommended_prtnums,
-    case when a._low_conf then null else a.recommended_item_names end   as recommended_items,
+    -- recommendations: only real SKUs (verified against the item master), shown
+    -- with their authoritative names; dropped when the match was low-confidence
+    ra.recommended_prtnums,
+    ra.recommended_items,
     case when a._low_conf then null else a.match_confidence end         as match_confidence,
 
     -- what marketing should do
@@ -149,3 +187,5 @@ left join items as itm
     on itm.prtnum = a.matched_prtnum
 left join stock as st
     on st.prtnum = a.matched_prtnum
+left join rec_agg as ra
+    on ra.concept_norm = a.concept_norm
