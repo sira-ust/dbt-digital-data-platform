@@ -180,7 +180,10 @@ select
     -- with their authoritative names; dropped when the match was low-confidence
     ra.recommended_prtnums,
     ra.recommended_items,
-    case when a._low_conf then null else a.match_confidence end         as match_confidence,
+    -- only meaningful when there's an actual match shown; null for none/unresolved
+    -- (a confidence score on a "no match" is noise)
+    case when a.result_type_adj in ('carried', 'substitute', 'basket')
+         then a.match_confidence end                                    as match_confidence,
 
     -- what marketing should do
     case
