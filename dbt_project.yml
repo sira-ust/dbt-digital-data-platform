@@ -56,22 +56,22 @@ vars:
   # least this confident, so a shaky spam call doesn't silently hide a real mention
   social_spam_confidence_min: 0.7
 
-  # int_social_concept_trends / mart_social_trending_items — trending-item leaderboard.
-  # Ranking is deterministic (pure social signal); the LLM only resolves the top-N
-  # concepts to WMS SKUs, offline (scripts/resolve_trending_concepts.py).
-  social_trend_top_n: 20             # leaderboard size kept per period in the mart
-  social_trend_lookback_periods: 4   # prior OBSERVED periods for the velocity baseline
-  social_trend_min_mentions: 2       # ignore concepts below this in a period (single-mention noise)
-  social_trend_momentum_cap: 3.0     # cap on the velocity multiplier so one spike can't dominate the board
-  social_trend_novelty_factor: 1.5   # momentum for a brand-new concept (no prior baseline to divide by)
+  # int_social_concept_trends / mart_social_trending_items — "currently trending"
+  # board. The mart is a SINGLE CURRENT SNAPSHOT of the top items over a trailing
+  # window of all mentions (not one calendar week), so a sustained trend keeps
+  # showing until it fades out of the window. Ranking is deterministic (pure social
+  # signal), VOLUME-forward; the LLM only resolves the top-N concepts to WMS SKUs,
+  # offline (scripts/resolve_trending_concepts.py).
+  social_trend_window_weeks: 4       # trailing window (weeks) of mentions = "currently trending"
+  social_trend_top_n: 20             # how many trending items the mart shows
+  social_trend_min_mentions: 2       # ignore concepts below this over the window (noise floor)
   social_trend_link_count: 5         # source_links per concept — the top links by reach then engagement
-  social_resolve_min_confidence: 0.5 # below this, a 'substitute' is too speculative to show -> treated as 'none'
+  social_resolve_min_confidence: 0.5 # below this, a concept->SKU match is suppressed (shown as none/source_new)
   # The trending UNIT is mentioned_dishes only (the AI's specific-product signal).
-  # Ingredients (too generic) and brands (dominated by retailers / delivery
-  # platforms / influencers / restaurants — unbounded, none are items to stock)
-  # are deliberately NOT ranked; see int_social_concept_trends. The LLM resolver
-  # still reads brand context from each concept's mention snippets. Ranked WEEKLY
-  # only (period_start = Monday-start ISO week).
+  # Ingredients (too generic) and brands (retailers / delivery platforms /
+  # influencers / restaurants — unbounded, none stockable) are NOT ranked; see
+  # int_social_concept_trends. The LLM resolver still reads brand context from each
+  # concept's mention snippets.
 
 
 

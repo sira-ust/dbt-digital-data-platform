@@ -384,46 +384,46 @@ models:
 
   - name: int_social_concept_trends
     description: >
-      Trending-PRODUCT leaderboard — one row per (period_start, concept), WEEKLY
-      (period_start = Monday-start ISO week). DETERMINISTIC and LLM-free: ranks the
-      specific-product signal on social signal only (volume x momentum x
-      engagement), no WMS key touched. The trending UNIT is mentioned_dishes only
-      (the specific dish/product the AI pulled from content); ingredients (too
-      generic) and brands (retailers / platforms / influencers / restaurants —
-      unbounded, none stockable) are NOT ranked. source_links carries the top
-      mention URLs behind the concept (by reach then engagement). momentum = this
-      week's mentions / prior-N OBSERVED weeks' avg, capped; a brand-new concept
-      gets social_trend_novelty_factor. Cross-language dupes (som tam / ส้มตำ) rank
-      separately — the LLM resolver canonicalises them downstream. This table is
-      the GATE scripts/resolve_trending_concepts.py reads to pick top-N concepts.
+      "Currently trending" snapshot — one row per concept, DETERMINISTIC and
+      LLM-free. NOT per-week: aggregates ALL mentions in a TRAILING WINDOW of
+      social_trend_window_weeks ending at the latest data (window_end = max
+      posted_date), so a dish talked about for weeks keeps ranking until its
+      mentions age out of the window. Recomputed/replaced each run. VOLUME-forward:
+      trend_score = window mentions x engagement, so sustained-popular items sit on
+      top; is_rising (recent half vs older half of the window) is a secondary flag,
+      not the sort. The trending UNIT is mentioned_dishes only; ingredients and
+      brands are not ranked. Cross-language dupes (som tam / ส้มตำ) rank separately —
+      the LLM resolver canonicalises them downstream. The GATE
+      scripts/resolve_trending_concepts.py reads to pick top-N concepts.
     config:
       tags: ["social"]
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [period_start, concept_norm]
     columns:
-      - name: period_start
-        description: Monday-start ISO week being ranked.
-        tests: [not_null]
       - name: concept_norm
-        description: Normalised concept text (lower+trim). The join key to concept_resolution.
-        tests: [not_null]
+        description: Normalised concept text (lower+trim). Unique key; joins to concept_resolution.
+        tests: [unique, not_null]
       - name: concept_source
         description: Specific-product stream the text came from — always 'dish' (brands/ingredients not ranked; reserved for v2).
+      - name: window_start
+        description: First day of the trailing window (window_end minus social_trend_window_weeks).
+        tests: [not_null]
+      - name: window_end
+        description: Last day of the trailing window = latest mention date in the data ("now").
+        tests: [not_null]
       - name: mention_count
-        description: Distinct food-relevant, non-spam mentions naming this concept in the week.
+        description: Distinct food-relevant, non-spam mentions naming this concept over the window.
       - name: total_engagement
         description: Summed engagement across those mentions (deduped per mention).
       - name: net_sentiment
         description: positives − negatives over those mentions (model-judged sentiment).
-      - name: prior_avg_mentions
-        description: Mean mention_count over the prior social_trend_lookback_periods OBSERVED weeks; null for a first appearance.
-      - name: momentum
-        description: mention_count / prior_avg_mentions, capped; novelty factor when no prior baseline.
+      - name: recent_mentions
+        description: Mentions in the recent HALF of the window (for is_rising).
+      - name: prior_mentions
+        description: Mentions in the older half of the window (for is_rising).
+      - name: is_rising
+        description: recent_mentions > prior_mentions — a secondary "accelerating" flag; does NOT drive the rank.
       - name: trend_score
-        description: mention_count x momentum x (1 + ln(1+total_engagement)/10) — the rank key.
+        description: mention_count x (1 + ln(1+total_engagement)/10) — the VOLUME-forward rank key.
       - name: source_links
         description: Array of the top social_trend_link_count mention URLs (by reach then engagement). Top-N set, order not guaranteed.
       - name: trend_rank
-        description: 1..N within the week by trend_score desc. The mart keeps rank <= social_trend_top_n.
+        description: 1..N by trend_score desc. The mart keeps rank <= social_trend_top_n.

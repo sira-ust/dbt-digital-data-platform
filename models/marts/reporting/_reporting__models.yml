@@ -185,60 +185,56 @@ models:
 
   - name: mart_social_trending_items
     description: >
-      Marketing-facing trending-item board — a CURRENT-WEEK SNAPSHOT: the top
-      social_trend_top_n concepts of the LATEST week only (period_start =
-      Monday-start ISO week), so it is always ~social_trend_top_n rows. The weekly
-      job recomputes and REPLACES it each run; it does NOT accumulate history (the
-      ranking history lives in int_social_concept_trends, which momentum needs).
-      Per trending thing it answers: what's trending and how hard (rank, mentions,
-      score, sentiment); where to see it (source_links); do we carry it (result_type
-      + matched item + this-week stock); if not, what similar to offer
-      (recommended_items); and what to DO (action_signal). Ranking is deterministic;
-      the concept->SKU link comes from the OFFLINE LLM resolution — dbt never calls
-      the LLM. A concept the LLM hasn't scored stays 'unresolved'. A low-confidence
-      match (match_confidence < social_resolve_min_confidence, ANY result_type) is
+      Marketing-facing "currently trending" board — a SINGLE CURRENT SNAPSHOT: the
+      top social_trend_top_n concepts over the trailing social_trend_window_weeks
+      window (see int_social_concept_trends), always ~social_trend_top_n rows. A
+      sustained trend KEEPS SHOWING until it fades out of the window; recomputed and
+      REPLACED each run (no per-week history). Per trending thing it answers: what's
+      trending, how hard, and is it rising (rank, mentions, score, is_rising); where
+      to see it (source_links); do we carry it (result_type + matched item + CURRENT
+      stock); if not, what similar to offer (recommended_items); and what to DO
+      (action_signal). Ranking is deterministic and VOLUME-forward; the concept->SKU
+      link comes from the OFFLINE LLM resolution — dbt never calls the LLM. A concept
+      the LLM hasn't scored stays 'unresolved'. A low-confidence match
+      (match_confidence < social_resolve_min_confidence, ANY result_type) is
       suppressed — matched item + recommendations dropped, shown as 'none' /
-      source_new — so a shaky match never reaches marketing. Matched-item stock is
-      looked up on the SAME week (CABOT warehouse only). Primary consumer is
-      scripts/export_trending_items_xlsx.py.
+      source_new. Stock is the item's CURRENT (latest snapshot week) shippability
+      (CABOT warehouse only). Read by Genie / BI.
     config:
       tags: ["social", "reporting"]
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [period_start, concept_norm]
     columns:
-      - name: concept_key
-        description: Surrogate key — period_start | concept_norm.
-        tests: [unique, not_null]
-      - name: period_start
-        description: The Monday-start ISO week this leaderboard row covers.
+      - name: window_start
+        description: First day of the trailing window the board covers.
+        tests: [not_null]
+      - name: window_end
+        description: Last day of the trailing window = latest mention date ("now").
         tests: [not_null]
       - name: concept_label
         description: >
           Human-readable trending "item" — the LLM's canonical_label once resolved
           (merges cross-language dupes), falling back to the raw normalised text
-          until then. Not unique across rows (two variants can canonicalise to one);
-          concept_norm is the grain key.
+          until then.
         tests: [not_null]
       - name: concept_norm
-        description: Raw normalised concept text; the grain/join key behind concept_label.
-        tests: [not_null]
+        description: Raw normalised concept text; unique grain/join key behind concept_label.
+        tests: [unique, not_null]
       - name: concept_type
         description: >
           Item type — the LLM's judgment (dish/category/ingredient/product/brand)
-          once resolved, else the ranking source (dish/brand).
+          once resolved, else the ranking source (dish).
       - name: trend_rank
-        description: 1..social_trend_top_n within the period; 1 = most trending.
+        description: 1..social_trend_top_n; 1 = most trending (by window volume x engagement).
         tests: [not_null]
       - name: mention_count
-        description: Distinct food-relevant, non-spam mentions behind the trend.
+        description: Distinct food-relevant, non-spam mentions behind the trend, over the window.
       - name: trend_score
-        description: Rank key — volume x momentum x engagement (see int_social_concept_trends).
+        description: Rank key — window mentions x engagement (VOLUME-forward; see int_social_concept_trends).
       - name: net_sentiment
         description: positives − negatives; a loud trend with negative buzz is not a promote.
+      - name: is_rising
+        description: True when the concept accelerated in the recent half of the window (secondary flag, not the rank).
       - name: source_links
-        description: Array of the top mention URLs behind the trend (by reach then engagement); the export flattens them.
+        description: Array of the top mention URLs behind the trend (by reach then engagement).
       - name: result_type
         description: >
           carried (we stock it), substitute (we don't, similar recommended), basket
