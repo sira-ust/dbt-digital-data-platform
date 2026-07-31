@@ -16,11 +16,12 @@
 -- JOIN int_jdawms_items (name) LEFT JOIN int_jdawms_stock_weekly (CURRENT stock —
 -- the latest snapshot week per item). dbt never calls the LLM.
 --
--- INVENTORY MATCH WINS: a 'carried' row is a verified real SKU we stock, so it
--- always shows regardless of confidence. The confidence floor
--- (social_resolve_min_confidence) applies ONLY to speculative 'basket' /
--- 'substitute' rows — a shaky ingredient guess is dropped (shows 'none' /
--- source_new), while a direct product a rep can sell is never hidden.
+-- CONFIDENCE FLOOR (social_resolve_min_confidence) applies to ANY match — carried,
+-- substitute, or basket. Inventory match wins, but only when the match is actually
+-- confident: a low-confidence carried match (sushi -> corn oil @0.45) is a bad
+-- guess, not a real inventory hit, so it's suppressed just like a shaky basket
+-- (row shows 'none' / source_new). Confident carried matches (FZ BANH MI @0.95)
+-- still show and outrank baskets.
 
 with trends as (
 
@@ -91,10 +92,11 @@ joined as (
         r.recommended_prtnums,
         r.recommended_item_names,
         r.match_confidence,
-        -- floor applies ONLY to speculative baskets/substitutes; a 'carried'
-        -- match is a verified real SKU we stock, so it always shows (inventory
-        -- match wins over confidence)
-        r.result_type in ('substitute', 'basket')
+        -- floor applies to ANY match (carried / substitute / basket): inventory
+        -- wins, but only when the match is actually confident. A low-confidence
+        -- carried match is a bad guess (sushi -> corn oil @0.45), not a real
+        -- inventory hit, so it's suppressed just like a shaky basket.
+        r.result_type in ('carried', 'substitute', 'basket')
             and coalesce(r.match_confidence, 0)
                 < {{ var('social_resolve_min_confidence') }}            as _low_conf
     from trends as t

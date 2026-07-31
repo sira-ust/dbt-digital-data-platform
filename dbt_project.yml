@@ -73,9 +73,9 @@ vars:
   # than a like/comment/share (active).
   social_trend_engagement_weight: 10
   social_trend_views_weight: 20
-  social_resolve_min_confidence: 0.7 # below this, a speculative basket/substitute is suppressed (shown as
-                                     # none/source_new). Does NOT apply to 'carried' — a direct product we
-                                     # stock is a verified SKU and always shows (inventory match wins).
+  social_resolve_min_confidence: 0.7 # below this, ANY match (carried/substitute/basket) is suppressed
+                                     # (shown as none/source_new). Inventory wins only when confident — a
+                                     # 0.45 carried guess (sushi -> corn oil) is dropped like a shaky basket.
   # The trending UNIT is mentioned_dishes only (the AI's specific-product signal).
   # Ingredients (too generic) and brands (retailers / delivery platforms /
   # influencers / restaurants — unbounded, none stockable) are NOT ranked; see
