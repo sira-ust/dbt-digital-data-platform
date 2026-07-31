@@ -195,11 +195,12 @@ models:
       stock); if not, what similar to offer (recommended_items); and what to DO
       (action_signal). Ranking is deterministic and VOLUME-forward; the concept->SKU
       link comes from the OFFLINE LLM resolution — dbt never calls the LLM. A concept
-      the LLM hasn't scored stays 'unresolved'. A low-confidence match
-      (match_confidence < social_resolve_min_confidence, ANY result_type) is
-      suppressed — matched item + recommendations dropped, shown as 'none' /
-      source_new. Stock is the item's CURRENT (latest snapshot week) shippability
-      (CABOT warehouse only). Read by Genie / BI.
+      the LLM hasn't scored stays 'unresolved'. INVENTORY MATCH WINS: a 'carried'
+      row (a verified real SKU we stock) always shows; the confidence floor
+      (social_resolve_min_confidence) suppresses only speculative 'basket' /
+      'substitute' rows below it (shown as 'none' / source_new). Stock is the item's
+      CURRENT (latest snapshot week) shippability (CABOT warehouse only). Read by
+      Genie / BI.
     config:
       tags: ["social", "reporting"]
     columns:

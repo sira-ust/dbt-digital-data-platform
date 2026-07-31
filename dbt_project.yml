@@ -66,7 +66,9 @@ vars:
   social_trend_top_n: 20             # how many trending items the mart shows
   social_trend_min_mentions: 2       # ignore concepts below this over the window (noise floor)
   social_trend_link_count: 5         # source_links per concept — the top links by reach then engagement
-  social_resolve_min_confidence: 0.5 # below this, a concept->SKU match is suppressed (shown as none/source_new)
+  social_resolve_min_confidence: 0.7 # below this, a speculative basket/substitute is suppressed (shown as
+                                     # none/source_new). Does NOT apply to 'carried' — a direct product we
+                                     # stock is a verified SKU and always shows (inventory match wins).
   # The trending UNIT is mentioned_dishes only (the AI's specific-product signal).
   # Ingredients (too generic) and brands (retailers / delivery platforms /
   # influencers / restaurants — unbounded, none stockable) are NOT ranked; see

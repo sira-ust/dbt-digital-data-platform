@@ -51,7 +51,7 @@ from datetime import datetime, timezone
 # ─────────────────────────────────────────────────────────────────────────────
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v3"                    # v3 = strict baskets (core ingredients only) + catalog-validated prtnums
+PROMPT_VERSION = "v4"                    # v4 = carried-first (inventory match wins over baskets)
 _CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
 CONCURRENCY = 4
@@ -93,6 +93,13 @@ Then return ONE JSON object — no markdown, no prose — exactly:
   "recommended_item_names": [string], // display names, SAME ORDER as recommended_prtnums
   "match_confidence": number       // 0.0–1.0
 }
+
+CHECK "carried" FIRST — inventory match wins. If the catalog contains the item \
+itself as a ready-to-sell product (a banh mi product, a matcha product, a \
+spring-roll product), return "carried" with that SKU, EVEN FOR A DISH. Only fall \
+to substitute / basket / none when we do NOT stock the item directly. Order of \
+preference: carried > substitute/basket > none. A direct product a rep can sell \
+beats a basket of ingredients every time.
 
 result_type decides what we show marketing:
   - "carried"   : the concept IS a product/ingredient we stock -> set matched_prtnum.
