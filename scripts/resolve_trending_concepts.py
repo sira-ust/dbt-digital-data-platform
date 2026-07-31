@@ -52,6 +52,7 @@ from datetime import datetime, timezone
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
 PROMPT_VERSION = "v3"                    # v3 = strict baskets (core ingredients only) + catalog-validated prtnums
+_CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
 CONCURRENCY = 4
 MAX_RETRIES = 8
@@ -200,8 +201,13 @@ def read_all(backend, top_n, duckdb_path):
         catalog = [r.asDict() for r in spark.table(DBX_ITEMS_TABLE)
                    .select("prtnum", "item_name", "item_family").collect()]
         try:
-            resolved = {r.concept_norm for r in
-                        spark.table(DBX_RESOLUTION_TABLE).select("concept_norm").collect()}
+            # VERSION-AWARE: only concepts resolved at the CURRENT model+prompt
+            # version count as done. Bumping PROMPT_VERSION drops every stale row
+            # out of this set, so the next run re-resolves it automatically — no
+            # manual truncate needed, still incremental (only stale + new).
+            resolved = {r.concept_norm for r in spark.sql(
+                f"select concept_norm from {DBX_RESOLUTION_TABLE} "
+                f"where model_version = '{_CURRENT_VERSION}'").collect()}
         except Exception:
             resolved = set()
     else:
@@ -216,7 +222,8 @@ def read_all(backend, top_n, duckdb_path):
         try:
             import duckdb as _d
             resolved = set(_d.connect().sql(
-                f"select concept_norm from read_parquet('{LOCAL_RESOLUTION_PATH}')"
+                f"select concept_norm from read_parquet('{LOCAL_RESOLUTION_PATH}') "
+                f"where model_version = '{_CURRENT_VERSION}'"
             ).df()["concept_norm"].tolist())
         except Exception:
             resolved = set()
@@ -409,7 +416,7 @@ def to_records(by_concept, resolved_at, catalog_by_prtnum):
     take the item name from the catalog (never the LLM's self-reported name — it
     can drift from the prtnum). This guarantees downstream only ever sees real
     SKUs with their true names."""
-    model_version = f"{MODEL}/{PROMPT_VERSION}"
+    model_version = _CURRENT_VERSION
     records = []
     for concept_norm, a in by_concept.items():
         # keep only recommended prtnums that exist; name comes from the catalog
