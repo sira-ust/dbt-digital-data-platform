@@ -89,6 +89,8 @@ def main() -> None:
 
     files = sorted(glob.glob(os.path.join(LANDING_DIR, "*.xlsx")))
     print(f"{len(files)} xlsx file(s) in {LANDING_DIR}")
+    for path in files:
+        print(f"  found: {os.path.basename(path)}")
 
     total = 0
     for path in files:
