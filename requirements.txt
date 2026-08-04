@@ -1,14 +1,18 @@
 # Local development — DuckDB adapter (zero cloud cost, no engine commitment)
 dbt-duckdb>=1.8.0,<2.0.0
 
-# Production engine TBD (followup.md). Install the matching adapter when decided:
+# Production engine TBD. Install the matching adapter when decided:
 # dbt-databricks>=1.8.0,<2.0.0
 # dbt-fabric>=1.8.0,<2.0.0
 
 # Social-listening pre-dbt scripts (scripts/convert_mentionlytics.py,
-# scripts/enrich_mentions.py). duckdb ships with dbt-duckdb; on Databricks
-# pyspark is provided by the runtime.
-anthropic>=0.120.0     # enrich_mentions.py — Claude via Databricks serving endpoint
-openpyxl>=3.1          # convert_mentionlytics.py — read xlsx
-pandas>=2.0            # both scripts
-pyarrow>=15.0          # parquet read/write
+# scripts/enrich_mentions.py, scripts/resolve_trending_concepts.py). duckdb
+# ships with dbt-duckdb; on Databricks pyspark is provided by the runtime.
+anthropic>=0.120.0             # enrich_mentions.py, resolve_trending_concepts.py — Claude via Databricks serving endpoint
+openpyxl>=3.1                  # convert_mentionlytics.py — read xlsx
+pandas>=2.0                    # enrich_mentions.py, resolve_trending_concepts.py
+pyarrow>=15.0                  # parquet read/write
+
+# Databricks connectivity for local runs against real Databricks
+databricks-sdk>=0.30.0         # enrich_mentions.py, resolve_trending_concepts.py — ambient/local auth (Config)
+databricks-sql-connector>=3.0.0 # scripts/snapshot_uc_schema.py — direct SQL against Unity Catalog

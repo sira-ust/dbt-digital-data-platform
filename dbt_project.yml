@@ -207,7 +207,12 @@ seeds:
     # All code columns below are strings on purpose: staging models cast the
     # raw codes to string, and Databricks won't implicit-cast joins the way
     # DuckDB does.
+    # Disabled 2026-08-04: decodes tracking_report_event.categories_name — the
+    # same retired legacy stream as seed_tracking_*/seed_activity_* below.
+    # CSV stays as the dev team's verbatim reference; re-enable if the legacy
+    # stream is ever decoded again.
     seed_category_name_aliases:
+      +enabled: false
       +column_types:
         category_id: string
 
@@ -246,6 +251,14 @@ seeds:
       +enabled: false
       +column_types:
         method_code: string
+
+    # Same legacy table as seed_activity_types/seed_activity_methods above
+    # (user_activity_report_event) — disabled for consistency. Added 2026-07-22,
+    # after the 2026-07-08 retirement, so double-check with the dev team whether
+    # they intend to keep supplying value maps for a table dbt no longer stages
+    # before assuming this is dead for good.
+    seed_layout_codes:
+      +enabled: false
 
     # Disabled: not referenced via ref() anywhere — the jdawms glossary/mock
     # scripts read these CSVs directly from seeds/, not from a database table.
