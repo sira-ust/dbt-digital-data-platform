@@ -41,7 +41,6 @@ import json
 import os
 import re
 import sys
-import unicodedata
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -241,15 +240,21 @@ def read_all(backend, top_n, duckdb_path):
     return new, snippets, catalog, len(resolved)
 
 
-_DMAP = str.maketrans("đĐ", "dd")
+# Copied character-for-character from macros/fold_concept.sql's translate()
+# call, so the two can't silently drift apart again. A general Unicode
+# NFKD/combining-mark strip (the previous approach) also strips THAI tone
+# marks and vowel signs — Thai combining characters aren't in this table, so
+# they must pass through byte-for-byte unchanged, exactly like the SQL side.
+_FOLD_FROM = "àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ"
+_FOLD_TO = "aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd"
+_FOLD_TABLE = str.maketrans(_FOLD_FROM, _FOLD_TO)
 
 
 def _fold(s):
-    """Match macros/fold_concept.sql: lower+trim, strip Vietnamese diacritics,
-    đ->d, collapse spaces — so snippet lookup keys line up with the folded
-    concept_norm the ranking model produces."""
-    s = unicodedata.normalize("NFKD", str(s).strip().lower())
-    s = "".join(c for c in s if not unicodedata.combining(c)).translate(_DMAP)
+    """Match macros/fold_concept.sql EXACTLY: lower+trim, translate() over the
+    same 67 Vietnamese-diacritic characters (+ đ->d), collapse spaces. Thai (and
+    anything else not in the table) passes through unchanged, same as the SQL."""
+    s = str(s).strip().lower().translate(_FOLD_TABLE)
     return re.sub(" +", " ", s)
 
 

@@ -30,6 +30,9 @@ jobs:
       - name: Parse project
         run: dbt parse
 
+      - name: Check fold_concept macro/script consistency
+        run: python scripts/check_fold_consistency.py
+
       # Full `dbt build` requires sample data in data/ — enable once a
       # CI-safe synthetic sample is committed or generated.
       # - name: Build
