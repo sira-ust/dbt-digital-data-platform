@@ -208,6 +208,10 @@
   .sig { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
   .sig span { font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px; color: var(--muted); }
   .sig span code { font-family: var(--mono); color: var(--ink); font-size: 11px; }
+  .script-panel { margin-top: 12px; border: 1px dashed color-mix(in srgb, var(--sp-color, var(--l-source)) 55%, var(--line)); border-radius: 8px; padding: 11px 13px; background: color-mix(in srgb, var(--sp-color, var(--l-source)) 7%, transparent); }
+  .script-panel .sp-head { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--sp-color, var(--l-source)); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .script-panel .sp-body { font-size: 12.5px; color: var(--muted); margin-top: 7px; }
+  .script-panel .sp-body b { color: var(--ink); font-weight: 600; }
 
   /* ---- dq grid ---- */
   .dq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 14px; }
@@ -255,7 +259,7 @@
 
   <div class="stats">
     <div class="stat" style="--c:var(--l-source)"><div class="n">3</div><div class="k">data sources</div></div>
-    <div class="stat" style="--c:var(--l-int)"><div class="n">42</div><div class="k">data models <b>(source → report)</b></div></div>
+    <div class="stat" style="--c:var(--l-int)"><div class="n">41</div><div class="k">data models <b>(source → report)</b></div></div>
     <div class="stat" style="--c:var(--l-mart)"><div class="n">6</div><div class="k">business reports <b>(marts)</b></div></div>
     <div class="stat" style="--c:var(--l-dq)"><div class="n">4</div><div class="k">data-quality checks</div></div>
   </div>
@@ -277,114 +281,87 @@
   <p class="hint">Scroll sideways to follow the graph · hover any model to trace its lineage both ways</p>
 
   <div class="sec-head"><h2>Social listening → mart_social_trending_items</h2><span class="rule"></span></div>
-  <p class="sec-sub">The one pipeline with an LLM in the loop — but it runs <b>offline</b> (Databricks-hosted Claude, <code>databricks-claude-haiku-4-5</code>), writing source tables dbt later reads, so the warehouse build stays deterministic. Each hop from the weekly Mentionlytics export to the marketing board, with the actual transform, materialization, and thresholds:</p>
+  <p class="sec-sub">Six boxes, six real dbt views/tables — the <b>table flow only</b>. Three of them are built from a source an offline Python script writes; that script (and any LLM call it makes) is shown as an inset panel <b>inside</b> that table's box, not as a step of its own — the script is how the table got its data, not a separate stop the data visits.</p>
 
   <div class="legend" style="margin-bottom:18px">
-    <div class="item"><span class="sw" style="--c:var(--l-staging)"></span><b>dbt model</b> — in the deterministic build</div>
-    <div class="item"><span class="sw" style="--c:var(--l-source)"></span><b>offline script</b> — Python, out-of-band</div>
-    <div class="item"><span class="sw" style="--c:var(--l-llm)"></span><b>offline LLM</b> — bills Databricks MODEL_SERVING</div>
+    <div class="item"><span class="sw" style="--c:var(--l-staging)"></span><b>dbt view</b></div>
+    <div class="item"><span class="sw" style="--c:var(--l-fact)"></span><b>dbt fact table</b></div>
+    <div class="item"><span class="sw" style="--c:var(--l-int)"></span><b>dbt intermediate table</b></div>
+    <div class="item"><span class="sw" style="--c:var(--l-mart)"></span><b>dbt mart table</b></div>
+    <div class="item"><span class="sw" style="--c:var(--l-source)"></span><b>inset: plain offline script</b></div>
+    <div class="item"><span class="sw" style="--c:var(--l-llm)"></span><b>inset: offline LLM — bills MODEL_SERVING</b></div>
   </div>
 
   <div class="sflow">
-    <div class="stage" style="--sc:var(--l-source)">
+    <div class="stage" style="--sc:var(--l-staging)">
       <div class="stage__spine"><div class="stage__num">1</div><div class="stage__line"></div></div>
       <div class="stage__card">
-        <div class="stage__title">convert_mentionlytics.py <span class="pill out">→ social.mentions</span></div>
-        <p class="stage__lead">Loads the weekly Mentionlytics <code>.xlsx</code> drop of food-related posts, as-is.</p>
-        <p class="stage__how"><b>How:</b> offline Python; <code>xlsx → parquet</code> (duckdb dev) / Delta (databricks). Pure reshape — no transformation, no LLM.</p>
-        <div class="stage__meta"><span class="pill">offline script</span><span class="pill">weekly</span></div>
+        <div class="stage__title">stg_mentionlytics__mentions</div>
+        <p class="stage__lead">Cleaned, de-duplicated social media posts — the entry point for everything else.</p>
+        <p class="stage__how"><b>How:</b> view; dedupe overlapping weekly files on <code>mention_id</code> (<b>latest <code>loaded_at</code> wins</b>, <code>source_file</code> as tiebreak), cast + trim only.</p>
+        <div class="script-panel">
+          <div class="sp-head"><span class="pill">offline script</span> convert_mentionlytics.py <span class="pill">weekly</span></div>
+          <div class="sp-body">Writes the <code>social.mentions</code> source this view reads. Pure <code>xlsx → parquet</code>/Delta reshape — no transformation, no LLM.</div>
+        </div>
+        <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:social</span></div>
       </div>
     </div>
 
     <div class="stage" style="--sc:var(--l-staging)">
       <div class="stage__spine"><div class="stage__num">2</div><div class="stage__line"></div></div>
       <div class="stage__card">
-        <div class="stage__title">stg_mentionlytics__mentions</div>
-        <p class="stage__lead">Cleaned, deduped posts — built <b>before</b> the AI ever sees them.</p>
-        <p class="stage__how"><b>How:</b> view; dedupe overlapping weekly files on <code>mention_id</code> (<b>latest <code>loaded_at</code> wins</b>, <code>source_file</code> as tiebreak), cast + trim only. Built ahead of #3 so the AI step reads one dedupe rule instead of re-deriving it.</p>
-        <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:social</span></div>
-      </div>
-    </div>
-
-    <div class="stage" style="--sc:var(--l-llm)">
-      <div class="stage__spine"><div class="stage__num">3</div><div class="stage__line"></div></div>
-      <div class="stage__card">
-        <div class="stage__title">enrich_mentions.py <span class="pill out">→ social.mention_enrichment</span></div>
-        <p class="stage__lead">AI reads each caption and returns structured attributes — is it food, is it spam, what dishes/ingredients/brands, what sentiment.</p>
-        <p class="stage__how"><b>How:</b> reads the already-deduped <code>stg_mentionlytics__mentions</code> from #2 (not the raw export). A <b>deterministic pre-filter</b> catches obvious gambling/betting spam by keyword first (~99.7% precision on real data) and labels it <code>is_spam</code> with <b>no LLM call</b> — only the rest go to the model: one serving call per mention, strict-JSON output <code>is_food_relevant, is_spam, themes[], mentioned_dishes[], ingredients[], brands[], sentiment_normalized, confidence</code>. Incremental on <code>mention_id</code>.</p>
-        <div class="loop-note"><b>Outside-of-dbt step:</b> reads a table dbt already built (#2) and writes a new one dbt reads next, at #4. Same shape as #8 below — dbt's own data passes through an outside script and back in.</div>
-        <div class="stage__meta"><span class="pill llm">offline LLM</span><span class="pill cost">MODEL_SERVING</span><span class="pill">incremental</span><span class="pill">pre-filtered spam</span></div>
-      </div>
-    </div>
-
-    <div class="stage" style="--sc:var(--l-staging)">
-      <div class="stage__spine"><div class="stage__num">4</div><div class="stage__line"></div></div>
-      <div class="stage__card">
         <div class="stage__title">stg_mentionlytics__mention_enrichment</div>
-        <p class="stage__lead">Cleaned view over the AI's per-post tags.</p>
+        <p class="stage__lead">The AI's read on each post — is it about food? is it spam? which dishes?</p>
         <p class="stage__how"><b>How:</b> view; cast + trim only — no dedupe needed here, the script already writes one row per <code>mention_id</code>.</p>
+        <div class="script-panel" style="--sp-color:var(--l-llm)">
+          <div class="sp-head"><span class="pill llm">offline LLM</span> enrich_mentions.py <span class="pill cost">MODEL_SERVING</span></div>
+          <div class="sp-body">Reads box <b>#1</b>'s cleaned posts and writes the table this view reads. A quick keyword check catches obvious gambling spam first — no AI needed for those. Everything else goes to the AI, which reads the post and answers: is this about food, is it spam, which dishes/ingredients/brands are mentioned, and what's the tone. Only new posts are sent each run. This step runs outside dbt — it reads a dbt table (box #1) and writes back a new one dbt picks up right here.</div>
+        </div>
         <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:social</span></div>
-      </div>
-    </div>
-
-    <div class="stage" style="--sc:var(--l-int)">
-      <div class="stage__spine"><div class="stage__num">5</div><div class="stage__line"></div></div>
-      <div class="stage__card">
-        <div class="stage__title">int_social_mentions_enriched</div>
-        <p class="stage__lead">Each post joined to its AI enrichment, with conformed dimensions added.</p>
-        <p class="stage__how"><b>How:</b> <code>LEFT JOIN</code> enrichment — keeps <b>all</b> mentions (so DQ can audit coverage). Adds <code>posted_week</code> + <code>market</code> (Thailand / Vietnam, from the tracker) and splits the overloaded <code>followers_or_rank</code> into <code>follower_count</code> vs <code>domain_rank</code>.</p>
-        <div class="stage__meta"><span class="pill">dbt · table</span></div>
       </div>
     </div>
 
     <div class="stage" style="--sc:var(--l-fact)">
-      <div class="stage__spine"><div class="stage__num">6</div><div class="stage__line"></div></div>
+      <div class="stage__spine"><div class="stage__num">3</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">fct_social_mentions</div>
-        <p class="stage__lead">The BI / Genie fact — one row per genuine, non-spam food mention.</p>
-        <p class="stage__how"><b>How:</b> filter keeps food-relevant rows and drops spam only when the model is confident, so a shaky spam call can't hide a real mention:</p>
+        <p class="stage__lead">Only the genuine, real food posts — spam and off-topic noise filtered out.</p>
+        <p class="stage__how"><b>How:</b> <code>LEFT JOIN</code> box #1 to box #2, add conformed dimensions (<code>posted_week</code> + <code>market</code> from the tracker; split <code>followers_or_rank</code> into <code>follower_count</code> vs <code>domain_rank</code>), then filter — keep food-relevant rows and drop spam only when the model is confident, so a shaky spam call can't hide a real mention:</p>
         <code class="codeblock">where is_food_relevant <span class="op">and not</span> (is_spam <span class="op">and</span> confidence <span class="op">&gt;=</span> social_spam_confidence_min) <span class="cm">-- 0.7</span></code>
         <div class="stage__meta"><span class="pill">dbt · table · fact</span></div>
       </div>
     </div>
 
     <div class="stage" style="--sc:var(--l-int)">
-      <div class="stage__spine"><div class="stage__num">7</div><div class="stage__line"></div></div>
+      <div class="stage__spine"><div class="stage__num">4</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">int_social_concept_trends <span class="pill gate">the gate</span></div>
-        <p class="stage__lead">Deterministic, LLM-free ranking of trending dishes over a trailing window.</p>
+        <p class="stage__lead">Ranks which dishes are trending right now, over the last 4 weeks.</p>
         <p class="stage__how"><b>How:</b> <code>unnest(mentioned_dishes)</code> → <code>fold_concept()</code> folds language/spelling variants (bánh khọt → banh khot) to one key → aggregate over a trailing <code>social_trend_window_weeks</code> (4wk) window → score &amp; <code>row_number()</code> rank. <code>is_rising</code> (recent half vs older half) is a secondary flag, not the sort. Materialized as a table because it's the gate the resolver reads.</p>
         <code class="codeblock">trend_score <span class="op">=</span> mention_count <span class="op">×</span> (1 <span class="op">+</span> ln(1+engagement)/10 <span class="op">+</span> ln(1+views)/20)</code>
         <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">≥ 2 mentions</span><span class="pill">top-20 kept</span></div>
       </div>
     </div>
 
-    <div class="stage" style="--sc:var(--l-llm)">
-      <div class="stage__spine"><div class="stage__num">8</div><div class="stage__line"></div></div>
-      <div class="stage__card">
-        <div class="stage__title">resolve_trending_concepts.py <span class="pill out">→ social.concept_resolution</span></div>
-        <p class="stage__lead">AI matches the top-ranked trends to real WMS SKUs.</p>
-        <p class="stage__how"><b>How:</b> reads the top <code>social_trend_top_n</code> (20) concepts + representative mention snippets. <b>Checks "carried" first</b> — if the catalog stocks the item as a ready-to-sell product, that wins even for a whole dish, before falling to substitute/basket/none. Returns <code>result_type ∈ {carried, substitute, basket, none}</code>, <code>matched_prtnum</code> / <code>recommended_prtnums</code>, <code>match_confidence</code> — every <code>prtnum</code> is checked against the real catalog before writing (hallucinated SKUs dropped, name always taken from the catalog). Same serving endpoint; gated to the top-20 so the long tail costs nothing.</p>
-        <div class="loop-note"><b>Outside-of-dbt step:</b> like #3 above, reads a table dbt already built (#7) and writes a new one dbt reads next, at #9. Still runs in the same 1→10 order — dbt's own data just passes through an outside script along the way.</div>
-        <div class="stage__meta"><span class="pill llm">offline LLM</span><span class="pill cost">MODEL_SERVING</span><span class="pill">version-aware incremental</span></div>
-      </div>
-    </div>
-
     <div class="stage" style="--sc:var(--l-staging)">
-      <div class="stage__spine"><div class="stage__num">9</div><div class="stage__line"></div></div>
+      <div class="stage__spine"><div class="stage__num">5</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">stg_mentionlytics__concept_resolution</div>
-        <p class="stage__lead">Cleaned view over the resolver's output.</p>
-        <p class="stage__how"><b>How:</b> staging view exposing <code>concept_norm → matched_prtnum</code>, <code>recommended_prtnums</code>, and <code>match_confidence</code>.</p>
+        <p class="stage__lead">The AI's answer for each trending dish: do we sell it, or something close?</p>
+        <p class="stage__how"><b>How:</b> view exposing <code>concept_norm → matched_prtnum</code>, <code>recommended_prtnums</code>, <code>match_confidence</code>. Cast + dedupe (latest <code>resolved_at</code> wins per concept — the source is append-only).</p>
+        <div class="script-panel" style="--sp-color:var(--l-llm)">
+          <div class="sp-head"><span class="pill llm">offline LLM</span> resolve_trending_concepts.py <span class="pill cost">MODEL_SERVING</span></div>
+          <div class="sp-body">Takes the top 20 trending dishes from box <b>#4</b>, plus real example posts from box <b>#3</b> and our product catalog, and asks the AI: do we sell this, or something close? The AI checks stock first — if we carry the item directly, that wins, even for a whole dish. Its answer is checked against the real catalog before saving, so it can never point to a product that doesn't exist. This step runs outside dbt — it reads dbt tables and writes back a new one dbt picks up right here.</div>
+        </div>
         <div class="stage__meta"><span class="pill">dbt · view</span></div>
       </div>
     </div>
 
     <div class="stage" style="--sc:var(--l-mart)">
-      <div class="stage__spine"><div class="stage__num">10</div><div class="stage__line"></div></div>
+      <div class="stage__spine"><div class="stage__num">6</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">mart_social_trending_items <span class="pill board">the board</span></div>
-        <p class="stage__lead">The marketing-facing board: what's trending, whether we carry it, and current stock.</p>
+        <p class="stage__lead">The finished report: what's trending, do we stock it, what to do about it.</p>
         <p class="stage__how"><b>How:</b> top-20 <code>trends ⋈ resolution ⋈ int_jdawms_items</code> (authoritative name) <code>⋈</code> current stock (latest snapshot week). A confidence floor <code>social_resolve_min_confidence</code> (0.7) suppresses <b>any</b> match below it (a 0.45 sushi→corn-oil guess is dropped, not shown). <code>recommended_prtnums</code> are re-verified against the item master (hallucinated SKUs dropped). Emits <code>action_signal</code>:</p>
         <div class="sig">
           <span><code>promote_now</code> · carried &amp; in stock</span>
@@ -493,7 +470,6 @@ const NODES = [
   { id:'int_items', label:'int_jdawms_items', desc:'WMS item master + names', col:2, layer:'int', pipe:'wms', mat:'table' },
   { id:'int_inv', label:'int_jdawms_inventory_daily', desc:'Daily on-hand / shippable', col:2, layer:'int', pipe:'wms', mat:'table' },
   { id:'int_picks', label:'int_jdawms_sale_picks_daily', desc:'Daily picks / sales', col:2, layer:'int', pipe:'wms', mat:'table' },
-  { id:'int_soc_m', label:'int_social_mentions_enriched', desc:'Post + its AI tags, joined (still per post)', col:2, layer:'int', pipe:'social', mat:'table' },
 
   { id:'int_enr', label:'int_events_enriched', desc:'Feature / outcome enrichment', col:3, layer:'int', pipe:'event-log', mat:'table' },
   { id:'int_stock', label:'int_jdawms_stock_weekly', desc:'Weekly stock levels', col:3, layer:'int', pipe:'wms', mat:'table' },
@@ -520,10 +496,9 @@ const EDGES = [
   ['src_mnt','stg_mnt_m'],['src_mnt','stg_mnt_e'],['src_mnt','stg_mnt_r'],
   ['stg_sel','int_dec'],['seeds','int_dec'],
   ['stg_jdawms','int_items'],['stg_jdawms','int_inv'],['stg_jdawms','int_picks'],['seeds','int_items'],
-  ['stg_mnt_m','int_soc_m'],['stg_mnt_e','int_soc_m'],
   ['int_dec','int_enr'],['seeds','int_enr'],
   ['int_inv','int_stock'],
-  ['int_soc_m','fct_soc'],
+  ['stg_mnt_m','fct_soc'],['stg_mnt_e','fct_soc'],
   ['int_enr','int_cycle'],['int_enr','int_dem'],['int_enr','fct_events'],['int_enr','fct_orders'],
   ['int_enr','fct_cycles'],['int_enr','mart_cust'],['int_enr','mart_feat'],
   ['fct_soc','int_trend'],

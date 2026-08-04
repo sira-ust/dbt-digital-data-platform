@@ -1,8 +1,7 @@
 -- Lossless 1:1 staging for Mentionlytics mentions. Light work only: cast, trim,
 -- rename to analytics-friendly names, and dedupe. Every source field is
 -- preserved. NO decoding, sentiment normalisation, or LLM enrichment here — that
--- lives in the intermediate layer (int_social_mentions_enriched) and the offline
--- enrich_mentions.py step.
+-- lives in fct_social_mentions and the offline enrich_mentions.py step.
 --
 -- Rerunnable dedupe: a mention_id can appear in more than one weekly file
 -- (overlapping export windows, or a re-drop). Partition by mention_id and keep

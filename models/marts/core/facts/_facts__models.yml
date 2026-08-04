@@ -182,12 +182,18 @@ models:
       excluded until classified). The Genie / BI table for social listening. It
       relates to WMS and mysql by shared dimensions (posted_week, market) and by
       AI/semantic matching on themes/dishes at query time — NOT by a product key.
-      The full unfiltered set (incl. spam/non-food) stays in
-      int_social_mentions_enriched for dq_social_mentions to audit.
+      Joins mentions to their LLM enrichment and applies the filter directly —
+      no separate intermediate model, since that join had exactly one consumer
+      (this fact). dq_social_mentions audits the unfiltered set by reading
+      stg_mentionlytics__mentions directly, one layer earlier.
     columns:
       - name: mention_id
         description: Primary key. One row per (food-relevant, non-spam) mention.
         tests: [unique, not_null]
+      - name: posted_at
+        description: Timestamp the mention was posted.
+      - name: posted_date
+        description: Date of posted_at.
       - name: posted_week
         description: Monday-start week — exact join axis to WMS weekly demand.
       - name: market
@@ -198,6 +204,8 @@ models:
         description: Follower count (social only; null for Web).
       - name: domain_rank
         description: Alexa domain rank (Web only). Never combined with follower_count.
+      - name: sentiment
+        description: Raw Mentionlytics sentiment label.
       - name: sentiment_normalized
         description: Model-judged sentiment (positive/negative/neutral).
       - name: is_food_relevant
