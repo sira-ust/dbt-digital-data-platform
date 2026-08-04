@@ -1,0 +1,681 @@
+<title>ust_digital_platform · lineage & data-flow map</title>
+<style>
+  :root {
+    --bg: #eef1f6;
+    --surface: #ffffff;
+    --surface-2: #f4f6fb;
+    --line: #d6dde8;
+    --line-strong: #b9c3d3;
+    --ink: #161b26;
+    --muted: #5d6779;
+    --faint: #8b95a7;
+
+    --l-source: #6b7a90;
+    --l-staging: #10a99b;
+    --l-seed: #e08a12;
+    --l-int: #7c6cf0;
+    --l-fact: #3b82f6;
+    --l-mart: #12a56f;
+    --l-dq: #ef4d63;
+    --l-llm: #cf3fd6;
+
+    --shadow: 0 1px 2px rgba(20,28,44,.06), 0 6px 20px -12px rgba(20,28,44,.28);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --r: 9px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0d13;
+      --surface: #111621;
+      --surface-2: #161c28;
+      --line: #232c3b;
+      --line-strong: #33415a;
+      --ink: #e7ecf5;
+      --muted: #96a1b4;
+      --faint: #667186;
+      --l-source: #8695ab;
+      --l-staging: #21c9b9;
+      --l-seed: #f4a935;
+      --l-int: #9a8cff;
+      --l-fact: #5b9bff;
+      --l-mart: #2fce93;
+      --l-dq: #ff6478;
+      --l-llm: #e668ec;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f6; --surface: #ffffff; --surface-2: #f4f6fb; --line: #d6dde8;
+    --line-strong: #b9c3d3; --ink: #161b26; --muted: #5d6779; --faint: #8b95a7;
+    --l-source: #6b7a90; --l-staging: #10a99b; --l-seed: #e08a12; --l-int: #7c6cf0;
+    --l-fact: #3b82f6; --l-mart: #12a56f; --l-dq: #ef4d63; --l-llm: #cf3fd6;
+    --shadow: 0 1px 2px rgba(20,28,44,.06), 0 6px 20px -12px rgba(20,28,44,.28);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a0d13; --surface: #111621; --surface-2: #161c28; --line: #232c3b;
+    --line-strong: #33415a; --ink: #e7ecf5; --muted: #96a1b4; --faint: #667186;
+    --l-source: #8695ab; --l-staging: #21c9b9; --l-seed: #f4a935; --l-int: #9a8cff;
+    --l-fact: #5b9bff; --l-mart: #2fce93; --l-dq: #ff6478; --l-llm: #e668ec;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1260px; margin: 0 auto; padding: clamp(20px, 4vw, 52px) clamp(16px, 3vw, 40px) 80px; }
+
+  /* ---- header ---- */
+  header { border-bottom: 1px solid var(--line); padding-bottom: 26px; margin-bottom: 30px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+  }
+  .eyebrow .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--l-fact); }
+  h1 {
+    font-family: var(--mono); font-weight: 700; letter-spacing: -.01em;
+    font-size: clamp(26px, 4.5vw, 42px); margin: 14px 0 8px; text-wrap: balance;
+  }
+  .tagline { color: var(--muted); max-width: 84ch; font-size: 15px; margin: 0 0 6px; }
+  .tagline b { color: var(--ink); font-weight: 600; }
+  .tagline.plain { color: var(--faint); font-style: italic; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .meta-row span {
+    background: var(--surface-2); border: 1px solid var(--line);
+    padding: 4px 10px; border-radius: 100px; color: var(--muted);
+  }
+  .meta-row span b { color: var(--ink); font-weight: 600; }
+
+  /* ---- stats ---- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 26px 0 34px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 14px 15px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .stat::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background: var(--c, var(--line-strong)); }
+  .stat .n { font-family: var(--mono); font-size: 25px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .stat .k { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat .k b { color: var(--ink); font-weight: 600; }
+
+  /* ---- section heads ---- */
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin: 46px 0 8px; flex-wrap: wrap; }
+  .sec-head h2 { font-family: var(--mono); font-size: 16px; font-weight: 700; letter-spacing: .02em; margin: 0; }
+  .sec-head .rule { flex: 1; height: 1px; background: var(--line); min-width: 40px; }
+  .sec-sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; max-width: 88ch; }
+  .sec-sub b { color: var(--ink); font-weight: 600; }
+  .sec-sub code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+
+  /* ---- legend ---- */
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 20px; font-size: 12.5px; }
+  .legend .item { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+  .legend .item b { color: var(--ink); font-weight: 600; }
+  .legend .sw { width: 11px; height: 11px; border-radius: 3px; background: var(--c); flex: none; }
+
+  /* ---- DAG ---- */
+  .dag-shell { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+  .dag-scroll { overflow-x: auto; overflow-y: hidden; }
+  .dag-inner { position: relative; width: max-content; min-width: 100%; padding: 26px 26px 30px; }
+  .dag-cols { position: relative; z-index: 2; display: flex; gap: clamp(34px, 5vw, 72px); align-items: stretch; }
+  .col { display: flex; flex-direction: column; justify-content: center; gap: 14px; min-width: 194px; }
+  .col-label {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--faint); text-align: center; padding-bottom: 4px; border-bottom: 1px dashed var(--line);
+    margin-bottom: 4px;
+  }
+  .node {
+    position: relative; background: var(--surface); border: 1px solid var(--line);
+    border-left: 3px solid var(--nc); border-radius: 8px; padding: 9px 12px; cursor: default;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, opacity .2s ease;
+    box-shadow: 0 1px 1px rgba(0,0,0,.03);
+  }
+  .node:hover { transform: translateY(-1px); box-shadow: var(--shadow); border-color: var(--nc); }
+  .node .nm { font-family: var(--mono); font-size: 12px; font-weight: 600; line-height: 1.3; word-break: break-word; }
+  .node .desc { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+  .node .mt {
+    display: flex; gap: 6px; align-items: center; margin-top: 8px;
+    font-family: var(--mono); font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em;
+  }
+  .node .pipe-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--nc); opacity: .6; flex: none; }
+  .srcflags { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--line); }
+  .sflag { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  .sflag i { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
+  .tag { font-size: 9.5px; padding: 1px 5px; border-radius: 4px; letter-spacing: .04em; font-family: var(--mono); }
+  .tag.view { color: var(--l-staging); border: 1px solid color-mix(in srgb, var(--l-staging) 40%, transparent); }
+  .tag.table { color: var(--l-fact); border: 1px solid color-mix(in srgb, var(--l-fact) 40%, transparent); }
+  .tag.src { color: var(--muted); border: 1px solid var(--line); }
+  .tag.csv { color: var(--l-seed); border: 1px solid color-mix(in srgb, var(--l-seed) 40%, transparent); }
+  .tag.ai { color: var(--l-llm); border: 1px solid color-mix(in srgb, var(--l-llm) 45%, transparent); background: color-mix(in srgb, var(--l-llm) 10%, transparent); font-weight: 700; }
+  .aisrc { font-family: var(--mono); font-size: 10px; color: var(--l-llm); opacity: .85; margin-top: 6px; word-break: break-word; }
+  .node .badge {
+    margin-left: auto; background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 100px; padding: 1px 7px; font-size: 10px; color: var(--muted); font-family: var(--mono);
+  }
+
+  /* edges */
+  #edges { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  #edges path { fill: none; stroke: var(--line-strong); stroke-width: 1.4; opacity: .5; transition: stroke .18s, opacity .18s, stroke-width .18s; }
+  .dag-inner.hovering #edges path { opacity: .12; }
+  .dag-inner.hovering #edges path.hot { opacity: .95; stroke-width: 2.2; }
+  .dag-inner.hovering .node { opacity: .38; }
+  .dag-inner.hovering .node.lit { opacity: 1; }
+  .dag-inner.hovering .node.root { opacity: 1; box-shadow: var(--shadow); }
+  .hint { font-size: 12.5px; color: var(--faint); text-align: center; padding: 4px 0 0; }
+
+  /* ---- social flow ---- */
+  .sflow { margin-top: 8px; }
+  .stage { display: grid; grid-template-columns: 34px 1fr; gap: 16px; }
+  .stage__spine { display: flex; flex-direction: column; align-items: center; }
+  .stage__num {
+    width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    font-family: var(--mono); font-weight: 700; font-size: 12.5px; font-variant-numeric: tabular-nums;
+    background: var(--surface); border: 2px solid var(--sc, var(--line-strong)); color: var(--sc, var(--ink));
+  }
+  .stage__line { flex: 1; width: 2px; background: var(--line); margin: 3px 0; min-height: 12px; }
+  .stage:last-child .stage__line { display: none; }
+  .stage__card {
+    background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--sc, var(--line-strong));
+    border-radius: 9px; padding: 13px 16px; box-shadow: var(--shadow); margin-bottom: 12px;
+  }
+  .stage__title { font-family: var(--mono); font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; word-break: break-word; }
+  .stage__lead { font-size: 14px; color: var(--ink); margin: 8px 0 0; max-width: 86ch; }
+  .stage__how { font-size: 13px; color: var(--muted); margin: 6px 0 0; max-width: 86ch; }
+  .stage__how b { color: var(--ink); font-weight: 600; }
+  .stage__how code, .stage__lead code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  .stage__meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+  .pill { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 100px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .pill.llm { color: var(--l-llm); border-color: color-mix(in srgb, var(--l-llm) 50%, transparent); background: color-mix(in srgb, var(--l-llm) 9%, transparent); }
+  .pill.cost { color: var(--l-llm); border-color: color-mix(in srgb, var(--l-llm) 50%, transparent); font-weight: 700; }
+  .pill.gate { color: var(--l-int); border-color: color-mix(in srgb, var(--l-int) 50%, transparent); background: color-mix(in srgb, var(--l-int) 9%, transparent); }
+  .pill.board { color: var(--l-mart); border-color: color-mix(in srgb, var(--l-mart) 50%, transparent); background: color-mix(in srgb, var(--l-mart) 9%, transparent); }
+  .pill.out { color: var(--ink); border-style: dashed; }
+  .codeblock {
+    display: block; font-family: var(--mono); font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 9px 11px; margin-top: 10px; color: var(--ink); overflow-x: auto; white-space: nowrap;
+  }
+  .codeblock .op { color: var(--l-fact); }
+  .codeblock .cm { color: var(--faint); }
+  .loop-note {
+    margin-top: 11px; font-size: 13px; color: var(--muted); border-left: 2px dashed var(--l-llm);
+    padding: 3px 0 3px 12px;
+  }
+  .loop-note b { color: var(--l-llm); }
+  .sig { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+  .sig span { font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px; color: var(--muted); }
+  .sig span code { font-family: var(--mono); color: var(--ink); font-size: 11px; }
+
+  /* ---- dq grid ---- */
+  .dq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 14px; }
+  .dqc { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--l-dq); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .dqc .type { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--l-dq); }
+  .dqc h4 { font-family: var(--mono); font-size: 13px; margin: 4px 0 0; word-break: break-word; }
+  .dqc .taps { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin: 8px 0 11px; line-height: 1.5; word-break: break-word; }
+  .dqc .taps::before { content: "taps "; color: var(--muted); }
+  .dqc p { font-size: 13px; color: var(--muted); margin: 0; }
+  .dqc p b { color: var(--ink); font-weight: 600; }
+  .dqc p code { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+  .sev { display: flex; gap: 5px; margin-top: 13px; flex-wrap: wrap; }
+  .sev span { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--line); }
+  .sev .warn { color: var(--l-seed); border-color: color-mix(in srgb, var(--l-seed) 45%, transparent); }
+  .sev .info { color: var(--l-source); border-color: color-mix(in srgb, var(--l-source) 45%, transparent); }
+  .sev .ok { color: var(--l-mart); border-color: color-mix(in srgb, var(--l-mart) 45%, transparent); }
+  .sev .quar { color: var(--l-dq); border-color: color-mix(in srgb, var(--l-dq) 45%, transparent); }
+
+  /* ---- cadence ---- */
+  .cadence { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .cadence { grid-template-columns: 1fr; } }
+  .cad { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .cad.daily { border-top: 3px solid var(--l-fact); }
+  .cad.weekly { border-top: 3px solid var(--l-llm); }
+  .cad .when { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+  .cad .cmd { font-family: var(--mono); font-size: 13px; margin: 9px 0 8px; color: var(--ink); word-break: break-all; }
+  .cad .cmd .flag { color: var(--l-fact); }
+  .cad .desc { font-size: 13px; color: var(--muted); }
+
+  footer { margin-top: 46px; padding-top: 18px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11.5px; color: var(--faint); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .node { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow"><span class="dot"></span> dbt project · lineage &amp; data-flow map <span class="dot"></span> duckdb (dev) → databricks (prod)</div>
+    <h1>ust_digital_platform</h1>
+    <p class="tagline">Read-only analytics warehouse over three sources — the <b>MySQL system-event log</b> (~600k events/mo), the <b>JDA / Blue&nbsp;Yonder WMS replica</b> (16 tables), and weekly <b>Mentionlytics</b> social listening — flowing <b>staging → intermediate → facts → reporting marts</b>, with an offline LLM sidecar that keeps the dbt build deterministic.</p>
+    <p class="tagline plain">In business terms: what customers do in our apps, what's in the warehouse, and what people say online — turned into demand-vs-supply and trending-product reports.</p>
+  </header>
+
+  <div class="stats">
+    <div class="stat" style="--c:var(--l-source)"><div class="n">3</div><div class="k">data sources</div></div>
+    <div class="stat" style="--c:var(--l-int)"><div class="n">42</div><div class="k">data models <b>(source → report)</b></div></div>
+    <div class="stat" style="--c:var(--l-mart)"><div class="n">6</div><div class="k">business reports <b>(marts)</b></div></div>
+    <div class="stat" style="--c:var(--l-dq)"><div class="n">4</div><div class="k">data-quality checks</div></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="dag-shell">
+    <div class="dag-scroll">
+      <div class="dag-inner" id="dag">
+        <svg id="edges"><defs>
+          <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0.5,0.5 L7.5,4 L0.5,7.5" fill="none" stroke="context-stroke" stroke-width="1.4"/>
+          </marker>
+        </defs></svg>
+        <div class="dag-cols" id="cols"></div>
+      </div>
+    </div>
+  </div>
+  <p class="hint">Scroll sideways to follow the graph · hover any model to trace its lineage both ways</p>
+
+  <div class="sec-head"><h2>Social listening → mart_social_trending_items</h2><span class="rule"></span></div>
+  <p class="sec-sub">The one pipeline with an LLM in the loop — but it runs <b>offline</b> (Databricks-hosted Claude, <code>databricks-claude-haiku-4-5</code>), writing source tables dbt later reads, so the warehouse build stays deterministic. Each hop from the weekly Mentionlytics export to the marketing board, with the actual transform, materialization, and thresholds:</p>
+
+  <div class="legend" style="margin-bottom:18px">
+    <div class="item"><span class="sw" style="--c:var(--l-staging)"></span><b>dbt model</b> — in the deterministic build</div>
+    <div class="item"><span class="sw" style="--c:var(--l-source)"></span><b>offline script</b> — Python, out-of-band</div>
+    <div class="item"><span class="sw" style="--c:var(--l-llm)"></span><b>offline LLM</b> — bills Databricks MODEL_SERVING</div>
+  </div>
+
+  <div class="sflow">
+    <div class="stage" style="--sc:var(--l-source)">
+      <div class="stage__spine"><div class="stage__num">1</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">convert_mentionlytics.py <span class="pill out">→ social.mentions</span></div>
+        <p class="stage__lead">Loads the weekly Mentionlytics <code>.xlsx</code> drop of food-related posts, as-is.</p>
+        <p class="stage__how"><b>How:</b> offline Python; <code>xlsx → parquet</code> (duckdb dev) / Delta (databricks). Pure reshape — no transformation, no LLM.</p>
+        <div class="stage__meta"><span class="pill">offline script</span><span class="pill">weekly</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-staging)">
+      <div class="stage__spine"><div class="stage__num">2</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">stg_mentionlytics__mentions</div>
+        <p class="stage__lead">Cleaned, deduped posts — built <b>before</b> the AI ever sees them.</p>
+        <p class="stage__how"><b>How:</b> view; dedupe overlapping weekly files on <code>mention_id</code> (<b>latest <code>loaded_at</code> wins</b>, <code>source_file</code> as tiebreak), cast + trim only. Built ahead of #3 so the AI step reads one dedupe rule instead of re-deriving it.</p>
+        <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:social</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-llm)">
+      <div class="stage__spine"><div class="stage__num">3</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">enrich_mentions.py <span class="pill out">→ social.mention_enrichment</span></div>
+        <p class="stage__lead">AI reads each caption and returns structured attributes — is it food, is it spam, what dishes/ingredients/brands, what sentiment.</p>
+        <p class="stage__how"><b>How:</b> reads the already-deduped <code>stg_mentionlytics__mentions</code> from #2 (not the raw export). A <b>deterministic pre-filter</b> catches obvious gambling/betting spam by keyword first (~99.7% precision on real data) and labels it <code>is_spam</code> with <b>no LLM call</b> — only the rest go to the model: one serving call per mention, strict-JSON output <code>is_food_relevant, is_spam, themes[], mentioned_dishes[], ingredients[], brands[], sentiment_normalized, confidence</code>. Incremental on <code>mention_id</code>.</p>
+        <div class="loop-note"><b>Outside-of-dbt step:</b> reads a table dbt already built (#2) and writes a new one dbt reads next, at #4. Same shape as #8 below — dbt's own data passes through an outside script and back in.</div>
+        <div class="stage__meta"><span class="pill llm">offline LLM</span><span class="pill cost">MODEL_SERVING</span><span class="pill">incremental</span><span class="pill">pre-filtered spam</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-staging)">
+      <div class="stage__spine"><div class="stage__num">4</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">stg_mentionlytics__mention_enrichment</div>
+        <p class="stage__lead">Cleaned view over the AI's per-post tags.</p>
+        <p class="stage__how"><b>How:</b> view; cast + trim only — no dedupe needed here, the script already writes one row per <code>mention_id</code>.</p>
+        <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:social</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">5</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_social_mentions_enriched</div>
+        <p class="stage__lead">Each post joined to its AI enrichment, with conformed dimensions added.</p>
+        <p class="stage__how"><b>How:</b> <code>LEFT JOIN</code> enrichment — keeps <b>all</b> mentions (so DQ can audit coverage). Adds <code>posted_week</code> + <code>market</code> (Thailand / Vietnam, from the tracker) and splits the overloaded <code>followers_or_rank</code> into <code>follower_count</code> vs <code>domain_rank</code>.</p>
+        <div class="stage__meta"><span class="pill">dbt · table</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-fact)">
+      <div class="stage__spine"><div class="stage__num">6</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">fct_social_mentions</div>
+        <p class="stage__lead">The BI / Genie fact — one row per genuine, non-spam food mention.</p>
+        <p class="stage__how"><b>How:</b> filter keeps food-relevant rows and drops spam only when the model is confident, so a shaky spam call can't hide a real mention:</p>
+        <code class="codeblock">where is_food_relevant <span class="op">and not</span> (is_spam <span class="op">and</span> confidence <span class="op">&gt;=</span> social_spam_confidence_min) <span class="cm">-- 0.7</span></code>
+        <div class="stage__meta"><span class="pill">dbt · table · fact</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">7</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_social_concept_trends <span class="pill gate">the gate</span></div>
+        <p class="stage__lead">Deterministic, LLM-free ranking of trending dishes over a trailing window.</p>
+        <p class="stage__how"><b>How:</b> <code>unnest(mentioned_dishes)</code> → <code>fold_concept()</code> folds language/spelling variants (bánh khọt → banh khot) to one key → aggregate over a trailing <code>social_trend_window_weeks</code> (4wk) window → score &amp; <code>row_number()</code> rank. <code>is_rising</code> (recent half vs older half) is a secondary flag, not the sort. Materialized as a table because it's the gate the resolver reads.</p>
+        <code class="codeblock">trend_score <span class="op">=</span> mention_count <span class="op">×</span> (1 <span class="op">+</span> ln(1+engagement)/10 <span class="op">+</span> ln(1+views)/20)</code>
+        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">≥ 2 mentions</span><span class="pill">top-20 kept</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-llm)">
+      <div class="stage__spine"><div class="stage__num">8</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">resolve_trending_concepts.py <span class="pill out">→ social.concept_resolution</span></div>
+        <p class="stage__lead">AI matches the top-ranked trends to real WMS SKUs.</p>
+        <p class="stage__how"><b>How:</b> reads the top <code>social_trend_top_n</code> (20) concepts + representative mention snippets. <b>Checks "carried" first</b> — if the catalog stocks the item as a ready-to-sell product, that wins even for a whole dish, before falling to substitute/basket/none. Returns <code>result_type ∈ {carried, substitute, basket, none}</code>, <code>matched_prtnum</code> / <code>recommended_prtnums</code>, <code>match_confidence</code> — every <code>prtnum</code> is checked against the real catalog before writing (hallucinated SKUs dropped, name always taken from the catalog). Same serving endpoint; gated to the top-20 so the long tail costs nothing.</p>
+        <div class="loop-note"><b>Outside-of-dbt step:</b> like #3 above, reads a table dbt already built (#7) and writes a new one dbt reads next, at #9. Still runs in the same 1→10 order — dbt's own data just passes through an outside script along the way.</div>
+        <div class="stage__meta"><span class="pill llm">offline LLM</span><span class="pill cost">MODEL_SERVING</span><span class="pill">version-aware incremental</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-staging)">
+      <div class="stage__spine"><div class="stage__num">9</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">stg_mentionlytics__concept_resolution</div>
+        <p class="stage__lead">Cleaned view over the resolver's output.</p>
+        <p class="stage__how"><b>How:</b> staging view exposing <code>concept_norm → matched_prtnum</code>, <code>recommended_prtnums</code>, and <code>match_confidence</code>.</p>
+        <div class="stage__meta"><span class="pill">dbt · view</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-mart)">
+      <div class="stage__spine"><div class="stage__num">10</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">mart_social_trending_items <span class="pill board">the board</span></div>
+        <p class="stage__lead">The marketing-facing board: what's trending, whether we carry it, and current stock.</p>
+        <p class="stage__how"><b>How:</b> top-20 <code>trends ⋈ resolution ⋈ int_jdawms_items</code> (authoritative name) <code>⋈</code> current stock (latest snapshot week). A confidence floor <code>social_resolve_min_confidence</code> (0.7) suppresses <b>any</b> match below it (a 0.45 sushi→corn-oil guess is dropped, not shown). <code>recommended_prtnums</code> are re-verified against the item master (hallucinated SKUs dropped). Emits <code>action_signal</code>:</p>
+        <div class="sig">
+          <span><code>promote_now</code> · carried &amp; in stock</span>
+          <span><code>restock</code> · carried, no stock</span>
+          <span><code>offer_substitute</code></span>
+          <span><code>promote_ingredients</code> · basket</span>
+          <span><code>source_new</code> · none</span>
+          <span><code>monitor</code></span>
+        </div>
+        <div class="stage__meta"><span class="pill">dbt · table · mart</span><span class="pill">single current snapshot</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-head"><h2>Data quality — dq_* models</h2><span class="rule"></span></div>
+  <p class="sec-sub">Distinct from the YAML / singular <b>gate tests</b> that block a build (PK, not-null, accepted-values, relationships). These <code>dq_*</code> models run every build but <b>never block it</b> — queryable bad-row / drift tables. Decision rule: blocks the pipeline → a test; ongoing drift to monitor or quarantine → a <code>dq_</code> model.</p>
+
+  <div class="dq-grid">
+    <div class="dqc">
+      <div class="type">quarantine · view</div>
+      <h4>dq_quarantine_invalid_source</h4>
+      <div class="taps">stg_mysql__system_event_log · seed_app_sources</div>
+      <p>Events whose <code>source</code> isn't a known app code. In live data these are <b>scanner / bot payloads</b> — SQLi, XSS, path-traversal, SSRF probes logged into the source column. Excluded from <code>int_events_decoded</code>; captured here for security review. One row per quarantined event.</p>
+      <div class="sev"><span class="quar">bad-row table</span></div>
+    </div>
+
+    <div class="dqc">
+      <div class="type">audit · view</div>
+      <h4>dq_unmapped_event_codes</h4>
+      <div class="taps">int_events_decoded · seed_event_codes</div>
+      <p>Event codes present in the data but <b>absent from the dictionary</b> → null <code>function_name</code> / category downstream. Flags <code>is_well_formed_code</code> (real 8-digit gap vs junk) and <code>is_known_legacy</code> (obsolete codes intentionally excluded). One row per code, most frequent first.</p>
+      <div class="sev"><span class="quar">bad-row table</span></div>
+    </div>
+
+    <div class="dqc">
+      <div class="type">audit · view</div>
+      <h4>dq_unmatched_demand_skus</h4>
+      <div class="taps">int_item_demand_daily · int_jdawms_items</div>
+      <p>Demand-payload SKUs matching <b>no WMS item</b> (discontinued, unmirrored warehouse, master-data gaps). Keeps the <b>~11% payload loss</b> (measured 2026-07-13) visible instead of silently shrinking demand in <code>mart_item_demand_supply</code>. One row per SKU, most demand first.</p>
+      <div class="sev"><span class="quar">bad-row table</span></div>
+    </div>
+
+    <div class="dqc">
+      <div class="type">scorecard · view · tag:social</div>
+      <h4>dq_social_mentions</h4>
+      <div class="taps">stg_mentionlytics__mentions · raw source</div>
+      <p>One row per named check with count, %, severity: <code>null_mention_id</code>, <code>future_posted_at</code>, <code>implausible_old_posted_at</code>, <code>sentiment_skew_positive</code> (&gt; 90% ⇒ warn), <code>negative_metric</code> (Reddit net-score exception), <code>duplicate_mention_id_collapsed</code>. Phase 1 = structural only; spam / food-relevance / coverage checks land in Phase 2.</p>
+      <div class="sev"><span class="warn">warn</span><span class="info">info</span><span class="ok">ok</span></div>
+    </div>
+  </div>
+
+  <div class="sec-head"><h2>Run cadence</h2><span class="rule"></span></div>
+  <div class="cadence">
+    <div class="cad daily">
+      <div class="when">every day</div>
+      <div class="cmd">dbt build <span class="flag">--exclude tag:social</span></div>
+      <div class="desc">App-activity + WMS pipelines end to end — staging → intermediate → facts → demand-vs-supply marts — with all gate tests and DQ tables.</div>
+    </div>
+    <div class="cad weekly">
+      <div class="when">weekly · after parse + enrich</div>
+      <div class="cmd">dbt build <span class="flag">--select tag:social</span></div>
+      <div class="desc">Social branch only, once the offline scripts have populated <code>social.*</code>: dedupe mentions, join enrichment, rank trends, resolve SKUs, refresh the trending board.</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Generated from the ref() / source() graph · models/</span>
+    <span>staging = view · intermediate / facts / marts = table · dq = view</span>
+  </footer>
+</div>
+
+<script>
+const LAYERS = {
+  source: { c: 'var(--l-source)', label: 'Sources', gloss: 'raw feeds (read-only)' },
+  staging: { c: 'var(--l-staging)', label: 'Staging', gloss: '1:1 cleaned views' },
+  seed: { c: 'var(--l-seed)', label: 'Seeds', gloss: 'reference CSVs' },
+  int: { c: 'var(--l-int)', label: 'Intermediate', gloss: 'prepared tables' },
+  fact: { c: 'var(--l-fact)', label: 'Facts', gloss: 'event / order grain' },
+  mart: { c: 'var(--l-mart)', label: 'Marts', gloss: 'reporting tables' },
+};
+const COLS = ['Sources', 'Staging', 'Intermediate', 'Intermediate + Facts', 'Facts + Intermediate', 'Marts'];
+const PIPE = {
+  'event-log': 'app-log', 'wms': 'wms', 'social': 'social',
+  'cross-pipeline': 'cross', 'reference': 'ref',
+};
+
+const NODES = [
+  { id:'src_mysql', label:'mysql', desc:'App system-event log (MySQL)', col:0, layer:'source', pipe:'event-log', mat:'src', sub:'3 tbl', color:'#2563eb' },
+  { id:'src_jdawms', label:'jdawms (WMS)', desc:'Blue Yonder WMS (SQL Server)', col:0, layer:'source', pipe:'wms', mat:'src', sub:'16 tbl', color:'#dc2626' },
+  { id:'src_mnt', label:'Social Listening (mentionlytics)', desc:'Weekly raw export — 1 row = 1 post', col:0, layer:'source', pipe:'social', mat:'src', sub:'3 tbl', color:'#9333ea' },
+  { id:'seeds', label:'seeds', desc:'Dictionaries & code maps', col:0, layer:'seed', pipe:'reference', mat:'csv', color:'#d97706' },
+
+  { id:'stg_sel', label:'stg_mysql__system_event_log', desc:'Cleaned app events', col:1, layer:'staging', pipe:'event-log', mat:'view' },
+  { id:'stg_admin', label:'stg_mysql__admin_users', desc:'Sales reps / users', col:1, layer:'staging', pipe:'event-log', mat:'view' },
+  { id:'stg_jdawms', label:'stg_jdawms__*', desc:'16 WMS tables, cleaned 1:1', col:1, layer:'staging', pipe:'wms', mat:'view', sub:'16' },
+  { id:'stg_mnt_m', label:'stg_mentionlytics__mentions', desc:'Posts, deduped — still 1 row = 1 post', col:1, layer:'staging', pipe:'social', mat:'view' },
+  { id:'stg_mnt_e', label:'stg_mentionlytics__mention_enrichment', desc:"AI's read on each post: spam? dishes? mood?", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/enrich_mentions.py' },
+  // col 1, same as the other staging views: in dbt's actual graph this model
+  // ONLY reads source('mentionlytics','concept_resolution') — cast + dedupe,
+  // zero ref()s. Its real-world tie to int_trend/fct_soc/int_items happens a
+  // run earlier, inside the offline Python script — not a dbt dependency, so
+  // it does not belong in this acyclic graph. See the walkthrough below.
+  { id:'stg_mnt_r', label:'stg_mentionlytics__concept_resolution', desc:"AI's dish→product match — 1 row = 1 dish", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/resolve_trending_concepts.py' },
+
+  { id:'int_dec', label:'int_events_decoded', desc:'8-digit code + UTC decoded', col:2, layer:'int', pipe:'event-log', mat:'table' },
+  { id:'int_items', label:'int_jdawms_items', desc:'WMS item master + names', col:2, layer:'int', pipe:'wms', mat:'table' },
+  { id:'int_inv', label:'int_jdawms_inventory_daily', desc:'Daily on-hand / shippable', col:2, layer:'int', pipe:'wms', mat:'table' },
+  { id:'int_picks', label:'int_jdawms_sale_picks_daily', desc:'Daily picks / sales', col:2, layer:'int', pipe:'wms', mat:'table' },
+  { id:'int_soc_m', label:'int_social_mentions_enriched', desc:'Post + its AI tags, joined (still per post)', col:2, layer:'int', pipe:'social', mat:'table' },
+
+  { id:'int_enr', label:'int_events_enriched', desc:'Feature / outcome enrichment', col:3, layer:'int', pipe:'event-log', mat:'table' },
+  { id:'int_stock', label:'int_jdawms_stock_weekly', desc:'Weekly stock levels', col:3, layer:'int', pipe:'wms', mat:'table' },
+  { id:'fct_soc', label:'fct_social_mentions', desc:'Only genuine, non-spam posts', col:3, layer:'fact', pipe:'social', mat:'table' },
+
+  { id:'int_cycle', label:'int_rep_order_cycle', desc:'Rep order cycles from bursts', col:4, layer:'int', pipe:'event-log', mat:'table' },
+  { id:'int_dem', label:'int_item_demand_daily', desc:'Demand per SKU × day', col:4, layer:'int', pipe:'event-log', mat:'table' },
+  { id:'fct_events', label:'fct_events', desc:'One row per decoded event', col:4, layer:'fact', pipe:'event-log', mat:'table' },
+  { id:'fct_orders', label:'fct_orders', desc:'One row per submitted order', col:4, layer:'fact', pipe:'event-log', mat:'table' },
+  { id:'fct_cycles', label:'fct_order_cycles', desc:'One row per order cycle', col:4, layer:'fact', pipe:'event-log', mat:'table' },
+  { id:'int_trend', label:'int_social_concept_trends', desc:'Posts grouped into ranked dishes (per dish)', col:4, layer:'int', pipe:'social', mat:'table' },
+  { id:'mart_feat', label:'mart_feature_pairing', desc:'Weekly feature co-occurrence', col:4, layer:'mart', pipe:'event-log', mat:'table' },
+
+  { id:'mart_rep', label:'mart_rep_weekly', desc:'Weekly sales-rep scorecard', col:5, layer:'mart', pipe:'event-log', mat:'table' },
+  { id:'mart_cust', label:'mart_customer_weekly', desc:'Customer activity + churn', col:5, layer:'mart', pipe:'event-log', mat:'table' },
+  { id:'mart_journey', label:'mart_rep_order_journey', desc:'Rep order-journey detail', col:5, layer:'mart', pipe:'event-log', mat:'table' },
+  { id:'mart_ds', label:'mart_item_demand_supply', desc:'Weekly demand × WMS supply', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
+  { id:'mart_soc', label:'mart_social_trending_items', desc:'Top dishes: do we stock it? how much?', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
+];
+
+const EDGES = [
+  ['src_mysql','stg_sel'],['src_mysql','stg_admin'],
+  ['src_jdawms','stg_jdawms'],
+  ['src_mnt','stg_mnt_m'],['src_mnt','stg_mnt_e'],['src_mnt','stg_mnt_r'],
+  ['stg_sel','int_dec'],['seeds','int_dec'],
+  ['stg_jdawms','int_items'],['stg_jdawms','int_inv'],['stg_jdawms','int_picks'],['seeds','int_items'],
+  ['stg_mnt_m','int_soc_m'],['stg_mnt_e','int_soc_m'],
+  ['int_dec','int_enr'],['seeds','int_enr'],
+  ['int_inv','int_stock'],
+  ['int_soc_m','fct_soc'],
+  ['int_enr','int_cycle'],['int_enr','int_dem'],['int_enr','fct_events'],['int_enr','fct_orders'],
+  ['int_enr','fct_cycles'],['int_enr','mart_cust'],['int_enr','mart_feat'],
+  ['fct_soc','int_trend'],
+  ['fct_cycles','mart_rep'],['fct_orders','mart_rep'],['stg_admin','mart_rep'],
+  ['fct_cycles','mart_cust'],['fct_orders','mart_cust'],
+  ['int_cycle','mart_journey'],['fct_events','mart_journey'],
+  ['int_dem','mart_ds'],['int_inv','mart_ds'],['int_items','mart_ds'],
+  ['int_items','mart_soc'],['int_trend','mart_soc'],['stg_mnt_r','mart_soc'],['int_stock','mart_soc'],
+];
+
+// NOTE: resolve_trending_concepts.py (offline LLM) reads int_social_concept_trends
+// + fct_social_mentions + int_jdawms_items and writes social.concept_resolution —
+// but that happens a dbt run EARLIER, outside dbt entirely. It is not a ref()/
+// source() edge, so it is intentionally left out of this graph (a cycle drawn
+// into an acyclic dbt DAG misrepresents the architecture more than it clarifies
+// it). That out-of-band hop is walked through step-by-step in the section below.
+const ALL_EDGES = EDGES;
+
+// legend
+const legend = document.getElementById('legend');
+const LEGEND = [
+  { c:'#2563eb', label:'MySQL logs', gloss:'source' },
+  { c:'#dc2626', label:'WMS · SQL Server', gloss:'source' },
+  { c:'#9333ea', label:'Social Listening (mentionlytics)', gloss:'source' },
+  { c:'#d97706', label:'Seeds', gloss:'source · reference CSVs' },
+  { c:'var(--l-staging)', label:'Staging', gloss:'1:1 cleaned views' },
+  { c:'var(--l-int)', label:'Intermediate', gloss:'prepared tables' },
+  { c:'var(--l-fact)', label:'Facts', gloss:'event / order grain' },
+  { c:'var(--l-mart)', label:'Marts', gloss:'reporting tables' },
+];
+LEGEND.forEach(l => {
+  const d = document.createElement('div'); d.className = 'item';
+  d.innerHTML = `<span class="sw" style="--c:${l.c}"></span><b>${l.label}</b> — ${l.gloss}`;
+  legend.appendChild(d);
+});
+
+// build columns
+const colsEl = document.getElementById('cols');
+const byCol = {};
+NODES.forEach(n => { (byCol[n.col] = byCol[n.col] || []).push(n); });
+const nodeEls = {};
+const adj = {}, radj = {};
+ALL_EDGES.forEach(([a,b]) => { (adj[a]=adj[a]||[]).push(b); (radj[b]=radj[b]||[]).push(a); });
+
+// the 4 sources, and the transitive source(s) each downstream model derives from
+const SOURCES = {
+  src_mysql:  { c:'#2563eb', abbr:'MySQL', title:'MySQL logs' },
+  src_jdawms: { c:'#dc2626', abbr:'WMS',   title:'WMS · SQL Server' },
+  src_mnt:    { c:'#9333ea', abbr:'SL',    title:'Social Listening (mentionlytics)' },
+  seeds:      { c:'#d97706', abbr:'Seed',  title:'Seeds' },
+};
+const SRC_IDS = Object.keys(SOURCES);
+function sourcesOf(id) {
+  const seen = new Set(), hit = new Set(), stack = [...(radj[id] || [])];
+  while (stack.length) {
+    const n = stack.pop();
+    if (seen.has(n)) continue; seen.add(n);
+    if (SRC_IDS.includes(n)) hit.add(n);
+    (radj[n] || []).forEach(m => stack.push(m));
+  }
+  return SRC_IDS.filter(s => hit.has(s));   // stable source order
+}
+
+Object.keys(byCol).sort((a,b)=>a-b).forEach(ci => {
+  const col = document.createElement('div'); col.className = 'col';
+  const lab = document.createElement('div'); lab.className = 'col-label'; lab.textContent = COLS[ci];
+  col.appendChild(lab);
+  byCol[ci].forEach((n,i) => {
+    const el = document.createElement('div');
+    el.className = 'node'; el.dataset.id = n.id;
+    el.style.setProperty('--nc', n.color || LAYERS[n.layer].c);
+    if (window.matchMedia('(prefers-reduced-motion: no-preference)').matches)
+      el.style.animationDelay = (ci*0.05 + i*0.03) + 's';
+    const anc = sourcesOf(n.id);
+    const flags = anc.length
+      ? `<div class="srcflags">` + anc.map(s =>
+          `<span class="sflag" title="from ${SOURCES[s].title}"><i style="background:${SOURCES[s].c}"></i>${SOURCES[s].abbr}</span>`
+        ).join('') + `</div>`
+      : '';
+    el.innerHTML = `<div class="nm">${n.label}</div>
+      <div class="desc">${n.desc}</div>
+      <div class="mt"><span class="tag ${n.mat}">${n.mat}</span>
+      ${n.ai ? `<span class="tag ai" title="Built offline by an LLM script, not dbt">AI</span>` : ''}
+      ${n.sub ? `<span class="badge">${n.sub}</span>` : ''}</div>
+      ${n.ai ? `<div class="aisrc">via ${n.ai}</div>` : ''}
+      ${flags}`;
+    col.appendChild(el);
+    nodeEls[n.id] = el;
+  });
+  colsEl.appendChild(col);
+});
+
+// edges
+const svg = document.getElementById('edges');
+const inner = document.getElementById('dag');
+const paths = [];
+ALL_EDGES.forEach(([a,b]) => {
+  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('marker-end','url(#arrow)');
+  p.dataset.from = a; p.dataset.to = b;
+  svg.appendChild(p); paths.push(p);
+});
+
+function draw() {
+  const base = inner.getBoundingClientRect();
+  svg.setAttribute('width', inner.scrollWidth);
+  svg.setAttribute('height', inner.scrollHeight);
+  svg.setAttribute('viewBox', `0 0 ${inner.scrollWidth} ${inner.scrollHeight}`);
+  paths.forEach(p => {
+    const s = nodeEls[p.dataset.from].getBoundingClientRect();
+    const t = nodeEls[p.dataset.to].getBoundingClientRect();
+    const x1 = s.right - base.left, y1 = s.top - base.top + s.height/2;
+    const x2 = t.left - base.left,  y2 = t.top - base.top + t.height/2;
+    const dx = Math.max(28, (x2 - x1) * 0.45);
+    p.setAttribute('d', `M ${x1},${y1} C ${x1+dx},${y1} ${x2-dx},${y2} ${x2-4},${y2}`);
+  });
+}
+
+// hover isolate
+function related(id) {
+  const up = new Set(), down = new Set();
+  (function goUp(n){ (radj[n]||[]).forEach(m=>{ if(!up.has(m)){up.add(m); goUp(m);} }); })(id);
+  (function goDn(n){ (adj[n]||[]).forEach(m=>{ if(!down.has(m)){down.add(m); goDn(m);} }); })(id);
+  return { all: new Set([...up, ...down, id]) };
+}
+NODES.forEach(n => {
+  const el = nodeEls[n.id];
+  el.addEventListener('mouseenter', () => {
+    const r = related(n.id);
+    inner.classList.add('hovering');
+    Object.entries(nodeEls).forEach(([id,e]) => {
+      e.classList.toggle('lit', r.all.has(id));
+      e.classList.toggle('root', id === n.id);
+    });
+    paths.forEach(p => {
+      const hot = r.all.has(p.dataset.from) && r.all.has(p.dataset.to);
+      p.classList.toggle('hot', hot);
+      if (hot) { const fn = NODES.find(x=>x.id===p.dataset.from); p.style.stroke = fn.color || LAYERS[fn.layer].c; }
+      else p.style.stroke = '';
+    });
+  });
+  el.addEventListener('mouseleave', () => {
+    inner.classList.remove('hovering');
+    Object.values(nodeEls).forEach(e => e.classList.remove('lit','root'));
+    paths.forEach(p => { p.classList.remove('hot'); p.style.stroke=''; });
+  });
+});
+
+const ro = new ResizeObserver(() => requestAnimationFrame(draw));
+ro.observe(inner);
+window.addEventListener('resize', () => requestAnimationFrame(draw));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+requestAnimationFrame(draw);
+setTimeout(draw, 250);
+</script>
