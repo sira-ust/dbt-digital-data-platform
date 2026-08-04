@@ -52,8 +52,31 @@ import yaml
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
 
-ROOT = Path(__file__).resolve().parents[1]
-DBT_PROJECT_PATH = ROOT / "dbt_project.yml"
+def _find_dbt_project_path():
+    """Locate dbt_project.yml. Prefers a path relative to this script file,
+    but __file__ is NOT always defined — Databricks Python-script tasks run
+    this via exec(compile(...)) in a notebook-style wrapper, which never sets
+    __file__ in the exec'd globals, unlike a normal `python script.py` run or
+    module import. Falls back to searching upward from the current working
+    directory so the job doesn't crash on that difference."""
+    candidates = []
+    try:
+        candidates.append(Path(__file__).resolve().parents[1] / "dbt_project.yml")
+    except NameError:
+        pass
+    cur = Path.cwd()
+    for _ in range(6):
+        candidates.append(cur / "dbt_project.yml")
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0] if candidates else Path("dbt_project.yml")
+
+
+DBT_PROJECT_PATH = _find_dbt_project_path()
 
 
 def _dbt_var(name, default):
