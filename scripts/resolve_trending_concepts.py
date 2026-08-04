@@ -44,10 +44,31 @@ import sys
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
+
+ROOT = Path(__file__).resolve().parents[1]
+DBT_PROJECT_PATH = ROOT / "dbt_project.yml"
+
+
+def _dbt_var(name, default):
+    """Read a var from dbt_project.yml's vars: block — the SAME block
+    mart_social_trending_items.sql reads via {{ var(...) }} — so this script
+    and the mart share one source of truth instead of two independent
+    hardcoded numbers that can silently drift apart. Falls back to `default`
+    if the file is missing/malformed (e.g. the script ever runs standalone,
+    without the rest of the repo checked out alongside it)."""
+    try:
+        data = yaml.safe_load(DBT_PROJECT_PATH.read_text(encoding="utf-8"))
+        return data["vars"][name]
+    except Exception:
+        return default
+
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
 PROMPT_VERSION = "v4"                    # v4 = carried-first (inventory match wins over baskets)
@@ -57,7 +78,10 @@ CONCURRENCY = 4
 MAX_RETRIES = 8
 MAX_ATTEMPTS = 2
 BATCH_SIZE = 100
-TOP_N = 20                              # gate: resolve concepts at trend_rank <= this
+# gate: resolve concepts at trend_rank <= this. Reads dbt_project.yml's
+# social_trend_top_n — the same var the mart uses — instead of a second,
+# independent hardcoded "20" that could quietly drift from it.
+TOP_N = _dbt_var("social_trend_top_n", 20)
 SNIPPETS_PER_CONCEPT = 6               # representative mentions shown to the model
 SNIPPET_CHARS = 220
 
@@ -502,7 +526,8 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--backend", choices=["local", "databricks"], default="local")
     p.add_argument("--top-n", type=int, default=TOP_N,
-                   help=f"resolve concepts at trend_rank <= this (default {TOP_N})")
+                   help=f"resolve concepts at trend_rank <= this "
+                        f"(default {TOP_N}, from dbt_project.yml's social_trend_top_n)")
     p.add_argument("--limit", type=int, help="resolve at most N new concepts (smoke test)")
     p.add_argument("--concurrency", type=int, default=CONCURRENCY)
     p.add_argument("--duckdb", default=LOCAL_DUCKDB_PATH,
