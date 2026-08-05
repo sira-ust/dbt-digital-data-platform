@@ -193,7 +193,9 @@ models:
       trending, how hard, and is it rising (rank, mentions, score, is_rising); where
       to see it (source_links); do we carry it (result_type + matched item + CURRENT
       stock); if not, what similar to offer (recommended_items); and what to DO
-      (action_signal). Ranking is deterministic and VOLUME-forward; the concept->SKU
+      (action_signal). Ranking is deterministic and author-diversity based (see
+      int_social_concept_trends for trend_score's formula and trend_score_legacy for
+      the prior mention-volume version kept alongside for comparison); the concept->SKU
       link comes from the OFFLINE LLM resolution — dbt never calls the LLM. A concept
       the LLM hasn't scored stays 'unresolved'. The confidence floor
       (social_resolve_min_confidence) suppresses ANY low-confidence match — carried,
@@ -224,7 +226,7 @@ models:
           Item type — the LLM's judgment (dish/category/ingredient/product/brand)
           once resolved, else the ranking source (dish).
       - name: trend_rank
-        description: 1..social_trend_top_n; 1 = most trending (by window volume x engagement).
+        description: 1..social_trend_top_n; 1 = most trending (by trend_score desc; see int_social_concept_trends).
         tests: [not_null]
       - name: mention_count
         description: Distinct food-relevant, non-spam mentions behind the trend, over the window.
@@ -234,14 +236,36 @@ models:
         description: Views summed over those mentions.
       - name: trend_score
         description: >
-          Rank key — VOLUME-forward: mentions x (1 + log-dampened engagement boost +
-          views boost). See int_social_concept_trends.
+          Rank key — author-diversity based: distinct authors x (1 + log-dampened,
+          per-channel-normalised engagement boost + views boost). See
+          int_social_concept_trends for the full formula.
       - name: net_sentiment
         description: positives − negatives; a loud trend with negative buzz is not a promote.
       - name: is_rising
         description: True when the concept accelerated in the recent half of the window (secondary flag, not the rank).
       - name: source_links
         description: Array of the top mention URLs behind the trend (by reach then engagement).
+      - name: distinct_authors_adj
+        description: >
+          Distinct authors behind the trend (channel-scoped; anonymised Instagram rows each
+          count as their own unknown author). See int_social_concept_trends.
+      - name: author_quality
+        description: >
+          'verified' (broad enough real authorship to trust), 'repeat_poster' (would be here,
+          but one or few real accounts are driving it — excluded before trend_rank is assigned,
+          so it never reaches this board), or 'unverifiable' (too little non-anonymised signal
+          to judge — shown anyway, flag visible, rather than silently dropped). See
+          int_social_concept_trends.
+        tests:
+          # 'repeat_poster' is excluded upstream — never reaches this board, so never appears here
+          - accepted_values:
+              arguments:
+                values: ['verified', 'unverifiable']
+      - name: is_single_channel
+        description: >
+          True if this trend has only ever been seen on one platform. A dampener on trend_score,
+          not grounds for exclusion — single-platform trends (TikTok-only virality) are common
+          and legitimate. See int_social_concept_trends.
       - name: result_type
         description: >
           carried (we stock it), substitute (we don't, similar recommended), basket

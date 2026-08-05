@@ -87,6 +87,12 @@ joined as (
         t.net_sentiment,
         t.is_rising,
         t.source_links,
+        -- author-diversity trust signal, surfaced (not just computed internally) —
+        -- an 'unverifiable' concept stays on the board rather than being silently
+        -- dropped, but marketing should see why it couldn't be confirmed.
+        t.distinct_authors_adj,
+        t.author_quality,
+        t.is_single_channel,
         r.result_type                                                   as raw_result_type,
         r.matched_prtnum                                                as raw_matched_prtnum,
         r.recommended_prtnums,
@@ -168,6 +174,9 @@ select
     a.net_sentiment,
     a.is_rising,
     a.source_links,
+    a.distinct_authors_adj,
+    a.author_quality,
+    a.is_single_channel,
 
     -- do we carry it? (unresolved = the gate hasn't scored this concept yet)
     coalesce(a.result_type_adj, 'unresolved')                          as result_type,

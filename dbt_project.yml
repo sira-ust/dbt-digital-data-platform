@@ -82,6 +82,19 @@ vars:
   # int_social_concept_trends. The LLM resolver still reads brand context from each
   # concept's mention snippets.
 
+  # trend_score v2 (distinct_authors_adj-based, replacing pure mention-volume
+  # ranking) — see int_social_concept_trends. STARTING POINTS pending backtest,
+  # same as the legacy weights above were never re-tuned after launch:
+  social_trend_v2_engagement_weight: 5   # divisor on ln(1+engagement_norm); lower = quality moves rank more
+  social_trend_v2_views_weight: 10       # divisor on ln(1+views_norm)
+  social_trend_v2_single_channel_dampener: 0.85  # multiplier for channel_count < 2 (flag, not exclude —
+                                                  # confirmed only ~5% of the actual top-20 is single-channel,
+                                                  # so this is low-stakes either way; see Step 3 findings)
+  # author_quality thresholds (named/non-anonymised authors only — see
+  # int_social_concept_trends for why anonymised profiles can't use this test):
+  social_trend_v2_min_named_mentions: 5        # below this, too little signal to judge -> 'unverifiable'
+  social_trend_v2_max_mentions_per_named_author: 3  # above this among named authors -> 'repeat_poster', excluded
+
 
 
 # Layering:
