@@ -442,6 +442,17 @@ def resolve_one(client, catalog_block, concept, snippets):
                 messages=[{"role": "user",
                            "content": build_user_prompt(concept, snippets)}],
             )
+            # TEMP DIAGNOSTIC (remove after confirming whether the Databricks
+            # serving proxy honors cache_control — see cache_creation vs
+            # cache_read below; if cache_read stays 0 across the whole run,
+            # caching isn't taking effect and the catalog is being sent at
+            # full price on every call).
+            u = resp.usage
+            print(f"  [cache-check] {concept['concept_norm']!r}: "
+                  f"input={u.input_tokens} "
+                  f"cache_create={getattr(u, 'cache_creation_input_tokens', None)} "
+                  f"cache_read={getattr(u, 'cache_read_input_tokens', None)} "
+                  f"output={u.output_tokens}")
             text = next((b.text for b in resp.content if b.type == "text"), "")
             data = extract_json(text)
             if (data and _REQUIRED_KEYS.issubset(data)
