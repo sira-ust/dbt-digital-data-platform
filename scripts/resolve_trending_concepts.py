@@ -112,11 +112,11 @@ LOCAL_DUCKDB_PATH = "dev.duckdb"
 LOCAL_RESOLUTION_PATH = "data/mock/mentionlytics/concept_resolution.parquet"
 
 DBX_TRENDS_TABLE = "ust_databricks.ust_intermediate.int_social_concept_trends"
-DBX_ITEMS_TABLE = "ust_databricks.ust_intermediate.int_jdawms_items"
+DBX_ITEMS_TABLE = "ust_databricks.ust_intermediate.int_jdawms_items_active"
 DBX_FCT_TABLE = "ust_databricks.ust_facts.fct_social_mentions"
 DBX_RESOLUTION_TABLE = "ust_databricks.social.concept_resolution"
 DUCKDB_TRENDS_REL = "ust_intermediate.int_social_concept_trends"
-DUCKDB_ITEMS_REL = "ust_intermediate.int_jdawms_items"
+DUCKDB_ITEMS_REL = "ust_intermediate.int_jdawms_items_active"
 DUCKDB_FCT_REL = "ust_facts.fct_social_mentions"
 
 INSTRUCTIONS = """You map a TRENDING FOOD CONCEPT from Thai/Vietnamese social \

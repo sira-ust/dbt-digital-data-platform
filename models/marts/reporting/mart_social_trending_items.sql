@@ -38,10 +38,12 @@ resolution as (
 
 ),
 
+-- ACTIVE items only — a discontinued item is a bad "we carry this" or
+-- "here's a substitute" answer, even if it's still in the item master.
 items as (
 
     select prtnum, item_name, item_family
-    from {{ ref('int_jdawms_items') }}
+    from {{ ref('int_jdawms_items_active') }}
 
 ),
 

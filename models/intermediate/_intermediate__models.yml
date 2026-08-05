@@ -253,6 +253,22 @@ models:
       - name: receive_status
         description: Default receive inventory status (rcvsts; decode still open in the seed gaps).
 
+  - name: int_jdawms_items_active
+    description: >
+      int_jdawms_items filtered to items with at least one invsts = 'A'
+      (active) row in invsum, joined on prtnum only. prtmst/prtdsc carry
+      every item ever set up (~5.7k); invsum only carries items currently
+      tracked in the warehouse, so this is the "do we actually still sell
+      this" filter — use this, not int_jdawms_items, wherever a match/
+      recommendation is shown to a person (e.g. the social concept->SKU
+      resolver) and a discontinued item would be a bad answer.
+    config:
+      tags: ["jdawms", "wms"]
+    columns:
+      - name: prtnum
+        description: WMS item number. Equals the app-side sku (verified 99.9%).
+        tests: [not_null]
+
   - name: int_jdawms_sale_picks_daily
     description: >
       Sale-shipment picking demand, one row per item x pick date x temperature
