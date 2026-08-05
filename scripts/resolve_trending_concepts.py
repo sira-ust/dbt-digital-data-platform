@@ -172,7 +172,11 @@ confident-looking wrong match.
 
 Rules: every prtnum you output MUST exist in the catalog exactly; names line up \
 1:1 with prtnums. Judge on MEANING across Thai / Vietnamese / English, never on \
-keyword overlap."""
+keyword overlap. This applies to brand names too: a snippet's "brands" field is a \
+hint about WHERE people saw the item, not a match key — a shared brand/word between \
+a snippet and a catalog item name is meaningless unless the underlying PRODUCT is \
+genuinely the same kind of food (a brand called "XYZ" on a banh mi post does not \
+make "XYZ Noodles" a match)."""
 
 _REQUIRED_KEYS = {
     "canonical_label", "concept_type", "result_type", "matched_prtnum",
@@ -326,6 +330,7 @@ def bucket_snippets(mentions, wanted):
             "text": (m.get("snippet") or "").replace("\n", " ")[:SNIPPET_CHARS],
             "dishes": _norm_list(m.get("mentioned_dishes")),
             "ingredients": _norm_list(m.get("ingredients")),
+            "brands": _norm_list(m.get("brands")),
         }
         eng = m.get("engagement") or 0
         for cn in hit:
@@ -387,8 +392,11 @@ def _get_spark():
 def build_catalog_block(catalog):
     """Catalog reference, sent once as a cached system block.
 
-    TODO(scale): 5.7k rows is fine as one cached block. If it grows or matches get
-    noisy, shortlist per concept (family/lexical prefilter) and pass only candidates.
+    TODO(scale): ~2.5k active rows is fine as one cached block. If it grows, prefer
+    an EMBEDDING-based candidate shortlist over a lexical/brand-token prefilter — a
+    string-overlap shortlist can both drop the true match (different wording) and
+    keep a false one (e.g. "banh mi XYZ" token-matching "XYZ Noodles"), with no
+    broader catalog left for the model to notice the mismatch.
     """
     lines = [f"{c['prtnum']}\t{c.get('item_name')}\t{c.get('item_family')}"
              for c in catalog]
@@ -411,6 +419,8 @@ def build_user_prompt(concept, snippets):
             extra.append("dishes=" + ", ".join(s["dishes"][:6]))
         if s["ingredients"]:
             extra.append("ingredients=" + ", ".join(s["ingredients"][:8]))
+        if s["brands"]:
+            extra.append("brands=" + ", ".join(s["brands"][:6]))
         if extra:
             lines.append("      (" + "; ".join(extra) + ")")
     return "\n".join(lines)
