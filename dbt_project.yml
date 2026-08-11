@@ -144,6 +144,17 @@ models:
         # scripts/generate_jdawms_mock.py — run it once before dbt build).
         +materialized: view
         +tags: ["staging", "jdawms", "wms"]
+      # NAV ERP feed. Same Azure Blob ingestion as jdawms, but a separate source
+      # system: lands in its own UC schema (navrep) under its own dbt source
+      # (`nav`), so lineage/freshness/selection stay independent. duckdb reads
+      # mock parquet from data/mock/navrep/.
+      #
+      # Commented out until the first stg_nav__* model exists — dbt warns
+      # "unused configuration paths" for a config block that matches no models.
+      # Uncomment together with that first model.
+      # nav:
+      #   +materialized: view
+      #   +tags: ["staging", "nav", "erp"]
       mentionlytics:
         # Social-listening feed. Weekly xlsx drop → parquet via
         # scripts/convert_mentionlytics.py (run before dbt build); duckdb globs

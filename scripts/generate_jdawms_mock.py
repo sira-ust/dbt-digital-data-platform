@@ -2,9 +2,11 @@
 
 Reads data/uc_schema_snapshot.csv (produced once by scripts/snapshot_uc_schema.py)
 and emits one parquet per table into data/mock/ (git-ignored), mirroring the
-two real Unity Catalog schemas under ust_databricks:
+real Unity Catalog schemas under ust_databricks:
 
   data/mock/jdawmsrep/<table>.parquet  all 16 jdawmsrep tables (WMS replica)
+  data/mock/navrep/<table>.parquet     NAV ERP replica — generic filler, and only
+                                       once navrep appears in the snapshot
   data/mock/mysql/<table>.parquet      ust_admin_users, ust_category
                                        (the two mysql tables with no JSON sample)
 
@@ -35,7 +37,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = ROOT / "data" / "uc_schema_snapshot.csv"
 DICTIONARY = ROOT / "seeds" / "seed_jdawms_data_dictionary.csv"
 OUT_JDAWMS = ROOT / "data" / "mock" / "jdawmsrep"
+OUT_NAV = ROOT / "data" / "mock" / "navrep"
 OUT_MYSQL = ROOT / "data" / "mock" / "mysql"
+
+# navrep (NAV ERP) rows are type-correct filler only — no PK/FK awareness, because
+# no NAV keys or tests are declared yet. Once nav staging models land with unique/
+# relationship tests, give those tables ROWCOUNTS/KEYED entries like jdawmsrep.
+NAV_DEFAULT_ROWS = 200
 
 # ---------------------------------------------------------------------------
 # mine literal enumerated codes straight out of the SME dictionary comments,
@@ -277,6 +285,22 @@ def mock_mysql(schemas) -> None:
     print(f"mysql.ust_category: {len(df)} rows (from seed_categories)")
 
 
+def mock_nav(schemas) -> None:
+    """navrep (NAV ERP) — generic filler per table; no-op until the schema lands."""
+    tables = schemas.get("navrep")
+    if not tables:
+        print("navrep: not in the snapshot yet, skipped "
+              "(re-run scripts/snapshot_uc_schema.py once the ingestion lands it)")
+        return
+
+    OUT_NAV.mkdir(parents=True, exist_ok=True)
+    for table, cols in sorted(tables.items()):
+        n = ROWCOUNTS.get(table, NAV_DEFAULT_ROWS)
+        df = to_frame(table, cols, n, KEYED.get(table, {}))
+        df.to_parquet(OUT_NAV / f"{table}.parquet", index=False)
+        print(f"navrep.{table}: {len(df)} rows, {len(cols)} cols")
+
+
 def main() -> None:
     schemas = load_snapshot()
     OUT_JDAWMS.mkdir(parents=True, exist_ok=True)
@@ -285,6 +309,7 @@ def main() -> None:
         df = to_frame(table, cols, n, KEYED.get(table, {}))
         df.to_parquet(OUT_JDAWMS / f"{table}.parquet", index=False)
         print(f"jdawmsrep.{table}: {len(df)} rows, {len(cols)} cols")
+    mock_nav(schemas)
     mock_mysql(schemas)
 
 

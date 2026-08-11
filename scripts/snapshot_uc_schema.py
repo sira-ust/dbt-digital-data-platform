@@ -1,9 +1,16 @@
 """One-time snapshot of the Unity Catalog schema for local mock generation.
 
-Queries ust_databricks.information_schema.columns for the jdawmsrep and mysql
-schemas and writes data/uc_schema_snapshot.csv (git-tracked). This is the ONLY
-script that touches Databricks during development — everything downstream
+Queries ust_databricks.information_schema.columns for the jdawmsrep, navrep, and
+mysql schemas and writes data/uc_schema_snapshot.csv (git-tracked). This is the
+ONLY script that touches Databricks during development — everything downstream
 (scripts/generate_jdawms_mock.py, DuckDB dev runs) works from the snapshot.
+
+navrep is the NAV ERP feed. It arrives through the same Azure Blob ingestion as
+jdawmsrep but is a separate source system, so it lands in its own UC schema and
+is modelled under a separate dbt source (`nav`) — see
+models/staging/nav/_nav__sources.yml. The DLT pipeline landed navrep's 15 tables
+on 2026-08-11; this snapshot has not been refreshed since, so the committed CSV
+still predates them.
 
 Re-run only when the replica schema actually changes (new columns/tables).
 Requires DBT_DATABRICKS_TOKEN in the environment; host/http_path mirror
@@ -31,7 +38,7 @@ select
     full_data_type,
     is_nullable
 from ust_databricks.information_schema.columns
-where table_schema in ('jdawmsrep', 'mysql')
+where table_schema in ('jdawmsrep', 'navrep', 'mysql')
   -- exclude ingestion-pipeline internals (Lakeflow/DLT bookkeeping)
   and table_name not like '\\_\\_materialization%'
   and table_name not like 'event\\_log\\_%'
