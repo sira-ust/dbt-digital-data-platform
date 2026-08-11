@@ -48,6 +48,53 @@ vars:
   demand_supply_trend_ratio: 1.5        # this week's views vs prior-4-week avg = trending
   demand_supply_trend_min_base_views: 5 # prior-4-week avg floor so tiny bases don't trend
 
+  # dq_social_mentions thresholds
+  social_sentiment_skew_warn_pct: 90    # warn if positive share of non-null sentiment exceeds this
+  social_posted_at_floor_date: '2020-01-01'  # posted_at before this = implausible/suspect
+
+  # fct_social_mentions filter — drop a mention as spam only when the model is at
+  # least this confident, so a shaky spam call doesn't silently hide a real mention
+  social_spam_confidence_min: 0.7
+
+  # int_social_concept_trends / mart_social_trending_items — "currently trending"
+  # board. The mart is a SINGLE CURRENT SNAPSHOT of the top items over a trailing
+  # window of all mentions (not one calendar week), so a sustained trend keeps
+  # showing until it fades out of the window. Ranking is deterministic (pure social
+  # signal), VOLUME-forward; the LLM only resolves the top-N concepts to WMS SKUs,
+  # offline (scripts/resolve_trending_concepts.py).
+  social_trend_window_weeks: 4       # trailing window (weeks) of mentions = "currently trending"
+  social_trend_top_n: 20             # how many trending items the mart shows
+  social_trend_min_mentions: 2       # ignore concepts below this over the window (noise floor)
+  social_trend_link_count: 5         # source_links per concept — the top links by reach then engagement
+  # trend_score = mentions x (1 + ln(1+engagement)/eng_weight + ln(1+views)/views_weight).
+  # engagement = active reactions (likes+comments+shares); views tracked separately.
+  # Both log-dampened so one viral post can't dominate; a BIGGER weight = that signal
+  # matters LESS. Views weight > engagement weight: a view (passive) is worth less
+  # than a like/comment/share (active).
+  social_trend_engagement_weight: 10
+  social_trend_views_weight: 20
+  social_resolve_min_confidence: 0.7 # below this, ANY match (carried/substitute/basket) is suppressed
+                                     # (shown as none/source_new). Inventory wins only when confident — a
+                                     # 0.45 carried guess (sushi -> corn oil) is dropped like a shaky basket.
+  # The trending UNIT is mentioned_dishes only (the AI's specific-product signal).
+  # Ingredients (too generic) and brands (retailers / delivery platforms /
+  # influencers / restaurants — unbounded, none stockable) are NOT ranked; see
+  # int_social_concept_trends. The LLM resolver still reads brand context from each
+  # concept's mention snippets.
+
+  # trend_score v2 (distinct_authors_adj-based, replacing pure mention-volume
+  # ranking) — see int_social_concept_trends. STARTING POINTS pending backtest,
+  # same as the legacy weights above were never re-tuned after launch:
+  social_trend_v2_engagement_weight: 5   # divisor on ln(1+engagement_norm); lower = quality moves rank more
+  social_trend_v2_views_weight: 10       # divisor on ln(1+views_norm)
+  social_trend_v2_single_channel_dampener: 0.85  # multiplier for channel_count < 2 (flag, not exclude —
+                                                  # confirmed only ~5% of the actual top-20 is single-channel,
+                                                  # so this is low-stakes either way; see Step 3 findings)
+  # author_quality thresholds (named/non-anonymised authors only — see
+  # int_social_concept_trends for why anonymised profiles can't use this test):
+  social_trend_v2_min_named_mentions: 5        # below this, too little signal to judge -> 'unverifiable'
+  social_trend_v2_max_mentions_per_named_author: 3  # above this among named authors -> 'repeat_poster', excluded
+
 
 
 # Layering:
@@ -97,6 +144,30 @@ models:
         # scripts/generate_jdawms_mock.py — run it once before dbt build).
         +materialized: view
         +tags: ["staging", "jdawms", "wms"]
+      # NAV ERP feed. Same Azure Blob ingestion as jdawms, but a separate source
+      # system: lands in its own UC schema (navrep) under its own dbt source
+      # (`nav`), so lineage/freshness/selection stay independent. duckdb reads
+      # mock parquet from data/mock/navrep/.
+      #
+      # Commented out until the first stg_nav__* model exists — dbt warns
+      # "unused configuration paths" for a config block that matches no models.
+      # Uncomment together with that first model.
+      # nav:
+      #   +materialized: view
+      #   +tags: ["staging", "nav", "erp"]
+      mentionlytics:
+        # Social-listening feed. Weekly xlsx drop → parquet via
+        # scripts/convert_mentionlytics.py (run before dbt build); duckdb globs
+        # data/mock/mentionlytics/, databricks reads social.mentions. Staging is
+        # a view that dedupes weekly files on mention_id (latest loaded_at wins).
+        #
+        # SEPARATE CADENCE: all mentionlytics models (staging/int/fct/dq) are
+        # tagged 'social' and run WEEKLY, apart from the daily pipeline. The int
+        # and fct models add config(tags=['social']) in-SQL so the whole group
+        # selects together. Daily job: `dbt build --exclude tag:social`. Weekly
+        # job (after parse + enrich populate social.*): `dbt build --select tag:social`.
+        +materialized: view
+        +tags: ["staging", "mentionlytics", "social"]
 
 
 
@@ -160,7 +231,12 @@ seeds:
     # All code columns below are strings on purpose: staging models cast the
     # raw codes to string, and Databricks won't implicit-cast joins the way
     # DuckDB does.
+    # Disabled 2026-08-04: decodes tracking_report_event.categories_name — the
+    # same retired legacy stream as seed_tracking_*/seed_activity_* below.
+    # CSV stays as the dev team's verbatim reference; re-enable if the legacy
+    # stream is ever decoded again.
     seed_category_name_aliases:
+      +enabled: false
       +column_types:
         category_id: string
 
@@ -199,6 +275,14 @@ seeds:
       +enabled: false
       +column_types:
         method_code: string
+
+    # Same legacy table as seed_activity_types/seed_activity_methods above
+    # (user_activity_report_event) — disabled for consistency. Added 2026-07-22,
+    # after the 2026-07-08 retirement, so double-check with the dev team whether
+    # they intend to keep supplying value maps for a table dbt no longer stages
+    # before assuming this is dead for good.
+    seed_layout_codes:
+      +enabled: false
 
     # Disabled: not referenced via ref() anywhere — the jdawms glossary/mock
     # scripts read these CSVs directly from seeds/, not from a database table.

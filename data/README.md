@@ -16,6 +16,8 @@ data/
       ust_admin_users.parquet <- generated (no API export exists for these two)
       ust_category.parquet
     jdawmsrep/                <- generated, all 16 tables (no API export exists)
+    navrep/                   <- generated, NAV ERP tables (appears once the
+                                 navrep schema lands in the UC snapshot)
 ```
 
 `raw_api/` holds **real** exported API responses — it lives under `mock/`
@@ -67,11 +69,19 @@ tables, mirroring the two real schemas under `ust_databricks`:
 ```
 data/
   uc_schema_snapshot.csv          <- git-tracked; landed UC schema (16 jdawmsrep +
-                                     7 mysql ust_* tables). Refresh with
-                                     scripts/snapshot_uc_schema.py only when the
-                                     replica schema changes (the ONLY UC touch).
+                                     7 mysql ust_* tables; navrep once it lands).
+                                     Refresh with scripts/snapshot_uc_schema.py
+                                     only when the replica schema changes (the
+                                     ONLY UC touch).
   mock/
     jdawmsrep/<table>.parquet     <- 16 WMS tables, constraint-aware mock rows
+    navrep/<table>.parquet        <- NAV ERP tables. Same Azure Blob ingestion as
+                                     jdawmsrep but a separate source system, so a
+                                     separate UC schema and a separate dbt source
+                                     (`nav`). Mock is type-correct filler only —
+                                     no PK/FK awareness until nav staging models
+                                     declare tests. Nothing is emitted while
+                                     navrep is absent from the snapshot.
     mysql/
       raw_api/                    <- real API export (see Step 1 above);
                                      not generated, kept here as the

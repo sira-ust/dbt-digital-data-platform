@@ -1,0 +1,173 @@
+version: 2
+
+# Mentionlytics social-listening export. Raw column names are the snake_case
+# identifiers produced by scripts/convert_mentionlytics.py (which normalises the
+# 24 xlsx headers and adds the loaded_at / source_file lineage columns). All
+# casting, trimming, and cross-week dedupe happen in stg_mentionlytics__mentions.
+
+sources:
+  - name: mentionlytics
+    description: >
+      Mentionlytics social-listening feed — one row per mention across social and
+      web channels for the Thai / Vietnam Food & Beverages trackers. Ingested as a
+      weekly xlsx export (file-drop cadence), not an API. Target-dependent source:
+        DuckDB (dev):     external_location globs the weekly parquet in
+                          data/mock/mentionlytics/ (mentions_YYYYMMDD.parquet),
+                          produced by scripts/convert_mentionlytics.py.
+        Databricks (POC): reads the real social.mentions Delta table, appended one
+                          batch per weekly drop; external_location is ignored.
+      A mention_id can recur across weekly files (overlapping export windows); the
+      staging model keeps the latest by loaded_at. There is NO product key linking
+      mentions to WMS/mysql — social relates to those subject areas by shared
+      dimensions (week, market) and by AI/semantic matching at query time.
+    database: "{{ 'ust_databricks' if target.type == 'databricks' else target.database }}"
+    schema: "{{ 'social' if target.type == 'databricks' else 'temp_mentionlytics' }}"
+    config:
+      tags: ["raw", "mentionlytics", "social"]
+      meta:
+        access: read_only
+        source_system: mentionlytics
+    tables:
+      - name: mentions
+        identifier: "{{ 'mentions' if target.type == 'databricks' else 'temp_mentions' }}"
+        description: >
+          One row per social/web mention. On DuckDB the identifier is symbolic —
+          external_location globs all weekly parquet files so re-drops and
+          overlapping exports are unioned, then deduped downstream on mention_id.
+        config:
+          external_location: "read_parquet('data/mock/mentionlytics/mentions_*.parquet', union_by_name = true)"
+          loaded_at_field: loaded_at
+          freshness:
+            warn_after: {count: 8, period: day}   # weekly cadence — stale after ~8 days
+            error_after: {count: 21, period: day}
+        columns:
+          - name: id
+            description: Mentionlytics mention ID. Stable per mention across exports — the unique/dedup key.
+          - name: channel
+            description: Platform the mention came from (Web, Twitter, Youtube, TikTok, Bluesky, Reddit).
+          - name: category
+            description: Mentionlytics's own content type (Tweets, Youtube Comments, Websites, News…). NOT a product category.
+          - name: profile
+            description: Author handle, page, or domain that posted the mention.
+          - name: profile_visits_web_only
+            description: Estimated visits to the profile/domain. Web mentions only; null off Web. Source header "Profile Visits (Web only)".
+          - name: profile_users_web_only
+            description: Estimated unique users of the profile/domain. Web mentions only; null off Web. Source header "Profile Users (Web only)".
+          - name: language
+            description: Detected language code (th, en, id, vi, und…).
+          - name: followers_rank
+            description: >
+              OVERLOADED by channel — follower/subscriber count for social mentions,
+              but the Alexa domain rank for Web mentions (per the export's Notes
+              sheet). Never sum or average across channels. Source header "Followers/Rank".
+          - name: total_engagement
+            description: Total engagement (platform-defined). Frequently null. Source header "Total Engagement".
+          - name: total_engagement_with_views
+            description: Total engagement including views. Frequently null. Source header "Total Engagement with views".
+          - name: likes
+            description: Like/favourite count.
+          - name: comments
+            description: Comment/reply count.
+          - name: shares
+            description: Share/retweet count.
+          - name: views
+            description: View count (video/post).
+          - name: impressions
+            description: Impression count.
+          - name: date
+            description: Timestamp the mention was posted. Timezone unconfirmed — verify before week-bucketing. Source header "Date".
+          - name: sentiment
+            description: Mentionlytics sentiment label (positive/negative/neutral). Heavily skewed positive — validate before trusting.
+          - name: title
+            description: Mention title/headline (often null for social replies). Raw text preserved for downstream enrichment.
+          - name: content
+            description: Mention body/caption. Raw text preserved for downstream enrichment.
+          - name: country
+            description: ISO-2 country code inferred by Mentionlytics. ~59% null.
+          - name: location
+            description: Free-text author location string. Messy/unnormalised.
+          - name: tracker
+            description: The campaign/keyword group that captured the mention (Thai Food & Beverages, Vietnam Food & Beverages).
+          - name: keyword
+            description: The specific matched search term that captured the mention.
+          - name: link
+            description: URL of the original mention.
+          - name: loaded_at
+            description: Export/ingest timestamp added at convert time. Latest wins when a mention_id recurs across weekly files.
+          - name: source_file
+            description: Filename of the weekly xlsx the row came from (lineage; dedup tiebreak).
+
+      - name: mention_enrichment
+        identifier: "{{ 'mention_enrichment' if target.type == 'databricks' else 'temp_mention_enrichment' }}"
+        description: >
+          LLM-derived attributes per mention, produced OUT-OF-BAND by
+          scripts/enrich_mentions.py via the Databricks-hosted Claude serving
+          endpoint (databricks-claude-haiku-4-5). dbt only reads this — it never
+          calls the LLM. Keyed by mention_id (NOT a WMS key). Multi-label arrays
+          by design. On DuckDB reads the pulled sample parquet; on Databricks the
+          social.mention_enrichment Delta table (append-only; staging dedupes on
+          mention_id, latest enriched_at wins).
+        config:
+          external_location: "read_parquet('data/mock/mentionlytics/mention_enrichment.parquet')"
+        columns:
+          - name: mention_id
+            description: Mention this enrichment describes. Joins to mentions.id.
+          - name: is_food_relevant
+            description: True only if the mention is genuinely about food/beverages.
+          - name: is_spam
+            description: True for gambling/casino promos, unrelated ads, or bot content.
+          - name: themes
+            description: Multi-label broad topics (array of strings; empty if none).
+          - name: mentioned_dishes
+            description: Multi-label specific dishes named (array of strings).
+          - name: ingredients
+            description: Multi-label ingredients named (array of strings).
+          - name: brands
+            description: Multi-label brand / restaurant / product / retailer names (array of strings).
+          - name: sentiment_normalized
+            description: Model-judged sentiment (positive/negative/neutral), independent of the raw Mentionlytics label.
+          - name: confidence
+            description: Model's overall self-rated certainty, 0.0–1.0.
+          - name: enriched_at
+            description: When this row was classified (dedup tiebreak — latest wins).
+          - name: model_version
+            description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v1).
+
+      - name: concept_resolution
+        identifier: "{{ 'concept_resolution' if target.type == 'databricks' else 'temp_concept_resolution' }}"
+        description: >
+          LLM-resolved link from a trending social CONCEPT (a dish / ingredient /
+          brand token from int_social_concept_trends) to WMS item(s), produced
+          OUT-OF-BAND by scripts/resolve_trending_concepts.py. dbt only reads this
+          — it never calls the LLM. Keyed by concept_norm (the normalised concept
+          text), NOT a WMS key on the mention. Gated: the script resolves only the
+          top-N ranked concepts, so the long tail is intentionally absent (surfaces
+          as result_type 'unresolved' in the mart). Append-only; staging dedupes on
+          concept_norm, latest resolved_at wins. On DuckDB reads the local parquet;
+          on Databricks the social.concept_resolution Delta table.
+        config:
+          external_location: "read_parquet('data/mock/mentionlytics/concept_resolution.parquet')"
+        columns:
+          - name: concept_norm
+            description: Normalised concept text (lower+trim). Join key to int_social_concept_trends.concept_norm.
+          - name: canonical_label
+            description: >
+              LLM's canonical display name for the concept, merging cross-language
+              and spelling variants (som tam / ส้มตำ -> "Som Tam (green papaya salad)").
+              What the mart shows to marketing.
+          - name: concept_type
+            description: LLM's item-level judgment — dish / category / ingredient / product / brand (may refine the SQL-derived type).
+          - name: result_type
+            description: carried (we stock it) / substitute (we don't, here's similar) / basket (a dish/category, here are ingredients we carry) / none.
+          - name: matched_prtnum
+            description: WMS part number we carry for this concept (result_type='carried'); null otherwise.
+          - name: recommended_prtnums
+            description: Array of WMS part numbers — substitutes (result_type='substitute') or the ingredient basket (result_type='basket').
+          - name: recommended_item_names
+            description: Array of display names parallel to recommended_prtnums (the LLM saw the catalog, so it carries names for the human-facing export).
+          - name: match_confidence
+            description: LLM's confidence in the resolution, 0.0–1.0.
+          - name: resolved_at
+            description: When this concept was resolved (dedup tiebreak — latest wins).
+          - name: model_version
+            description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v1).

@@ -1,0 +1,135 @@
+version: 2
+
+models:
+  - name: stg_mentionlytics__mentions
+    description: >
+      Lossless 1:1 staging for Mentionlytics mentions. One row per mention_id
+      (latest export wins — rerunnable dedupe over the weekly file drops). Cast,
+      trim, and rename to analytics-friendly names; all 24 source fields plus the
+      loaded_at / source_file lineage columns are preserved. No sentiment
+      normalisation or LLM enrichment — that lives in the intermediate layer.
+    columns:
+      - name: mention_id
+        description: Mentionlytics mention ID. Unique key; dedup grain (latest loaded_at wins). Source column `id`.
+        tests: [unique, not_null]
+      - name: channel
+        description: Platform (Web, Twitter, Youtube, TikTok, Bluesky, Reddit).
+        tests: [not_null]
+      - name: mention_category
+        description: Mentionlytics content type (Tweets, Youtube Comments, Websites…). Not a product category. Source column `category`.
+      - name: profile
+        description: Author handle, page, or domain.
+      - name: profile_visits
+        description: Profile/domain visits (Web mentions only; null off Web). Source column `profile_visits_web_only`.
+      - name: profile_users
+        description: Profile/domain unique users (Web mentions only; null off Web). Source column `profile_users_web_only`.
+      - name: language
+        description: Detected language code (th, en, id, vi, und…).
+      - name: followers_or_rank
+        description: >
+          Overloaded by channel — follower count for social, Alexa domain rank for
+          Web. Never aggregate across channels. Source column `followers_rank`.
+      - name: total_engagement
+        description: Total engagement (platform-defined). Frequently null.
+      - name: total_engagement_with_views
+        description: Total engagement including views. Frequently null.
+      - name: likes
+        description: Like/favourite count.
+      - name: comments
+        description: Comment/reply count.
+      - name: shares
+        description: Share/retweet count.
+      - name: views
+        description: View count.
+      - name: impressions
+        description: Impression count.
+      - name: posted_at
+        description: Timestamp the mention was posted. Timezone unconfirmed — verify before week-bucketing. Source column `date`.
+      - name: sentiment
+        description: Mentionlytics sentiment label (positive/negative/neutral). Heavily skewed positive — validate.
+      - name: title
+        description: Mention title/headline (often null for social replies). Raw — preserved for enrichment.
+      - name: content
+        description: Mention body/caption. Raw — preserved for enrichment.
+      - name: country
+        description: ISO-2 country code (~59% null).
+      - name: location
+        description: Free-text author location. Messy/unnormalised.
+      - name: tracker
+        description: Campaign/keyword group (Thai Food & Beverages, Vietnam Food & Beverages).
+      - name: keyword
+        description: Specific matched search term.
+      - name: link
+        description: URL of the original mention.
+      - name: loaded_at
+        description: Export/ingest timestamp. Latest wins in the dedupe.
+        tests: [not_null]
+      - name: source_file
+        description: Weekly xlsx filename the row came from (lineage; dedup tiebreak).
+
+  - name: stg_mentionlytics__mention_enrichment
+    description: >
+      Lossless staging for the LLM enrichment (produced by
+      scripts/enrich_mentions.py). One row per mention_id — the enrichment table
+      is append-only, so re-enrichment of the same mention is deduped here
+      (latest enriched_at wins). Cast + dedupe only; multi-label arrays pass
+      through unchanged. dbt never calls the LLM.
+    columns:
+      - name: mention_id
+        description: Mention this row describes. Unique key; joins to stg_mentionlytics__mentions.mention_id.
+        tests: [unique, not_null]
+      - name: is_food_relevant
+        description: True only if genuinely about food/beverages.
+      - name: is_spam
+        description: True for gambling/casino promos, unrelated ads, or bot content.
+      - name: themes
+        description: Multi-label broad topics (array).
+      - name: mentioned_dishes
+        description: Multi-label specific dishes (array).
+      - name: ingredients
+        description: Multi-label ingredients (array).
+      - name: brands
+        description: Multi-label brand / restaurant / product / retailer names (array).
+      - name: sentiment_normalized
+        description: Model-judged sentiment (positive/negative/neutral), independent of the raw label.
+      - name: confidence
+        description: Model self-rated certainty, 0.0–1.0.
+      - name: enriched_at
+        description: Classification time (dedup tiebreak).
+      - name: model_version
+        description: Model + prompt version (e.g. databricks-claude-haiku-4-5/v1).
+
+  - name: stg_mentionlytics__concept_resolution
+    description: >
+      Lossless staging for the concept->SKU resolution (produced by
+      scripts/resolve_trending_concepts.py). One row per concept_norm — the source
+      is append-only, so a re-resolution is deduped here (latest resolved_at wins).
+      Cast + dedupe only; the recommended_* arrays pass through unchanged. dbt
+      never calls the LLM. Only the top-N ranked concepts are resolved (gated), so
+      this covers a small set by design.
+    columns:
+      - name: concept_norm
+        description: Normalised concept text. Unique key; joins to int_social_concept_trends.concept_norm.
+        tests: [unique, not_null]
+      - name: canonical_label
+        description: LLM canonical display name, merging cross-language/spelling variants.
+      - name: concept_type
+        description: LLM item-level type — dish / category / ingredient / product / brand.
+      - name: result_type
+        description: carried / substitute / basket / none.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [carried, substitute, basket, none]
+      - name: matched_prtnum
+        description: WMS part number we carry for this concept (result_type='carried'); null otherwise.
+      - name: recommended_prtnums
+        description: Array of WMS part numbers — substitutes or the ingredient basket.
+      - name: recommended_item_names
+        description: Array of display names parallel to recommended_prtnums.
+      - name: match_confidence
+        description: LLM confidence in the resolution, 0.0–1.0.
+      - name: resolved_at
+        description: When this concept was resolved (dedup tiebreak — latest wins).
+      - name: model_version
+        description: Model + prompt version that produced it.
