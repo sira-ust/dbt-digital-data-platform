@@ -305,7 +305,14 @@ def main() -> None:
     schemas = load_snapshot()
     OUT_JDAWMS.mkdir(parents=True, exist_ok=True)
     for table, cols in sorted(schemas["jdawmsrep"].items()):
-        n = ROWCOUNTS[table]
+        # A table in the replica that ROWCOUNTS has never heard of is worth
+        # saying out loud, not crashing on: it means the snapshot picked up
+        # something new (or something orphaned in the wrong schema).
+        if table not in ROWCOUNTS:
+            print(f"jdawmsrep.{table}: NOT in ROWCOUNTS - unexpected table, "
+                  f"generating {NAV_DEFAULT_ROWS} filler rows. Add a ROWCOUNTS/KEYED "
+                  f"entry if it is real, or drop it in UC if it is an orphan.")
+        n = ROWCOUNTS.get(table, NAV_DEFAULT_ROWS)
         df = to_frame(table, cols, n, KEYED.get(table, {}))
         df.to_parquet(OUT_JDAWMS / f"{table}.parquet", index=False)
         print(f"jdawmsrep.{table}: {len(df)} rows, {len(cols)} cols")

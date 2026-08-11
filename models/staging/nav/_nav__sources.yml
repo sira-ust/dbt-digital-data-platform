@@ -1,27 +1,48 @@
 version: 2
 
 # NAV ERP source. Shares the Azure Blob ingestion with jdawmsrep — the nav_*
-# folders sit INSIDE abfss://staging@ustsqlrep.../jdawmsrep/ — but NAV is a
-# DIFFERENT source system, so the DLT pipeline publishes it to its own UC schema
-# (navrep) and dbt models it under its own source name (`nav`): separate lineage,
-# freshness, docs, and job selection.
+# folders sit INSIDE abfss://staging@ustsqlrep.dfs.core.windows.net/jdawmsrep —
+# but NAV is a DIFFERENT source system, so the DLT pipeline publishes it to its
+# own UC schema (navrep) and dbt models it under its own source name (`nav`):
+# separate lineage, freshness, docs, and job selection.
 #
 # The blob FOLDER keeps its nav_ prefix (nav_item); the landed UC TABLE drops it
-# (navrep.item), so names don't stutter. That means no `identifier:` is needed
-# here. If the prefix is ever kept in UC, add `identifier: nav_<name>` per table.
+# (navrep.item), so no `identifier:` is needed here.
 #
-# COLUMNS ARE NOT DECLARED YET — navrep is not in data/uc_schema_snapshot.csv, so
-# the column lists and per-column docs are still open. Table names below come
-# from the DLT pipeline's NAV_FULL_LOAD_TABLES list, so refs and selection work
-# now; every table description is PROVISIONAL (inferred from the table name) and
-# needs confirming against NAV before it is trusted or shown to users.
-# To finish:
-#   1. python scripts/snapshot_uc_schema.py   (only UC touch; navrep is included)
-#   2. python scripts/generate_jdawms_mock.py (emits data/mock/navrep/*.parquet)
-#   3. add `columns:` per table, and replace the provisional descriptions.
+# Columns and types below are TRANSCRIBED FROM THE REAL REPLICA
+# (data/uc_schema_snapshot.csv, refreshed 2026-08-11 — 231 columns / 15 tables).
 #
-# All NAV tables are FULL LOAD (latest runDate replaces the table), so `loaddate`
-# advances on every pipeline run — freshness measures the pipeline, not row age.
+# These are a CURATED SUBSET, not whole NAV tables. The Azure Data Factory job
+# that writes the blob issues an explicit SELECT per table, aliasing NAV's native
+# names (`[Sell-to Customer No_]` -> sell_to_customer_no) and taking only the
+# listed columns. So a column that is missing here is missing because ADF does not
+# select it — the fix is in the ADF config, NOT in dbt. Source tables are the
+# `U_S_ Trading Co_$*` SQL tables in dbo.
+#
+# DESCRIPTIONS ARE NOT SME-VERIFIED. There is no NAV data dictionary yet (the
+# WMS side has seed_jdawms_data_dictionary; NAV has nothing equivalent). Standard
+# NAV/Business Central fields are described from that convention; anything
+# genuinely ambiguous is marked CONFIRM and left honest rather than guessed.
+# persist_docs pushes these strings to UC comments, so treat an unmarked
+# description as "probably right", not "verified".
+#
+# All NAV tables are FULL LOAD: the pipeline keeps only the latest runDate, so
+# `loaddate` advances on every run and freshness measures the PIPELINE, not row
+# age. The ADF queries carry NO WHERE clause, so each export IS a complete dump
+# of the source table — full load loses nothing at the ingestion layer, and the
+# rolling-window worry is settled.
+#
+# What DOES limit history is NAV itself: `Sales Header` / `Sales Line` hold OPEN,
+# UNPOSTED documents. Once an order is posted, NAV moves it to the posted-document
+# tables (Sales Invoice Header / Sales Shipment Header), which ADF does NOT export.
+# So sales_header is a live snapshot of in-flight orders, not an order history —
+# see the sales_header description below.
+#
+# Two conventions across every table:
+#   * int columns holding 0/1 are NAV booleans (BC stores Boolean as an int).
+#   * decimal(38,20) is the landed type for every numeric measure — NAV decimals
+#     widened by the parquet export, NOT a claim of 20-digit precision. Cast down
+#     in staging.
 
 sources:
   - name: nav
@@ -40,8 +61,12 @@ sources:
                           Catalog access needed for local development.
       Kept apart from the `jdawms` source on purpose: WMS answers "where is the
       stock and who moved it", NAV answers "what was ordered, priced, and sold".
-      Joins between the two belong in the intermediate layer, where the key
-      mapping can be documented and tested — not hidden in staging.
+      NAV sits BETWEEN the website and the WMS, and carries keys into both:
+      sales_header.m2_* / customer.m2_* point at Magento (the website), and the
+      jda_* columns record the handoff to JDA (the WMS). That makes this source
+      the most promising bridge for the order-grain join the WMS mirror alone
+      could not support. Those joins belong in the intermediate layer, where the
+      key mapping can be documented and tested — not hidden in staging.
     database: "{{ 'ust_databricks' if target.type == 'databricks' else target.database }}"
     schema: "{{ 'navrep' if target.type == 'databricks' else 'temp_navrep' }}"
     config:
@@ -49,138 +74,684 @@ sources:
       meta:
         access: read_only
         source_system: nav
-        doc_status: provisional   # table descriptions inferred from names; no NAV
-                                  # data dictionary seeded yet
+        doc_status: unverified   # real columns; descriptions not SME-confirmed
     tables:
-      # ── master data ────────────────────────────────────────────────────────
+
+      # ═══ master data ═══════════════════════════════════════════════════════
       - name: customer
-        description: "PROVISIONAL — NAV customer master (blob folder nav_customer). Candidate link to mysql ust_customer_no / jdawms stcust; confirm the key before joining."
+        description: >
+          NAV customer master — one row per customer_no. Carries BOTH cross-system
+          customer keys: customer_no (the ERP/WMS code, already confirmed equal to
+          mysql ust_customer_no and jdawms stcust) and m2_customer_id (Magento).
+          Also holds the weekday delivery pattern and routing/zone attributes.
         config:
           external_location: "read_parquet('data/mock/navrep/customer.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: customer_no
+            description: "Customer number — the PK. Same code as mysql ust_customer_no and jdawms pckwrk_dtl.stcust (confirmed exact, no normalisation)."
+          - name: name
+            description: "Customer name."
+          - name: name_2
+            description: "Customer name, second line."
+          - name: address
+            description: "Street address."
+          - name: city
+            description: "City."
+          - name: global_dimension_1_code
+            description: "NAV global dimension 1 — the tenant's primary analysis dimension. CONFIRM what it means here (commonly department or region)."
+          - name: global_dimension_2_code
+            description: "NAV global dimension 2 — secondary analysis dimension. CONFIRM local meaning."
+          - name: customer_posting_group
+            description: "Posting group driving which GL receivables accounts this customer posts to."
+          - name: customer_price_group
+            description: "Price group governing which price list applies to this customer."
+          - name: payment_terms_code
+            description: "Payment terms (e.g. net days)."
+          - name: salesperson_code
+            description: "Salesperson who owns the account. Joins to sales_quota_line.salesperson_code, and candidate join to mysql ust_admin_users.salesperson_code."
+          - name: shipment_method_code
+            description: "Shipment method / incoterm-style delivery arrangement."
+          - name: shipping_agent_code
+            description: "Carrier. Candidate join to the jdawms carcod value map (seed_jdawms_code_descriptions, domain carcod) — CONFIRM the code systems actually agree."
+          - name: country_region_code
+            description: "Country/region code."
+          - name: payment_method_code
+            description: "Payment method."
+          - name: gen_bus_posting_group
+            description: "General business posting group — the customer side of NAV's GL posting matrix."
+          - name: post_code
+            description: "Postal/ZIP code."
+          - name: county
+            description: "County, or state/province in US-style addresses. Candidate join to state_zone.state_code — CONFIRM, since NAV's county field is free text."
+          - name: responsibility_center
+            description: "Responsibility centre — the location/branch owning the customer relationship."
+          - name: shipping_agent_service_code
+            description: "Carrier service level within shipping_agent_code."
+          - name: monday_deliveries
+            description: "Boolean (0/1) — customer accepts Monday deliveries. The seven weekday flags together are the delivery-day pattern."
+          - name: tuesday_deliveries
+            description: "Boolean (0/1) — accepts Tuesday deliveries."
+          - name: wednesday_deliveries
+            description: "Boolean (0/1) — accepts Wednesday deliveries."
+          - name: thursday_deliveries
+            description: "Boolean (0/1) — accepts Thursday deliveries."
+          - name: friday_deliveries
+            description: "Boolean (0/1) — accepts Friday deliveries."
+          - name: saturday_deliveries
+            description: "Boolean (0/1) — accepts Saturday deliveries."
+          - name: sunday_deliveries
+            description: "Boolean (0/1) — accepts Sunday deliveries."
+          - name: in_active
+            description: "Boolean (0/1) — NOTE THE POLARITY: 1 means INACTIVE, not active. Filter accordingly."
+          - name: shipping_zone
+            description: "Shipping zone. Coexists with ship_zone below — CONFIRM which is authoritative before using either."
+          - name: appointment_required
+            description: "Boolean (0/1) — delivery needs a booked appointment. Pairs with sales_header.appt_required."
+          - name: m2_customer_id
+            description: "Magento customer entity id. The website-side customer key — the bridge from NAV to Magento customer records."
+          - name: m2_customer
+            description: "Boolean-ish int — CONFIRM: most likely a flag for 'this customer exists / is synced in Magento', not an id."
+          - name: jda_route
+            description: "Delivery route as sent to JDA (the WMS). Routing attribute shared with the WMS handoff."
+          - name: m2_setup_dt
+            description: "When the customer was set up in Magento."
+          - name: ship_zone
+            description: "Shipping zone — coexists with shipping_zone above. Candidate join to state_zone.zone_code; CONFIRM which of the two is live."
+          - name: customer_group
+            description: "Customer group/segment. CONFIRM whether this is a NAV grouping or a Magento customer-group mirror."
+          - name: loaddate
+            description: "Ingestion watermark — set to the pipeline run time. Full load, so this advances every run regardless of whether the row changed."
 
       - name: customer_ethnicity
-        description: "PROVISIONAL — customer ethnicity attribute/segment per customer (blob folder nav_customer_ethnicity)."
+        description: >
+          Ethnicity mix per customer — grain customer_no + ethnicity, with a
+          percentage allocation. Likely drives assortment/targeting for an ethnic
+          food wholesaler. Handle as demographic data: useful for assortment
+          analysis, but keep it out of anything customer-facing.
         config:
           external_location: "read_parquet('data/mock/navrep/customer_ethnicity.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: customer_no
+            description: "Customer this row describes. Joins to customer.customer_no."
+          - name: ethnicity
+            description: "Ethnicity code. NO DECODE IS AVAILABLE in this source — the codes stay as raw values, so expect them unresolved in any output."
+          - name: selected
+            description: "Boolean (0/1) — CONFIRM: most likely 'this ethnicity is flagged for the customer', letting allocation_pct be 0 while still selected."
+          - name: allocation_pct
+            description: "Share of the customer's mix for this ethnicity. NAV source column is [Allocation %], so expect a 0-100 percentage rather than a 0-1 fraction — confirm whether rows sum to 100 per customer."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: item
-        description: "PROVISIONAL — NAV item master (blob folder nav_item). The ERP-side item; jdawms prtmst is the WMS-side item. Confirm which key ties them."
+        description: >
+          NAV item master — one row per item_no. The ERP-side item, where jdawms
+          prtmst is the WMS-side item; item_no is the same SKU code as
+          prtmst.prtnum (already confirmed exact against the website sku). This is
+          also the table holding real item names, families, and web-merchandising
+          flags — the catalog attributes local dev.duckdb lacks.
         config:
           external_location: "read_parquet('data/mock/navrep/item.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: item_no
+            description: "Item number — the PK. Same SKU code as jdawms prtmst.prtnum and the website sku (confirmed exact)."
+          - name: description
+            description: "Item name, short form. The primary human-readable label."
+          - name: base_unit_of_measure
+            description: "Stocking UOM all quantities are expressed in. Compare with jdawms prtftp_dtl.uomcod."
+          - name: inventory_posting_group
+            description: "Posting group driving which GL inventory accounts the item posts to."
+          - name: gross_weight
+            description: "Gross weight per base UOM. CONFIRM the unit (lb vs kg) — not encoded in the column."
+          - name: blocked
+            description: "Boolean (0/1) — 1 blocks the item from transacting. Combine with new_item/show_on_web to judge what is genuinely sellable."
+          - name: gen_prod_posting_group
+            description: "General product posting group — the item side of NAV's GL posting matrix."
+          - name: country_region_of_origin_code
+            description: "Country of origin."
+          - name: global_dimension_1_code
+            description: "NAV global dimension 1 on the item. CONFIRM local meaning."
+          - name: global_dimension_2_code
+            description: "NAV global dimension 2 on the item. CONFIRM local meaning."
+          - name: item_category_code
+            description: "Item category. Joins to item_category.item_category_code. NAV's own taxonomy — NOT the website taxonomy in seed_categories, and the two must never be merged."
+          - name: product_group_code
+            description: "Product group within the category. Joins to product_group (grain item_category_code + product_group_code)."
+          - name: upc_code_1
+            description: "Primary UPC barcode. Also exposed per-UOM as item_unit_of_measure.upc_1."
+          - name: show_on_web
+            description: "Boolean (0/1) — item is published to the website. The ERP-side gate on web assortment; pairs naturally with the website demand signals."
+          - name: new_item
+            description: "Boolean (0/1) — flagged as new. CONFIRM how long the flag persists; it is a manual attribute, not a derived age."
+          - name: popular_item
+            description: "Boolean (0/1) — merchandised as popular. A MANUAL buyer flag, not a computed velocity measure — do not treat as ground truth for demand (item_category has the velocity flags)."
+          - name: hi
+            description: "Pallet pattern HI — layers high per pallet. With ti, gives the pallet build; cs_per_pallet should equal hi x ti."
+          - name: ti
+            description: "Pallet pattern TI — cases per layer (tier)."
+          - name: cs_per_pallet
+            description: "Cases per pallet. Expected to equal hi x ti — a cheap DQ check once staged."
+          - name: basic_uom_size
+            description: "Size descriptor for the base UOM, as text (e.g. a pack size). Free text, not a number."
+          - name: case_qty
+            description: "Units per case."
+          - name: innerpack_qty
+            description: "Units per inner pack. Compare with jdawms invdtl.untpak."
+          - name: ea_qty
+            description: "Each quantity — CONFIRM: likely units per 'each', normally 1 unless the item is sold as a multiple."
+          - name: size_unit
+            description: "Unit for the size attributes (oz, g, ml…)."
+          - name: item_family_no
+            description: "Item family grouping. The real family key — local dev.duckdb only has synthetic families, so family analysis needs the Databricks target or a refreshed mock."
+          - name: app_banner
+            description: "Boolean-ish int — CONFIRM: most likely 'feature this item in an app banner slot'. Merchandising, not inventory."
+          - name: m2_last_sync_dt
+            description: "When the item was last synced to Magento. Staleness signal for website/ERP catalog drift."
+          - name: body_description
+            description: "Long marketing copy for the item."
+          - name: attributes1_flavor
+            description: "Flavour attribute."
+          - name: attributes2_size_other
+            description: "Size/other attribute."
+          - name: attributes3_package
+            description: "Packaging attribute."
+          - name: full_description
+            description: "Full item name — the richest label available. Prefer over description for anything user-facing."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: item_category
-        description: "PROVISIONAL — NAV item category hierarchy (blob folder nav_item_category). Distinct from seed_categories, which is the website taxonomy."
+        description: >
+          NAV item category — one row per item_category_code, with the ABC-style
+          velocity flags (fast/good/average/slow) applied at category level.
+          Distinct from seed_categories, which is the WEBSITE taxonomy; the two
+          numbering systems are unrelated and must not be merged.
         config:
           external_location: "read_parquet('data/mock/navrep/item_category.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: item_category_code
+            description: "Category code — the PK. Joins to item.item_category_code."
+          - name: description
+            description: "Category name."
+          - name: def_inventory_posting_group
+            description: "Default inventory posting group inherited by items in this category."
+          - name: fast_item
+            description: "Boolean (0/1) — category classed as fast-moving. The four velocity flags look mutually exclusive; worth a DQ test that exactly one is set."
+          - name: good_item
+            description: "Boolean (0/1) — good-moving."
+          - name: average_item
+            description: "Boolean (0/1) — average-moving."
+          - name: slow_item
+            description: "Boolean (0/1) — slow-moving. Compare against jdawms abccod, which classifies at ITEM level for cycle counting — different grain, possibly different intent."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: item_unit_of_measure
-        description: "PROVISIONAL — UOM definitions and conversion factors per item (blob folder nav_item_unit_of_measure). NAV's analogue of jdawms prtftp_dtl."
+        description: >
+          UOM definitions per item — grain item_no + uom_code, carrying the
+          physical dimensions and weight of each packaging level. NAV's analogue
+          of jdawms prtftp_dtl / ftpmst, so a natural place to cross-check the
+          WMS footprint data.
         config:
           external_location: "read_parquet('data/mock/navrep/item_unit_of_measure.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: item_no
+            description: "Item this UOM belongs to. Joins to item.item_no."
+          - name: uom_code
+            description: "UOM code (EA, CS, PLT…). With item_no, the grain."
+          - name: length
+            description: "Length of this UOM. CONFIRM the unit — not encoded in the column."
+          - name: width
+            description: "Width of this UOM."
+          - name: height
+            description: "Height of this UOM."
+          - name: weight
+            description: "Weight of this UOM. Reconcile against item.gross_weight for the base UOM."
+          - name: size
+            description: "Size descriptor, as text."
+          - name: upc_1
+            description: "UPC barcode for this specific UOM (a case has a different barcode from an each)."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: product_group
-        description: "PROVISIONAL — NAV product group grouping above/beside item category (blob folder nav_product_group)."
+        description: >
+          Product group within an item category — grain item_category_code +
+          product_group_code, the level below item_category. Repeats the same four
+          velocity flags at this finer grain.
         config:
           external_location: "read_parquet('data/mock/navrep/product_group.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: item_category_code
+            description: "Parent category. Joins to item_category.item_category_code."
+          - name: product_group_code
+            description: "Product group code. With item_category_code, the grain — NOT unique on its own, so always join on both."
+          - name: description
+            description: "Product group name."
+          - name: good_item
+            description: "Boolean (0/1) — good-moving at product-group level."
+          - name: average_item
+            description: "Boolean (0/1) — average-moving."
+          - name: slow_item
+            description: "Boolean (0/1) — slow-moving."
+          - name: fast_item
+            description: "Boolean (0/1) — fast-moving."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: state_zone
-        description: "PROVISIONAL — state-to-zone geography mapping for territory/shipping logic (blob folder nav_state_zone)."
+        description: >
+          State-to-zone mapping — one row per state_code, giving the delivery zone
+          a state belongs to. Small reference table; a natural seed candidate if it
+          turns out to be static.
         config:
           external_location: "read_parquet('data/mock/navrep/state_zone.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: state_code
+            description: "State/province code — the PK."
+          - name: state_name
+            description: "State name."
+          - name: zone_code
+            description: "Delivery zone the state belongs to. Candidate join to customer.ship_zone / shipping_zone."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
-      # ── calendar ───────────────────────────────────────────────────────────
+      # ═══ calendar ══════════════════════════════════════════════════════════
       - name: holiday_calendar
-        description: "PROVISIONAL — holiday calendar header: named holidays and their dates (blob folder nav_holiday_calendar). Likely useful for seasonality in the demand marts."
+        description: >
+          Holiday calendar — grain holiday_year + holiday_occasion, with the
+          promotional window (begin_period to end_period) for each occasion. The
+          ERP's own seasonality definition, which beats deriving seasons from
+          transaction dates for a business this holiday-driven.
         config:
           external_location: "read_parquet('data/mock/navrep/holiday_calendar.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: holiday_year
+            description: "Year the occasion belongs to. With holiday_occasion, the grain — occasions repeat annually with shifting dates (lunar calendars especially)."
+          - name: begin_period
+            description: "Start of the holiday/promotional window."
+          - name: end_period
+            description: "End of the window. Windows may overlap across occasions — check before treating as a clean partition of the year."
+          - name: holiday_occasion
+            description: "Numeric occasion code. Meaning comes from `description`; a value map is worth seeding once the distinct set is known."
+          - name: description
+            description: "Occasion name (the human label for holiday_occasion)."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: holiday_item
-        description: "PROVISIONAL — items associated with a holiday (blob folder nav_holiday_item). Holiday-driven assortment; pairs with holiday_calendar."
+        description: >
+          Items promoted for a holiday occasion — grain holiday_year + item_no +
+          holiday_occasion, with the planned promo quantity. The buyer's demand
+          expectation, which is a genuine forecast to compare actual sales against.
         config:
           external_location: "read_parquet('data/mock/navrep/holiday_item.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: holiday_year
+            description: "Year. Joins to holiday_calendar with holiday_occasion."
+          - name: item_no
+            description: "Item promoted. Joins to item.item_no."
+          - name: holiday_occasion
+            description: "Occasion code. Joins to holiday_calendar.holiday_occasion."
+          - name: promo_qty
+            description: "Planned promotional quantity. CONFIRM the UOM (base vs cases) before comparing to sales_line.quantity."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
-      # ── promotions ─────────────────────────────────────────────────────────
+      # ═══ promotions ════════════════════════════════════════════════════════
       - name: promotion_header
-        description: "PROVISIONAL — promotion header: one row per promotion with its validity window (blob folder nav_promotion_header)."
+        description: >
+          Promotion header — one row per promo_code with its validity window.
+          Sourced from NAV's `AFP Promotion Header` (promo_code is its [Code]).
         config:
           external_location: "read_parquet('data/mock/navrep/promotion_header.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: promo_code
+            description: "Promotion code — the PK."
+          - name: description
+            description: "Promotion name."
+          - name: promo_begin_date
+            description: "Promotion start."
+          - name: promo_end_date
+            description: "Promotion end."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: promotion_line
-        description: "PROVISIONAL — promotion lines: the items/prices a promotion applies to (blob folder nav_promotion_line). FULL LOAD — confirm the export carries full history, not a rolling window."
+        description: >
+          Promotion lines — the items on a promotion, with holiday linkage and
+          lifecycle flags. From NAV's `AFP Promotion Line`. WARNING: this table has
+          BOTH `promotion_code` ([Promotion Code]) and `promo_code` ([Promo Code]).
+          These are two genuinely distinct NAV fields, not an ingestion artefact,
+          and only one is the real join to promotion_header.promo_code ([Code]) —
+          resolve which before modelling.
         config:
           external_location: "read_parquet('data/mock/navrep/promotion_line.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: promotion_code
+            description: "Promotion code. CONFIRM against promo_code below — two near-identical columns, likely one legacy and one live."
+          - name: item_no
+            description: "Item on promotion. Joins to item.item_no."
+          - name: promotion_group_code
+            description: "Grouping within the promotion. CONFIRM meaning."
+          - name: campaign_target_qty
+            description: "Target quantity for the campaign. Compare with holiday_item.promo_qty — CONFIRM whether they are the same planning number by another name."
+          - name: new_on_promotion
+            description: "Boolean (0/1) — newly added to the promotion."
+          - name: promo_begin_date
+            description: "Line-level promotion start. May differ from the header window — check before assuming the header governs."
+          - name: promo_end_date
+            description: "Line-level promotion end."
+          - name: promo_code
+            description: "Promotion code. The likelier join to promotion_header.promo_code, on name alone — CONFIRM against promotion_code."
+          - name: holiday_occasion
+            description: "Occasion this promotion serves. Joins to holiday_calendar with holiday_year."
+          - name: holiday_year
+            description: "Holiday year for the occasion link."
+          - name: discontinued
+            description: "Boolean (0/1) — line discontinued."
+          - name: released
+            description: "Boolean (0/1) — line released/active. With discontinued, the lifecycle gate on whether a promo line counts."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
-      # ── sales ──────────────────────────────────────────────────────────────
+      # ═══ sales ═════════════════════════════════════════════════════════════
       - name: sales_header
         description: >
-          PROVISIONAL — sales order header, one row per order (blob folder
-          nav_sales_header). This is the most likely home for the order-header
-          link that WMS lacks; verify against the outstanding `ord` mirror ask
-          before building on it. FULL LOAD — confirm the export carries full
-          history, not a rolling window, or history is lost on every run.
+          Sales order header — grain document_type + document_no. THE CROSS-SYSTEM
+          BRIDGE: m2_order_no / m2_entity_id carry the Magento (website) order
+          keys, and the jda_* columns record what was handed to JDA (the WMS),
+          which makes this the strongest candidate for the order-grain join the WMS
+          mirror alone could not support. Verify the m2 keys against the website's
+          increment_id / entity_id before building on it.
+
+          CRITICAL LIMITATION — NOT AN ORDER HISTORY. NAV's `Sales Header` holds
+          OPEN, UNPOSTED documents only. When an order is posted it MOVES to the
+          posted-document tables (Sales Invoice Header / Sales Shipment Header),
+          which the ADF job does not export. So this is a live snapshot of in-flight
+          orders that shrinks as orders complete, and the full-load strategy is
+          correct for that. Anything needing completed-order history needs the
+          posted tables added to the ADF export first. Check row count and
+          order_date range against expected volume to confirm before modelling.
         config:
           external_location: "read_parquet('data/mock/navrep/sales_header.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: document_type
+            description: "NAV document type as an int. Part of the PK — document_no is NOT unique on its own. CONFIRM the enum; standard NAV is Quote/Order/Invoice/Credit Memo/Blanket/Return Order, and the numbering must be verified rather than assumed."
+          - name: document_no
+            description: "NAV order number. With document_type, the PK. This is the ERP order id — distinct from both the Magento order number and the WMS ordnum."
+          - name: sell_to_customer_no
+            description: "Customer placing the order. Joins to customer.customer_no, and thus to jdawms stcust and mysql ust_customer_no."
+          - name: bill_to_name
+            description: "Bill-to name."
+          - name: bill_to_address
+            description: "Bill-to street address."
+          - name: bill_to_city
+            description: "Bill-to city."
+          - name: ship_to_code
+            description: "Ship-to address code on the customer record — identifies WHICH of a customer's addresses this order ships to."
+          - name: ship_to_name
+            description: "Ship-to name."
+          - name: ship_to_address
+            description: "Ship-to street address."
+          - name: ship_to_city
+            description: "Ship-to city."
+          - name: order_date
+            description: "Date the order was placed. The natural spine date for order-grain analysis, and the one to pair with website event timestamps."
+          - name: posting_date
+            description: "GL posting date — an accounting date, not an operational one. Do not use for demand timing."
+          - name: shipment_date
+            description: "Planned shipment date."
+          - name: shipment_method_code
+            description: "Shipment method for this order."
+          - name: location_code
+            description: "NAV location/warehouse fulfilling the order. IMPORTANT for the known single-warehouse limitation: the jdawms mirror only covers CABOT, so this column should reveal how much volume ships from unmirrored sites."
+          - name: customer_posting_group
+            description: "Customer posting group snapshotted onto the order."
+          - name: salesperson_code
+            description: "Salesperson owning the order. Candidate join to mysql ust_admin_users.salesperson_code."
+          - name: gen_bus_posting_group
+            description: "General business posting group snapshotted onto the order."
+          - name: bill_to_post_code
+            description: "Bill-to postal code."
+          - name: bill_to_county
+            description: "Bill-to county/state."
+          - name: bill_to_country_region_code
+            description: "Bill-to country/region."
+          - name: ship_to_post_code
+            description: "Ship-to postal code."
+          - name: ship_to_county
+            description: "Ship-to county/state. Candidate join to state_zone.state_code."
+          - name: ship_to_country_region_code
+            description: "Ship-to country/region."
+          - name: prepayment_pct
+            description: "Prepayment percentage required."
+          - name: responsibility_center
+            description: "Responsibility centre owning the order."
+          - name: requested_delivery_date
+            description: "Delivery date the customer asked for. Against actual shipment, this is the service-level yardstick the WMS mirror lacked (jdawms shipment.dlv_dte is 0% populated)."
+          - name: shipping_time
+            description: "Transit time. Stored as text, not an interval."
+          - name: shipping_agent_service_code
+            description: "Carrier service level."
+          - name: pda_order_no
+            description: "Order number from the PDA channel. `PDA` is one of the app sources in seed_app_sources — a candidate channel-attribution key. CONFIRM."
+          - name: date_received
+            description: "Date the order was received into NAV. With time_received, reconstructs the intake timestamp."
+          - name: time_received
+            description: "Time the order was received — a SEPARATE column from date_received (NAV splits date and time). Combine both to get a real timestamp."
+          - name: date_sent
+            description: "Date the order was sent onward (to the WMS). With time_sent, the handoff timestamp."
+          - name: time_sent
+            description: "Time the order was sent onward."
+          - name: ship_with_prepayment
+            description: "Boolean (0/1) — ship only with prepayment."
+          - name: order_weight_jda_sent
+            description: "Order weight as sent to JDA (the WMS). A jda_* column: evidence of the ERP-to-WMS handoff for this order."
+          - name: order_cubage_jda_sent
+            description: "Order cube as sent to JDA."
+          - name: order_cubage_mix_est
+            description: "Estimated mixed-pallet cube."
+          - name: pallet_count_total
+            description: "Total pallets on the order."
+          - name: pallet_count_override
+            description: "Manual override of the pallet count. A non-null/non-zero value means someone corrected the calculation."
+          - name: pick_priority
+            description: "Picking priority passed to the warehouse. Candidate comparison against jdawms pckwrk_hdr sequencing."
+          - name: jda_last_sent_dt
+            description: "When the order was last sent to JDA. The cleanest ERP-side timestamp of the WMS handoff — use it to bound the search window when pairing NAV orders to WMS picks."
+          - name: lift_gate_required
+            description: "Boolean (0/1) — delivery needs a lift gate."
+          - name: hot_rush_local
+            description: "Boolean (0/1) — local rush order."
+          - name: appt_required
+            description: "Boolean (0/1) — delivery appointment required. Pairs with customer.appointment_required."
+          - name: handle_with_care
+            description: "Boolean (0/1) — fragile handling."
+          - name: order_weight_fz_est
+            description: "Estimated weight of the frozen portion. `fz` = frozen; pairs with sales_line.is_frozen_item."
+          - name: order_cubage_fz_est
+            description: "Estimated cube of the frozen portion."
+          - name: pickup_date
+            description: "Customer pickup date, for will-call orders. Compare with jdawms carcod CPU01 = CUSTOMER PICKUP."
+          - name: pickup_time
+            description: "Customer pickup time."
+          - name: qty_override
+            description: "Boolean (0/1) — quantities were manually overridden."
+          - name: override_oos
+            description: "Boolean (0/1) — out-of-stock block was overridden. DIRECTLY RELEVANT to the demand-vs-supply mart: it marks orders taken despite no stock, which is a stockout the WMS side cannot see."
+          - name: update_jda_ship_qty
+            description: "Boolean (0/1) — flag controlling whether shipped quantities flow back from JDA."
+          - name: m2_order_no
+            description: "Magento order number. STRONG CANDIDATE for the website increment_id — the order key missing from every other source. Verify against the website's order table before relying on it."
+          - name: m2_order
+            description: "Boolean-ish int — CONFIRM: likely a flag for 'this order originated in / is synced with Magento', which would make it the channel discriminator between web and non-web orders."
+          - name: m2_entity_id
+            description: "Magento order entity id (the website's internal surrogate key). Together with m2_order_no, the pair that could finally close the order-grain link."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: sales_line
         description: >
-          PROVISIONAL — sales order lines: item, quantity, price per order line
-          (blob folder nav_sales_line). The ERP-side demand signal, next to the
-          website behavioural signal in int_item_demand_daily. FULL LOAD — same
-          history caveat as sales_header.
+          Sales order lines — grain document_type + document_no + line_no, with
+          ordered / shipped / invoiced quantities per item. The ERP-side demand
+          signal, alongside the website behavioural signal in
+          int_item_demand_daily, and the first source here that shows ORDERED
+          quantity (jdawms pckqty is planned-pick, not customer-ordered). Carries
+          the SAME open-documents-only limitation as sales_header: lines vanish when
+          their order posts, so this is in-flight demand, not sales history.
         config:
           external_location: "read_parquet('data/mock/navrep/sales_line.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: sell_to_customer_no
+            description: "Customer, denormalised onto the line. Joins to customer.customer_no."
+          - name: document_type
+            description: "Document type — part of the join back to sales_header. Same enum caveat."
+          - name: document_no
+            description: "Order number. With document_type and line_no, the PK; with document_type alone, the join to sales_header."
+          - name: line_no
+            description: "Line number within the order."
+          - name: line_type
+            description: >
+              NAV [Type] — what KIND of line this is. Standard NAV options are
+              blank/comment, G/L Account, Item, Resource, Fixed Asset and Charge,
+              so this column decides which rows are real product demand. CONFIRM
+              the integer for Item before filtering; everything downstream that
+              counts demand depends on getting it right.
+          - name: item_no
+            description: >
+              NAV [No_] — the identifier of whatever the line points at. It is an
+              ITEM NUMBER ONLY WHEN line_type is Item; on other line types it holds
+              a G/L account, resource, or charge code instead. Always filter on
+              line_type before joining to item.item_no or jdawms prtnum.
+          - name: location_code
+            description: "Location fulfilling the line. May differ from the header location."
+          - name: posting_group
+            description: "Posting group on the line."
+          - name: description
+            description: "Item description snapshotted at order time — may differ from today's item.description, which makes it useful for historical naming."
+          - name: unit_of_measure
+            description: "UOM name as text. Coexists with unit_of_measure_code below; prefer the code for joins."
+          - name: gross_weight
+            description: "Line gross weight."
+          - name: unit_volume
+            description: "Volume per unit."
+          - name: quantity
+            description: "Quantity ORDERED. The true customer demand number, and the thing the WMS mirror could not provide — allocation cuts become visible as quantity minus quantity_shipped."
+          - name: quantity_shipped
+            description: "Quantity actually shipped. Below quantity means a short-ship or cut."
+          - name: quantity_invoiced
+            description: "Quantity invoiced. Usually tracks shipped; a gap points at billing state, not fulfilment."
+          - name: gen_bus_posting_group
+            description: "General business posting group on the line."
+          - name: gen_prod_posting_group
+            description: "General product posting group on the line."
+          - name: prepayment_pct
+            description: "Prepayment percentage on the line."
+          - name: unit_of_measure_code
+            description: "UOM code. Joins to item_unit_of_measure (item_no + uom_code) — REQUIRED to normalise quantity, since lines can be ordered in cases while stock is tracked in eaches."
+          - name: responsibility_center
+            description: "Responsibility centre on the line."
+          - name: item_category_code
+            description: "Category snapshotted onto the line. Joins to item_category."
+          - name: product_group_code
+            description: "Product group snapshotted onto the line."
+          - name: requested_delivery_date
+            description: "Requested delivery date at line level."
+          - name: return_qty_to_receive
+            description: "Quantity expected back on a return."
+          - name: return_reason_code
+            description: "NAV return reason code. Candidate for a seed value map."
+          - name: is_frozen_item
+            description: "Boolean (0/1) — frozen item. Drives the fz weight/cube estimates on the header."
+          - name: original_qty
+            description: "Quantity before amendment. Against `quantity`, this exposes order editing — CONFIRM when NAV populates it."
+          - name: ust_return_reason
+            description: "UST-specific return reason (a customisation, not standard NAV). Candidate for a seed value map; ask the dev team for the code list."
+          - name: override_oos
+            description: "Boolean (0/1) — out-of-stock override at line level. The line-grain version of the header flag, and the more precise stockout signal."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: sales_quota_header
-        description: "PROVISIONAL — sales quota/target header, likely per salesperson and period (blob folder nav_sales_quota_header)."
+        description: >
+          Sales quota header — one row per quota_code with its period and an active
+          flag. Targets, not actuals.
         config:
           external_location: "read_parquet('data/mock/navrep/sales_quota_header.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: quota_code
+            description: "Quota code — the PK."
+          - name: begin_date
+            description: "Quota period start."
+          - name: end_date
+            description: "Quota period end."
+          - name: active
+            description: "Boolean (0/1) — quota is active. NOTE the opposite polarity to customer.in_active."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
 
       - name: sales_quota_line
-        description: "PROVISIONAL — sales quota lines: the target amounts behind a quota header (blob folder nav_sales_quota_line)."
+        description: >
+          Sales quota lines — grain quota_code + item_no + salesperson_code, giving
+          the target quantity per salesperson per item. Pairs with sales_line
+          actuals for attainment reporting.
         config:
           external_location: "read_parquet('data/mock/navrep/sales_quota_line.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
+        columns:
+          - name: quota_code
+            description: "Quota this line belongs to. Joins to sales_quota_header.quota_code."
+          - name: item_no
+            description: "Item the target applies to. Joins to item.item_no."
+          - name: salesperson_code
+            description: "Salesperson the target applies to. Joins to sales_header.salesperson_code and, likely, mysql ust_admin_users.salesperson_code."
+          - name: quota_quantity
+            description: "Target quantity. CONFIRM the UOM before comparing to sales_line.quantity."
+          - name: order_quota_qty
+            description: "A second quota measure — CONFIRM how it differs from quota_quantity (plausibly order-count vs unit target, but do not assume)."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
