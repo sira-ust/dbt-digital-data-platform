@@ -123,16 +123,33 @@ days as (
 -- which returned [NULL, 'M000000002']) and array_agg(DISTINCT ...) is not
 -- reliably portable. A resubmit logs the same increment_id twice; distinct
 -- collapses it.
+-- order_channel splits orders the rep BUILT from orders that ARRIVED for him
+-- to process. Verified on the real mirror 2026-08-13, a perfect split with no
+-- crossover: the "Order List/Detail: Customer" codes carry only WEB (1,030)
+-- and APP (946) orders, the "Sales" codes only PDA (8,795). So Customer/Sales
+-- in the dev team's event names is WHO PLACED the order, not which screen —
+-- a customer orders online, it lands with their rep, and his device logs
+-- receiving it. That is why a customer-day can hold an order with 0 keying
+-- minutes: there was nothing for him to key.
 day_orders as (
 
     select
         customer_day_key,
         count(*)                                                         as orders_submitted,
-        array_agg(increment_id)                                          as order_ids
+        array_agg(increment_id)                                          as order_ids,
+        sum(case when order_channel = 'PDA'          then 1 else 0 end)  as orders_keyed,
+        sum(case when order_channel in ('WEB','APP') then 1 else 0 end)  as orders_received
     from (
-        select distinct customer_day_key, increment_id
-        from visit_events
-        where is_submit and increment_id is not null
+        -- fct_orders is unique on increment_id, so this cannot fan out
+        select distinct
+            v.customer_day_key,
+            v.increment_id,
+            o.order_channel
+        from visit_events as v
+        left join {{ ref('fct_orders') }} as o
+            on o.increment_id = v.increment_id
+        where v.is_submit
+          and v.increment_id is not null
     ) as deduped
     group by customer_day_key
 
@@ -172,6 +189,8 @@ select
     d.last_touch_local,
 
     coalesce(o.orders_submitted, 0)                                      as orders_submitted,
+    coalesce(o.orders_keyed, 0)                                          as orders_keyed,
+    coalesce(o.orders_received, 0)                                       as orders_received,
     o.order_ids,
     d.event_count,
 

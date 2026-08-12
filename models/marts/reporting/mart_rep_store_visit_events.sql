@@ -27,27 +27,32 @@ with visit_events as (
 )
 
 select
-    customer_day_key,
-    entity_id,
+    e.customer_day_key,
+    e.entity_id,
 
-    sales_code,
-    customer_key,
-    visit_date,
+    e.sales_code,
+    e.customer_key,
+    e.visit_date,
 
-    login_seq,
-    event_seq,
-    event_at_local,
-    seconds_since_prev_event,
+    e.login_seq,
+    e.event_seq,
+    e.event_at_local,
+    e.seconds_since_prev_event,
 
-    device,
-    description_code,
-    function_name,
-    feature_name,
-    page_context,
+    e.device,
+    e.description_code,
+    e.function_name,
+    e.feature_name,
+    e.page_context,
 
-    is_add,
-    is_remove,
-    is_qty_change,
-    is_submit,
-    increment_id
-from visit_events
+    e.is_add,
+    e.is_remove,
+    e.is_qty_change,
+    e.is_submit,
+    e.increment_id,
+    -- PDA = the rep keyed it; WEB / APP = the customer placed it and it
+    -- arrived for him to process. Null on non-submit rows.
+    o.order_channel
+from visit_events as e
+left join {{ ref('fct_orders') }} as o
+    on o.increment_id = e.increment_id

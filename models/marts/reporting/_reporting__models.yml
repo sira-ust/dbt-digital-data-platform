@@ -93,8 +93,21 @@ models:
         description: Last work event on this customer that day, rep local time.
       - name: orders_submitted
         description: >
-          Distinct increment_ids submitted (EXACT, the submit event names its
-          order). 0 is legitimate: the rep worked the customer without sending.
+          Distinct orders on this customer-day (EXACT). Total of orders_keyed +
+          orders_received. Note the name is loose: ~28% of these the CUSTOMER
+          placed online and the rep received to process, so "handled" is nearer
+          the truth than "submitted".
+      - name: orders_keyed
+        description: >
+          Orders the rep BUILT on the PDA (order_channel = PDA). These are the
+          ones keying_minutes actually measures.
+      - name: orders_received
+        description: >
+          Orders the CUSTOMER placed online (order_channel WEB or APP) that
+          landed with this rep to process. Verified as a clean split with no
+          crossover: the dev team's "Customer" event codes carry only WEB/APP
+          orders, the "Sales" codes only PDA. This is why a customer-day can
+          hold an order with 0 keying_minutes — there was nothing to key.
       - name: order_ids
         description: The increment_ids submitted; NULL when none were sent.
       - name: event_count
@@ -164,6 +177,10 @@ models:
         description: True on the one event per order that actually sent it.
       - name: increment_id
         description: Order number. Populated on submit rows only; exact.
+      - name: order_channel
+        description: >
+          PDA = the rep keyed it; WEB / APP = the customer placed it online and
+          it arrived for the rep to process. Null on non-submit rows.
 
   - name: mart_customer_weekly
     description: >
