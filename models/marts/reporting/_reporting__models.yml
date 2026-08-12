@@ -29,24 +29,32 @@ models:
       - name: avg_days_to_close
         description: Average calendar days from first cycle event to submit (approximate).
 
-  - name: mart_rep_store_visits
+  - name: mart_rep_customer_activity
     description: >
       One row per REP x CUSTOMER x DAY. "On Monday rep 001 worked these 6
-      stores, spending this many minutes keying on each, at these times, and
-      sent these orders." 6 stores on Monday = 6 rows; keying_minutes is the
-      per-store time; logged_in_at is the "at x time, x time".
-      NOT A ROUTE: this aggregates app usage per customer and makes no claim
-      about physical presence or the order the rep worked in. Sessions for
+      customers, spending this many minutes keying on each, at these times, and
+      sent these orders." 6 customers on Monday = 6 rows; keying_minutes is the
+      per-customer time; logged_in_at is the "at x time, x time".
+      NAMED ACTIVITY, NOT VISITS, on purpose: this measures APP USAGE and
+      cannot tell you the rep was physically there. GPS was profiled 2026-08-13
+      and cannot close the gap — only 44% of fixes land within a quarter mile
+      of the customer's median location (p90 is 244 miles, since a customer
+      stays selected while the rep drives away), so at best 17.7% of
+      customer-days could be confirmed on-site. Physical presence needs an
+      explicit check-in event from the app team. Also CUSTOMER, not "store":
+      NAV flags these accounts as MFG, Food Service, Wholesale, Retail and
+      Ecommerce, so many are not shops.
+      NOT A ROUTE either: it makes no claim about the order the rep worked in. Sessions for
       different customers legitimately overlap, because reps work several open
       orders at once (41% of customer switches happen inside 60 seconds on the
       real mirror). keying_minutes is APPROXIMATE, because cart events carry no
       order number, so sessions are inferred from idle gaps of
-      var('visit_gap_minutes') (30). Exact per row: customer, device split,
+      var('activity_gap_minutes') (30). Exact per row: customer, device split,
       orders_submitted and order_ids. Filter `where has_activity` for
       reporting; see that column for why event_count is the wrong filter.
     columns:
       - name: customer_day_key
-        description: sales_code-customer_key-visit_date. PK; join key to the event mart.
+        description: sales_code-customer_key-activity_date. PK; join key to the event mart.
         tests: [not_null, unique]
       - name: sales_code
         description: Rep territory code.
@@ -54,9 +62,9 @@ models:
       - name: rep_name
         description: Display name from admin_users (max per territory code).
       - name: customer_key
-        description: Unified customer key, the store worked.
+        description: Unified customer key, the account worked.
         tests: [not_null]
-      - name: visit_date
+      - name: activity_date
         description: >
           Date in the REP's local time. One timezone offset is chosen per
           rep-day (the modal one) because device_timezone is a device setting,
@@ -129,9 +137,9 @@ models:
           rather than filtered out of the model, since "rep opened the customer
           and did nothing" is real and matters for coverage questions.
 
-  - name: mart_rep_store_visit_events
+  - name: mart_rep_customer_activity_events
     description: >
-      Drill-down behind mart_rep_store_visits. One row per rep work event,
+      Drill-down behind mart_rep_customer_activity. One row per rep work event,
       stamped with the rep-customer-day it belongs to. Filter on
       customer_day_key and order by event_seq to replay the work. Grain is
       entity_id, so no day-level metric is repeated onto event rows and sum()
@@ -140,12 +148,12 @@ models:
       order number.
     columns:
       - name: customer_day_key
-        description: FK to mart_rep_store_visits.
+        description: FK to mart_rep_customer_activity.
         tests:
           - not_null
           - relationships:
               arguments:
-                to: ref('mart_rep_store_visits')
+                to: ref('mart_rep_customer_activity')
                 field: customer_day_key
       - name: entity_id
         description: Event id, the PK. Join to fct_events for anything not here.
@@ -154,9 +162,9 @@ models:
         description: Rep territory code; denormalised so a rep filters without a join.
         tests: [not_null]
       - name: customer_key
-        description: The store; denormalised for the same reason.
+        description: The account; denormalised for the same reason.
         tests: [not_null]
-      - name: visit_date
+      - name: activity_date
         description: Date in the rep's local time.
       - name: login_seq
         description: Which sitting on this customer the event belongs to.

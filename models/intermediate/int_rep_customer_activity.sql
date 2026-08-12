@@ -1,14 +1,14 @@
--- int_rep_store_visits — assigns every rep work event to a REP-CUSTOMER-DAY,
+-- int_rep_customer_activity — assigns every rep work event to a REP-CUSTOMER-DAY,
 -- and to a LOGIN within it. Event grain: one row per qualifying event, stamped
 -- with customer_day_key, login_seq, the device stint, and its dwell.
 --
 -- This is the shared spine for both consumer marts, so the gap heuristic is
 -- defined exactly once:
---   mart_rep_store_visits         rolls this up per rep x customer x day
---   mart_rep_store_visit_events   presents this at event grain for drill-down
+--   mart_rep_customer_activity         rolls this up per rep x customer x day
+--   mart_rep_customer_activity_events   presents this at event grain for drill-down
 --
 -- A LOGIN = a run of one rep's activity on ONE customer with no idle gap of
--- var('visit_gap_minutes') (30) or more. Tighter than cycle_gap_minutes (60),
+-- var('activity_gap_minutes') (30) or more. Tighter than cycle_gap_minutes (60),
 -- which is tuned for "same shopping cycle" and survives a lunch break.
 --
 -- Logins for DIFFERENT customers may overlap in wall-clock time, and that is
@@ -22,9 +22,9 @@
 -- So this model deliberately does NOT reconstruct a route. It measures app
 -- usage per customer. An earlier version broke a login whenever the rep
 -- switched customer, to force stops to be sequential — that fragmented a
--- single sitting into a dozen "stops" and was removed. If PHYSICAL visits are
--- ever needed, no timing rule gets there; that needs the GPS check-in
--- (01040100 Location-Success), which is deliberately out of scope here.
+-- single sitting into a dozen "stops" and was removed. Physical presence is
+-- out of scope entirely — no timing rule gets there, and GPS was profiled
+-- 2026-08-13 and found too loose (see mart_rep_customer_activity).
 --
 -- APPROXIMATE, same root cause as fct_order_cycles: cart events carry no order
 -- number, so a login is inferred from idle gaps rather than declared by the
@@ -165,7 +165,7 @@ flagged as (
         case
             when prev_at is null                                          then 1
             when {{ dbt.datediff('prev_at', 'event_at_utc', 'minute') }}
-                 >= {{ var('visit_gap_minutes') }}                        then 1
+                 >= {{ var('activity_gap_minutes') }}                        then 1
             else 0
         end                                                              as is_new_login
     from sequenced
@@ -208,7 +208,7 @@ select
 
     sales_code,
     customer_key,
-    cast(event_at_local as date)                                         as visit_date,
+    cast(event_at_local as date)                                         as activity_date,
     login_seq,
     stint_seq,
 

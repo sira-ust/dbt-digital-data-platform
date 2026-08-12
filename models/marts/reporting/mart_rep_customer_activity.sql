@@ -1,6 +1,19 @@
--- mart_rep_store_visits — one row per REP x CUSTOMER x DAY.
--- Answers "on Monday, rep 001 worked these 6 stores, spending this many
+-- mart_rep_customer_activity — one row per REP x CUSTOMER x DAY.
+-- Answers "on Monday, rep 001 WORKED these 6 customers, spending this many
 -- minutes keying on each, at these times, and sent these orders".
+--
+-- Named ACTIVITY, not "visits", on purpose. This measures app usage; it
+-- cannot tell you the rep was physically at the customer. GPS was profiled
+-- 2026-08-13 and cannot close that gap: only 44% of location fixes land
+-- within a quarter mile of the customer's own median location (p90 is 244
+-- miles — a customer stays selected in the app while the rep drives away),
+-- so at best 17.7% of customer-days could be confirmed on-site. A column
+-- that is blank 80% of the time would be read as "did not visit", which is
+-- worse than not having it. Physical presence needs an explicit check-in
+-- event from the app team.
+--
+-- Also note CUSTOMER, not "store": NAV flags these accounts as MFG, Food
+-- Service, Wholesale, Retail and Ecommerce, so many are not shops.
 --
 --   6 stores on Monday  = 6 rows
 --   10 minutes          = keying_minutes on that row
@@ -11,11 +24,10 @@
 -- different customers legitimately overlap in wall-clock time because reps
 -- work several open orders at once — 41% of customer switches on the real
 -- mirror happen inside 60 seconds (2026-08-13). Sequencing that into a route
--- would be inventing a story the data does not tell; a physical visit would
--- need the GPS check-in (01040100), deliberately out of scope.
+-- would be inventing a story the data does not tell.
 --
 -- keying_minutes is APPROXIMATE: cart events carry no order number, so a
--- login is inferred from idle gaps (var('visit_gap_minutes'), 30). Exact on
+-- login is inferred from idle gaps (var('activity_gap_minutes'), 30). Exact on
 -- every row: the customer, the device split, and orders_submitted / order_ids,
 -- since the submit event names its order.
 --
@@ -34,9 +46,9 @@
 --
 -- Full-rebuild table, NOT incremental: login boundaries shift as events land.
 
-with visit_events as (
+with activity_events as (
 
-    select * from {{ ref('int_rep_store_visits') }}
+    select * from {{ ref('int_rep_customer_activity') }}
 
 ),
 
@@ -56,7 +68,7 @@ stints as (
         max(device)                                                      as device,
         {{ dbt.datediff('min(event_at_utc)', 'max(event_at_utc)', 'second') }}
                                                                          as stint_seconds
-    from visit_events
+    from activity_events
     group by customer_day_key, stint_seq
 
 ),
@@ -82,7 +94,7 @@ sessions as (
         customer_day_key,
         login_seq,
         min(event_at_local)                                              as login_at
-    from visit_events
+    from activity_events
     group by customer_day_key, login_seq
 
 ),
@@ -109,11 +121,11 @@ days as (
         customer_day_key,
         max(sales_code)                                                  as sales_code,
         max(customer_key)                                                as customer_key,
-        max(visit_date)                                                  as visit_date,
+        max(activity_date)                                                  as activity_date,
         min(event_at_local)                                              as first_touch_local,
         max(event_at_local)                                              as last_touch_local,
         count(*)                                                         as event_count
-    from visit_events
+    from activity_events
     group by customer_day_key
 
 ),
@@ -149,7 +161,7 @@ day_orders as (
             v.customer_day_key,
             v.increment_id,
             o.order_channel
-        from visit_events as v
+        from activity_events as v
         left join {{ ref('fct_orders') }} as o
             on o.increment_id = v.increment_id
         where v.is_submit
@@ -176,7 +188,7 @@ select
     d.sales_code,
     r.rep_name,
     d.customer_key,
-    d.visit_date,
+    d.activity_date,
 
     -- the headline: minutes actually keying on this customer that day
     coalesce(v.pda_minutes, 0)

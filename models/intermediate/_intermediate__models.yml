@@ -468,14 +468,14 @@ models:
           inspection but a plain `trend_rank <= N` filter (used by both the mart and
           scripts/resolve_trending_concepts.py) already excludes them with no extra clause needed.
 
-  - name: int_rep_store_visits
+  - name: int_rep_customer_activity
     description: >
       Assigns every rep work event to a rep-customer-day, and to a session
-      within it. Event grain. Shared spine for mart_rep_store_visits (rolled up
-      per customer-day) and mart_rep_store_visit_events (event-grain
+      within it. Event grain. Shared spine for mart_rep_customer_activity (rolled up
+      per customer-day) and mart_rep_customer_activity_events (event-grain
       drill-down), so the session heuristic is defined once. A session is a run
       of one rep's activity on ONE customer with no idle gap of
-      var('visit_gap_minutes') (30) or more; sessions for different customers
+      var('activity_gap_minutes') (30) or more; sessions for different customers
       may overlap in time, which is correct, because reps work several open
       orders at once. Work events only (cart edits, discovery features, order
       create and send); background pings are excluded so they cannot inflate
@@ -485,7 +485,7 @@ models:
         description: Event id, unique, the PK.
         tests: [not_null, unique]
       - name: customer_day_key
-        description: sales_code-customer_key-visit_date; the key both marts join on.
+        description: sales_code-customer_key-activity_date; the key both marts join on.
         tests: [not_null]
       - name: login_seq
         description: Which sitting on that customer the event belongs to.
