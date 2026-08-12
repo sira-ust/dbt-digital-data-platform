@@ -27,7 +27,7 @@
 -- KNOWN UNDERSTATEMENT: a stint holding one event spans 0 minutes, because
 -- first and last are the same timestamp. event_count is published so a
 -- dashboard can filter those out rather than averaging them in. Use the
--- is_reportable flag for that, NOT event_count -- see its definition below. On
+-- has_activity flag for that, NOT event_count -- see its definition below. On
 -- the real mirror ~26% of customer-days are a single event (mostly bare
 -- order-list opens or a lone submit).
 --
@@ -181,7 +181,7 @@ select
     (coalesce(v.pda_minutes, 0)
         + coalesce(v.ipad_minutes, 0)
         + coalesce(v.android_tablet_minutes, 0) > 0
-     or coalesce(o.orders_submitted, 0) > 0)                             as is_reportable
+     or coalesce(o.orders_submitted, 0) > 0)                             as has_activity
 from days as d
 left join device_time as v
     on v.customer_day_key = d.customer_day_key

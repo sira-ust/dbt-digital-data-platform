@@ -42,7 +42,7 @@ models:
       real mirror). keying_minutes is APPROXIMATE, because cart events carry no
       order number, so sessions are inferred from idle gaps of
       var('visit_gap_minutes') (30). Exact per row: customer, device split,
-      orders_submitted and order_ids. Filter `where is_reportable` for
+      orders_submitted and order_ids. Filter `where has_activity` for
       reporting; see that column for why event_count is the wrong filter.
     columns:
       - name: customer_day_key
@@ -96,14 +96,16 @@ models:
         description: The increment_ids submitted; NULL when none were sent.
       - name: event_count
         description: Work events on this customer that day (cart edits, features, order create/send).
-      - name: is_reportable
+      - name: has_activity
         description: >
-          The standard noise filter: true when the rep spent measurable time OR
-          sent an order. Use `where is_reportable` rather than rolling your own
+          Did anything actually come of this customer-day? True when the rep
+          spent measurable time OR sent an order; false only when both are
+          zero, which is almost always a lone abandoned Create Order tap.
+          Use `where has_activity` rather than rolling your own
           rule. Do NOT filter on event_count instead — `event_count >= 4` looks
           reasonable but discards 4,503 orders (31% of all orders here),
           because a submit landing with no preceding cart activity is a
-          legitimate one-event row. is_reportable keeps 100% of orders and
+          legitimate one-event row. has_activity keeps 100% of orders and
           minutes and drops only the 4,240 rows carrying neither. Rows are kept
           rather than filtered out of the model, since "rep opened the customer
           and did nothing" is real and matters for coverage questions.
