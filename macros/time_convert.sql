@@ -1,8 +1,13 @@
 {#
   Timezone / epoch helpers. Two distinct conversions exist in this source:
 
-  1. event_time  — DEVICE local time; convert to UTC using the row's
-     `timezone` column ("GMT+8" style device UTC offset).
+  1. event_time — FORMAT-DEPENDENT, see event_time_to_utc below. The live
+     MySQL stores an epoch value, which is already UTC by definition; the
+     local JSON sample stores a device-LOCAL datetime string, which needs the
+     row's `timezone` column ("GMT+8" style offset) applied. Applying the
+     offset to an epoch value is a double conversion — it was doing exactly
+     that until 2026-08-13, which pushed every GMT-8 event 8h forward and put
+     the apparent activity peak at 16:00-21:00 instead of 09:00-13:00.
   2. created_at / updated_at — SERVER time, fixed PST (UTC-8) year-round
      with NO daylight saving. Convert with a CONSTANT +8h offset, never a
      tz-rules conversion (rules would wrongly apply DST).
@@ -72,5 +77,73 @@
         when {{ column }} rlike '^[0-9]{12,}$' then timestamp_millis(try_cast({{ column }} as bigint))
         when {{ column }} rlike '^[0-9]+$' then timestamp_seconds(try_cast({{ column }} as bigint))
         else try_cast({{ column }} as timestamp)
+    end
+{%- endmacro %}
+
+
+{# Sort an array ascending. array_agg gives NO ordering guarantee on either
+   engine — ordering the input subquery does not survive the aggregate — so any
+   array meant to READ in order has to be sorted after the fact. Spelling
+   differs: duckdb list_sort, databricks array_sort. #}
+{% macro sort_array(arr) -%}
+    {{ return(adapter.dispatch('sort_array', 'ust_digital_platform')(arr)) }}
+{%- endmacro %}
+
+{% macro default__sort_array(arr) -%}
+    list_sort({{ arr }})
+{%- endmacro %}
+
+{% macro databricks__sort_array(arr) -%}
+    array_sort({{ arr }})
+{%- endmacro %}
+
+
+{# Timestamp -> 'HH:mm' clock string. duckdb has strftime, databricks has
+   date_format, and neither knows the other's name — isolate it here. #}
+{% macro format_hhmm(ts) -%}
+    {{ return(adapter.dispatch('format_hhmm', 'ust_digital_platform')(ts)) }}
+{%- endmacro %}
+
+{% macro default__format_hhmm(ts) -%}
+    strftime({{ ts }}, '%H:%M')
+{%- endmacro %}
+
+{% macro databricks__format_hhmm(ts) -%}
+    date_format({{ ts }}, 'HH:mm')
+{%- endmacro %}
+
+
+{# Is this event_time an epoch value (all digits) rather than a datetime string?
+   Decides whether the device tz offset must be applied — see event_time_to_utc. #}
+{% macro event_time_is_epoch(column) -%}
+    {{ return(adapter.dispatch('event_time_is_epoch', 'ust_digital_platform')(column)) }}
+{%- endmacro %}
+
+{% macro default__event_time_is_epoch(column) -%}
+    regexp_matches(trim(cast({{ column }} as {{ dbt.type_string() }})), '^[0-9]+$')
+{%- endmacro %}
+
+{% macro databricks__event_time_is_epoch(column) -%}
+    cast({{ column }} as string) rlike '^[0-9]+$'
+{%- endmacro %}
+
+
+{# event_time -> TRUE UTC, branching on the stored format.
+
+   epoch            already UTC (that is what an epoch IS) -> use as-is.
+   datetime string  device LOCAL wall clock -> UTC = local - offset, so for
+                    GMT-8 we ADD 8h. A null/unparseable timezone falls back to
+                    offset 0, i.e. the string is taken at face value.
+
+   Applying the offset in both branches is the double-conversion bug fixed
+   2026-08-13; it silently skewed every timestamp in the warehouse by up to 9h. #}
+{% macro event_time_to_utc(column, tz_column) -%}
+    case
+        when {{ event_time_is_epoch(column) }}
+            then {{ event_time_to_ts(column) }}
+        else {{ add_hours(
+                   event_time_to_ts(column),
+                   '-coalesce(' ~ tz_offset_hours(tz_column) ~ ', 0)'
+               ) }}
     end
 {%- endmacro %}
