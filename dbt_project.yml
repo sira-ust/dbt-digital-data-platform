@@ -35,6 +35,13 @@ vars:
   cycle_abandon_days: 7       # open cycle with no activity this long = abandoned
   churn_consecutive_weeks: 3  # removes > adds this many weeks running = churn signal
 
+  # mart_rep_store_visits — a rep's stop at one customer. Deliberately TIGHTER
+  # than cycle_gap_minutes (60): 60 min is tuned for "is this the same shopping
+  # cycle", which survives a lunch break; a store visit does not. 30 min is long
+  # enough to absorb a chat with the owner mid-order, short enough that drive
+  # time to the next stop always splits the visit.
+  visit_gap_minutes: 30
+
   # system_event_log production go-live: event_at_utc is device time, so a
   # few rows carry clock-skewed dates before this — int_item_demand_daily
   # clamps to [go-live, now].

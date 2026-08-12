@@ -29,6 +29,128 @@ models:
       - name: avg_days_to_close
         description: Average calendar days from first cycle event to submit (approximate).
 
+  - name: mart_rep_store_visits
+    description: >
+      One row per REP x CUSTOMER x DAY. "On Monday rep 001 worked these 6
+      stores, spending this many minutes keying on each, at these times, and
+      sent these orders." 6 stores on Monday = 6 rows; keying_minutes is the
+      per-store time; logged_in_at is the "at x time, x time".
+      NOT A ROUTE: this aggregates app usage per customer and makes no claim
+      about physical presence or the order the rep worked in. Sessions for
+      different customers legitimately overlap, because reps work several open
+      orders at once (41% of customer switches happen inside 60 seconds on the
+      real mirror). keying_minutes is APPROXIMATE, because cart events carry no
+      order number, so sessions are inferred from idle gaps of
+      var('visit_gap_minutes') (30). Exact per row: customer, device split,
+      orders_submitted and order_ids. About 26% of rows are a single event and
+      report 0 minutes, so filter event_count >= 4 for reporting.
+    columns:
+      - name: customer_day_key
+        description: sales_code-customer_key-visit_date. PK; join key to the event mart.
+        tests: [not_null, unique]
+      - name: sales_code
+        description: Rep territory code.
+        tests: [not_null]
+      - name: rep_name
+        description: Display name from admin_users (max per territory code).
+      - name: customer_key
+        description: Unified customer key, the store worked.
+        tests: [not_null]
+      - name: visit_date
+        description: >
+          Date in the REP's local time. One timezone offset is chosen per
+          rep-day (the modal one) because device_timezone is a device setting,
+          not a location: only 43% of rep-days carry a single value.
+        tests: [not_null]
+      - name: keying_minutes
+        description: >
+          The headline number, in MINUTES. Time actually keying on this customer that
+          day, summed across device stints. Excludes idle gaps and device
+          handoffs, so it is lower than last_touch minus first_touch.
+      - name: pda_minutes
+        description: Of keying_minutes, the share spent on the PDA.
+      - name: ipad_minutes
+        description: Of keying_minutes, the share spent on the iPad (CatalogFS iOS).
+      - name: android_tablet_minutes
+        description: >
+          Of keying_minutes, the share on the Android tablet (CatalogFS
+          Android). Kept so the three device columns sum to keying_minutes.
+      - name: login_count
+        description: >
+          How many separate times the rep opened this customer that day. A
+          30-minute idle gap starts a new one.
+      - name: logged_in_at
+        description: >
+          One HH:mm per login, ascending. The "at x time, x time". NOTE: this is
+          the first WORK event on the customer, not a literal login event from
+          the auth system, so it is when the rep started working that customer.
+      - name: first_touch_local
+        description: First work event on this customer that day, rep local time.
+      - name: last_touch_local
+        description: Last work event on this customer that day, rep local time.
+      - name: orders_submitted
+        description: >
+          Distinct increment_ids submitted (EXACT, the submit event names its
+          order). 0 is legitimate: the rep worked the customer without sending.
+      - name: order_ids
+        description: The increment_ids submitted; NULL when none were sent.
+      - name: event_count
+        description: >
+          Work events (cart edits, features, order create/send). Filter
+          event_count >= 4 to drop trivial rows, which report 0 minutes.
+
+  - name: mart_rep_store_visit_events
+    description: >
+      Drill-down behind mart_rep_store_visits. One row per rep work event,
+      stamped with the rep-customer-day it belongs to. Filter on
+      customer_day_key and order by event_seq to replay the work. Grain is
+      entity_id, so no day-level metric is repeated onto event rows and sum()
+      is safe. increment_id is populated on submit rows only and is exact; it
+      is deliberately NOT back-filled onto preceding events, which carry no
+      order number.
+    columns:
+      - name: customer_day_key
+        description: FK to mart_rep_store_visits.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('mart_rep_store_visits')
+                field: customer_day_key
+      - name: entity_id
+        description: Event id, the PK. Join to fct_events for anything not here.
+        tests: [not_null, unique]
+      - name: sales_code
+        description: Rep territory code; denormalised so a rep filters without a join.
+        tests: [not_null]
+      - name: customer_key
+        description: The store; denormalised for the same reason.
+        tests: [not_null]
+      - name: visit_date
+        description: Date in the rep's local time.
+      - name: login_seq
+        description: Which sitting on this customer the event belongs to.
+      - name: event_seq
+        description: Position within the customer-day (1 = first), the replay order.
+      - name: event_at_local
+        description: When it happened, in the rep's local time.
+      - name: seconds_since_prev_event
+        description: >
+          Dwell on the previous step. Null on a session's first event. Bounded
+          by the 30-minute gap rule, which starts a new session.
+      - name: device
+        description: PDA / iPad / Android tablet.
+      - name: function_name
+        description: The dev team's name for the event, verbatim.
+      - name: feature_name
+        description: search / filter / catalog_view / item_detail / icon_click / oos_check.
+      - name: page_context
+        description: Catalog section. promo / backorder / history / suggest.
+      - name: is_submit
+        description: True on the one event per order that actually sent it.
+      - name: increment_id
+        description: Order number. Populated on submit rows only; exact.
+
   - name: mart_customer_weekly
     description: >
       Customer behaviour, one row per customer_key x week. Event-based metrics

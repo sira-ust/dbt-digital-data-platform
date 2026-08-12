@@ -467,3 +467,35 @@ models:
           excluded concepts get NULL here (not a rank past the end), so they stay in this table for
           inspection but a plain `trend_rank <= N` filter (used by both the mart and
           scripts/resolve_trending_concepts.py) already excludes them with no extra clause needed.
+
+  - name: int_rep_store_visits
+    description: >
+      Assigns every rep work event to a rep-customer-day, and to a session
+      within it. Event grain. Shared spine for mart_rep_store_visits (rolled up
+      per customer-day) and mart_rep_store_visit_events (event-grain
+      drill-down), so the session heuristic is defined once. A session is a run
+      of one rep's activity on ONE customer with no idle gap of
+      var('visit_gap_minutes') (30) or more; sessions for different customers
+      may overlap in time, which is correct, because reps work several open
+      orders at once. Work events only (cart edits, discovery features, order
+      create and send); background pings are excluded so they cannot inflate
+      durations.
+    columns:
+      - name: entity_id
+        description: Event id, unique, the PK.
+        tests: [not_null, unique]
+      - name: customer_day_key
+        description: sales_code-customer_key-visit_date; the key both marts join on.
+        tests: [not_null]
+      - name: login_seq
+        description: Which sitting on that customer the event belongs to.
+      - name: event_seq
+        description: Position of the event within its customer-day (1 = first).
+      - name: seconds_since_prev_event
+        description: >
+          Dwell on the previous step. Null on a session's first event: the gap
+          before it is idle time, not work on this customer.
+      - name: device
+        description: PDA / iPad / Android tablet.
+      - name: increment_id
+        description: Order number; populated on submit rows only, and exact.
