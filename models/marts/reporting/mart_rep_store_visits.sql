@@ -123,14 +123,18 @@ days as (
 -- which returned [NULL, 'M000000002']) and array_agg(DISTINCT ...) is not
 -- reliably portable. A resubmit logs the same increment_id twice; distinct
 -- collapses it.
--- order_channel splits orders the rep BUILT from orders that ARRIVED for him
--- to process. Verified on the real mirror 2026-08-13, a perfect split with no
--- crossover: the "Order List/Detail: Customer" codes carry only WEB (1,030)
--- and APP (946) orders, the "Sales" codes only PDA (8,795). So Customer/Sales
--- in the dev team's event names is WHO PLACED the order, not which screen —
--- a customer orders online, it lands with their rep, and his device logs
--- receiving it. That is why a customer-day can hold an order with 0 keying
--- minutes: there was nothing for him to key.
+-- order_channel splits orders the rep KEYED from orders the customer placed
+-- themselves. Observed as a perfect split with no crossover on the real mirror
+-- (2026-08-13) — "Order List/Detail: Customer" carries only WEB (1,030) and
+-- APP (946), "Sales" only PDA (8,795) — and CONFIRMED by the dev team the same
+-- day: Customer vs Sales tracks WHO PLACED the order, not the entry screen,
+-- and these codes fire on "Sent successfully", never on opening or viewing.
+-- That is why a customer-day can hold an order with 0 keying minutes: the
+-- customer submitted it self-service, so the rep had nothing to key.
+--
+-- The payload also carries a `duration` field. It is NOT order-building time —
+-- median 1s, p90 3s, only 0.315 correlated with item count, i.e. submit
+-- request latency. Do not mistake it for rep effort.
 day_orders as (
 
     select
