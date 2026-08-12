@@ -22,7 +22,8 @@
 -- Device time is measured in STINTS — a run of consecutive events on one
 -- device. PDA -> iPad -> PDA is three stints, each measured end to end, so a
 -- handoff is never double-counted and keying_minutes stays under wall-clock
--- elapsed time.
+-- elapsed time. Stints are measured in SECONDS and rounded to minutes once,
+-- per device — see the stints CTE for why rounding per stint inflates.
 --
 -- KNOWN UNDERSTATEMENT: a stint holding one event spans 0 minutes, because
 -- first and last are the same timestamp. event_count is published so a
@@ -42,12 +43,19 @@ with visit_events as (
 -- ── device time: measure each stint, then fold stints up to the day ────────
 stints as (
 
+    -- Measured in SECONDS, deliberately, then rounded to minutes once at the
+    -- end. dbt.datediff(...,'minute') compiles on Databricks to
+    --   timestampdiff(minute, date_trunc('minute', a), date_trunc('minute', b))
+    -- which counts minute BOUNDARIES CROSSED, not elapsed time: 20:57:57 ->
+    -- 21:07:13 scores 10 despite only 9.27 minutes passing, and a two-second
+    -- stint straddling a boundary scores a full minute. Rounding per stint and
+    -- then summing compounded that — it moved 7,159 of 19,994 rows (36%).
     select
         customer_day_key,
         stint_seq,
         max(device)                                                      as device,
-        {{ dbt.datediff('min(event_at_utc)', 'max(event_at_utc)', 'minute') }}
-                                                                         as stint_minutes
+        {{ dbt.datediff('min(event_at_utc)', 'max(event_at_utc)', 'second') }}
+                                                                         as stint_seconds
     from visit_events
     group by customer_day_key, stint_seq
 
@@ -55,11 +63,13 @@ stints as (
 
 device_time as (
 
+    -- rounded per DEVICE (not per stint) so the three device columns always
+    -- add up to keying_minutes, which is what anyone eyeballing a row checks
     select
         customer_day_key,
-        sum(case when device = 'PDA'            then stint_minutes else 0 end) as pda_minutes,
-        sum(case when device = 'iPad'           then stint_minutes else 0 end) as ipad_minutes,
-        sum(case when device = 'Android tablet' then stint_minutes else 0 end) as android_tablet_minutes
+        cast(round(sum(case when device = 'PDA'            then stint_seconds else 0 end) / 60.0) as int) as pda_minutes,
+        cast(round(sum(case when device = 'iPad'           then stint_seconds else 0 end) / 60.0) as int) as ipad_minutes,
+        cast(round(sum(case when device = 'Android tablet' then stint_seconds else 0 end) / 60.0) as int) as android_tablet_minutes
     from stints
     group by customer_day_key
 

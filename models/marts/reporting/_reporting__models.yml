@@ -64,7 +64,10 @@ models:
         tests: [not_null]
       - name: keying_minutes
         description: >
-          The headline number, in MINUTES. Time actually keying on this customer that
+          The headline number, in MINUTES, and always equal to pda_minutes +
+          ipad_minutes + android_tablet_minutes. Measured in seconds and
+          rounded once per device, so short bursts are not inflated. Time
+          actually keying on this customer that
           day, summed across device stints. Excludes idle gaps and device
           handoffs, so it is lower than last_touch minus first_touch.
       - name: pda_minutes
