@@ -26,9 +26,10 @@
 --
 -- KNOWN UNDERSTATEMENT: a stint holding one event spans 0 minutes, because
 -- first and last are the same timestamp. event_count is published so a
--- dashboard can filter those out rather than averaging them in; on the real
--- mirror ~26% of customer-days are a single event (mostly bare order-list
--- opens), so `event_count >= 4` is the sane default filter.
+-- dashboard can filter those out rather than averaging them in. Use the
+-- is_reportable flag for that, NOT event_count -- see its definition below. On
+-- the real mirror ~26% of customer-days are a single event (mostly bare
+-- order-list opens or a lone submit).
 --
 -- Full-rebuild table, NOT incremental: login boundaries shift as events land.
 
@@ -162,7 +163,25 @@ select
 
     coalesce(o.orders_submitted, 0)                                      as orders_submitted,
     o.order_ids,
-    d.event_count
+    d.event_count,
+
+    -- The noise filter, defined once here instead of in every query.
+    --
+    -- NOT applied as a WHERE: a customer-day with no time and no order is real
+    -- data (the rep opened the customer and did nothing — 7,297 abandoned
+    -- Create Order clicks on the real mirror), and a churn or coverage question
+    -- may well want those rows. Hiding them would also stop counts reconciling
+    -- with fct_events.
+    --
+    -- Do NOT filter on event_count instead: `event_count >= 4` looks sensible
+    -- but drops 4,503 orders — 31% of every order in this table — because a
+    -- submit that lands with no preceding cart activity is a legitimate
+    -- one-event row. This rule keeps 100% of orders and 100% of minutes, and
+    -- drops only the 4,240 rows that carry neither (2026-08-13).
+    (coalesce(v.pda_minutes, 0)
+        + coalesce(v.ipad_minutes, 0)
+        + coalesce(v.android_tablet_minutes, 0) > 0
+     or coalesce(o.orders_submitted, 0) > 0)                             as is_reportable
 from days as d
 left join device_time as v
     on v.customer_day_key = d.customer_day_key
