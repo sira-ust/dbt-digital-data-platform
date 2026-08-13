@@ -1,17 +1,17 @@
 -- int_rep_customer_activity — assigns every rep work event to a REP-CUSTOMER-DAY,
--- and to a LOGIN within it. Event grain: one row per qualifying event, stamped
--- with customer_day_key, login_seq, the device stint, and its dwell.
+-- and to a SESSION within it. Event grain: one row per qualifying event, stamped
+-- with customer_day_key, session_seq, the device stint, and its dwell.
 --
 -- This is the shared spine for both consumer marts, so the gap heuristic is
 -- defined exactly once:
 --   mart_rep_customer_activity         rolls this up per rep x customer x day
 --   mart_rep_customer_activity_events   presents this at event grain for drill-down
 --
--- A LOGIN = a run of one rep's activity on ONE customer with no idle gap of
+-- A SESSION = one stretch of a rep's work on ONE customer, ended by an idle gap of
 -- var('activity_gap_minutes') (30) or more. Tighter than cycle_gap_minutes (60),
 -- which is tuned for "same shopping cycle" and survives a lunch break.
 --
--- Logins for DIFFERENT customers may overlap in wall-clock time, and that is
+-- Sessions for DIFFERENT customers may overlap in wall-clock time, and that is
 -- correct, not a bug. Reps demonstrably work several customers at once: 41% of
 -- customer switches on the real mirror happen within 60 SECONDS, and 6,380 of
 -- them within 10 seconds (2026-08-13). Nobody drives to another store in ten
@@ -20,14 +20,14 @@
 -- seed_event_codes).
 --
 -- So this model deliberately does NOT reconstruct a route. It measures app
--- usage per customer. An earlier version broke a login whenever the rep
+-- usage per customer. An earlier version broke a session whenever the rep
 -- switched customer, to force stops to be sequential — that fragmented a
 -- single sitting into a dozen "stops" and was removed. Physical presence is
 -- out of scope entirely — no timing rule gets there, and GPS was profiled
 -- 2026-08-13 and found too loose (see mart_rep_customer_activity).
 --
 -- APPROXIMATE, same root cause as fct_order_cycles: cart events carry no order
--- number, so a login is inferred from idle gaps rather than declared by the
+-- number, so a session is inferred from idle gaps rather than declared by the
 -- app. Exact per row: customer, device, timestamp, and increment_id on submits.
 --
 -- WORK EVENTS ONLY: cart edits + discovery features + the order family (09
@@ -92,7 +92,7 @@ with raw_events as (
 -- the work started.
 --
 -- So: take the MODAL offset for the rep's day and apply it to every event that
--- day. Ties break toward the offset closest to UTC for determinism. Login
+-- day. Ties break toward the offset closest to UTC for determinism. Session
 -- boundaries are computed in UTC and are unaffected by this — the offset only
 -- decides what wall clock the work is displayed against.
 rep_day_offset as (
@@ -142,7 +142,7 @@ events as (
 
 ),
 
--- windows run over ONE CUSTOMER's timeline for that rep, so a login measures
+-- windows run over ONE CUSTOMER's timeline for that rep, so a session measures
 -- time spent on that customer regardless of what else the rep interleaved.
 sequenced as (
 
@@ -167,7 +167,7 @@ flagged as (
             when {{ dbt.datediff('prev_at', 'event_at_utc', 'minute') }}
                  >= {{ var('activity_gap_minutes') }}                        then 1
             else 0
-        end                                                              as is_new_login
+        end                                                              as is_new_session
     from sequenced
 
 ),
@@ -176,17 +176,17 @@ numbered as (
 
     select
         *,
-        sum(is_new_login) over (
+        sum(is_new_session) over (
             partition by sales_code, customer_key
             order by event_at_utc, entity_id
             rows between unbounded preceding and current row
-        )                                                                as login_seq,
-        -- a new device stint starts on a new login OR whenever the device
+        )                                                                as session_seq,
+        -- a new device stint starts on a new session OR whenever the device
         -- changes hands. coalesce (not IS DISTINCT FROM) keeps this portable
         -- across duckdb and databricks.
         sum(
             case
-                when is_new_login = 1                                   then 1
+                when is_new_session = 1                                   then 1
                 when coalesce(device, '?') <> coalesce(prev_device, '?')   then 1
                 else 0
             end
@@ -209,7 +209,7 @@ select
     sales_code,
     customer_key,
     cast(event_at_local as date)                                         as activity_date,
-    login_seq,
+    session_seq,
     stint_seq,
 
     event_at_utc,
@@ -220,10 +220,10 @@ select
         order by event_at_utc, entity_id
     )                                                                    as event_seq,
 
-    -- dwell on the PREVIOUS step. Null on the first event of a login: the gap
+    -- dwell on the PREVIOUS step. Null on the first event of a session: the gap
     -- before it is idle time, not work on this customer.
     case
-        when is_new_login = 1 then null
+        when is_new_session = 1 then null
         else {{ dbt.datediff('prev_at', 'event_at_utc', 'second') }}
     end                                                                  as seconds_since_prev_event,
 

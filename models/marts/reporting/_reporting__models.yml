@@ -34,7 +34,7 @@ models:
       One row per REP x CUSTOMER x DAY. "On Monday rep 001 worked these 6
       customers, spending this many minutes keying on each, at these times, and
       sent these orders." 6 customers on Monday = 6 rows; keying_minutes is the
-      per-customer time; logged_in_at is the "at x time, x time".
+      per-customer time; opened_at is the "at x time, x time".
       NAMED ACTIVITY, NOT VISITS, on purpose: this measures APP USAGE and
       cannot tell you the rep was physically there. GPS was profiled 2026-08-13
       and cannot close the gap — only 44% of fixes land within a quarter mile
@@ -86,15 +86,18 @@ models:
         description: >
           Of keying_minutes, the share on the Android tablet (CatalogFS
           Android). Kept so the three device columns sum to keying_minutes.
-      - name: login_count
+      - name: times_opened
         description: >
-          How many separate times the rep opened this customer that day. A
+          How many separate times the rep pulled this customer up that day. A
           30-minute idle gap starts a new one.
-      - name: logged_in_at
+      - name: opened_at
         description: >
-          One HH:mm per login, ascending. The "at x time, x time". NOTE: this is
-          the first WORK event on the customer, not a literal login event from
-          the auth system, so it is when the rep started working that customer.
+          One HH:mm per session, ascending — the "at x time, x time". NOTE this
+          is NOT the app's Login event (family 02): those record signing into
+          the APP, carry no customer 92% of the time, and Logout fires only 53
+          times in the whole log, so they cannot bracket per-customer work.
+          opened_at is INFERRED from idle gaps: it is when the rep started
+          working this customer, not a recorded login.
       - name: first_touch_local
         description: First work event on this customer that day, rep local time.
       - name: last_touch_local
@@ -166,7 +169,7 @@ models:
         tests: [not_null]
       - name: activity_date
         description: Date in the rep's local time.
-      - name: login_seq
+      - name: session_seq
         description: Which sitting on this customer the event belongs to.
       - name: event_seq
         description: Position within the customer-day (1 = first), the replay order.

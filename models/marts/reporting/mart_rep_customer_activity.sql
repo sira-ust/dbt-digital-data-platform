@@ -17,7 +17,7 @@
 --
 --   6 stores on Monday  = 6 rows
 --   10 minutes          = keying_minutes on that row
---   at x time, x time   = logged_in_at on that row (one HH:mm per login)
+--   at x time, x time   = opened_at on that row (one HH:mm per session)
 --
 -- NOT A ROUTE. This aggregates app usage per customer; it does not sequence
 -- the rep's day and makes no claim about physical presence. Sessions for
@@ -27,7 +27,7 @@
 -- would be inventing a story the data does not tell.
 --
 -- keying_minutes is APPROXIMATE: cart events carry no order number, so a
--- login is inferred from idle gaps (var('activity_gap_minutes'), 30). Exact on
+-- session is inferred from idle gaps (var('activity_gap_minutes'), 30). Exact on
 -- every row: the customer, the device split, and orders_submitted / order_ids,
 -- since the submit event names its order.
 --
@@ -44,7 +44,7 @@
 -- the real mirror ~26% of customer-days are a single event (mostly bare
 -- order-list opens or a lone submit).
 --
--- Full-rebuild table, NOT incremental: login boundaries shift as events land.
+-- Full-rebuild table, NOT incremental: session boundaries shift as events land.
 
 with activity_events as (
 
@@ -87,29 +87,29 @@ device_time as (
 
 ),
 
--- ── the "at x time, x time": one entry per LOGIN on that customer ─────────
+-- ── the "at x time, x time": one entry per SESSION on that customer ───────
 sessions as (
 
     select
         customer_day_key,
-        login_seq,
-        min(event_at_local)                                              as login_at
+        session_seq,
+        min(event_at_local)                                              as opened_at_ts
     from activity_events
-    group by customer_day_key, login_seq
+    group by customer_day_key, session_seq
 
 ),
 
-login_times as (
+open_times as (
 
     select
         customer_day_key,
-        count(*)                                                         as login_count,
+        count(*)                                                         as times_opened,
         -- sorted AFTER aggregating: array_agg gives no ordering guarantee, and
         -- ordering its input subquery does not survive (verified on Databricks,
         -- which returned "18:00, 17:11"). 'HH:mm' sorts lexically the same as
         -- chronologically, so a plain ascending sort is the correct fix.
-        {{ sort_array('array_agg(' ~ format_hhmm('login_at') ~ ')') }}
-                                                                         as logged_in_at
+        {{ sort_array('array_agg(' ~ format_hhmm('opened_at_ts') ~ ')') }}
+                                                                         as opened_at
     from sessions
     group by customer_day_key
 
@@ -198,9 +198,9 @@ select
     v.ipad_minutes,
     v.android_tablet_minutes,
 
-    -- when he worked it: one HH:mm per session, in time order
-    s.login_count,
-    s.logged_in_at,
+    -- when he opened it: one HH:mm per session, in time order
+    s.times_opened,
+    s.opened_at,
     d.first_touch_local,
     d.last_touch_local,
 
@@ -230,7 +230,7 @@ select
 from days as d
 left join device_time as v
     on v.customer_day_key = d.customer_day_key
-left join login_times as s
+left join open_times as s
     on s.customer_day_key = d.customer_day_key
 left join day_orders as o
     on o.customer_day_key = d.customer_day_key

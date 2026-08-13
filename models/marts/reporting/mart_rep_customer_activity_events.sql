@@ -34,7 +34,7 @@ select
     e.customer_key,
     e.activity_date,
 
-    e.login_seq,
+    e.session_seq,
     e.event_seq,
     e.event_at_local,
     e.seconds_since_prev_event,
