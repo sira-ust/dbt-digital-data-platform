@@ -73,6 +73,17 @@ import time
 
 import requests
 
+# The Windows console defaults to cp1252, where printing any non-ASCII character
+# raises UnicodeEncodeError. That killed a run *after* the Google calls had been
+# billed -- the worst possible place to fail. Force UTF-8 and downgrade an
+# unencodable character to a replacement rather than an exception: a garbled
+# glyph in a log is a cosmetic problem, a crash costs money.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):                  # already wrapped/redirected
+        pass
+
 API_KEY_ENV = "GOOGLE_GEOCODING_API_KEY"
 GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
@@ -92,7 +103,7 @@ DBX_SCHEMA  = "ust_databricks.ust_external"
 DBX_GEOCODE = "ust_databricks.ust_external.nav_customer_geocode"
 
 
-# ── address cleaning: verbatim from the team's geocoding.py ──────────────────
+# -- address cleaning: verbatim from the team's geocoding.py ------------------
 def build_address(street, city, zip_code, state):
     """Return the single-line address string Google is asked to resolve.
 
@@ -142,7 +153,7 @@ def geocode(addr: str, api_key: str):
     return None, None, status or "UNKNOWN"
 
 
-# ── backends ────────────────────────────────────────────────────────────────
+# -- backends ----------------------------------------------------------------
 def load_local():
     import duckdb
     con = duckdb.connect()
@@ -361,6 +372,33 @@ def save_dbx(rows):
     return n
 
 
+def summary(total, with_row, backlog, written, ok, fail):
+    """One scannable block at the end of every run.
+
+    This is the ONLY place per-run volume is visible: the Databricks task log
+    keeps stdout, but nothing else records how much this particular run did. It
+    prints even when there was nothing to do -- on a daily schedule that is the
+    normal case, and a run that says nothing is indistinguishable from a run
+    that did not fire.
+
+    `coverage` is deliberately "has a row", not "has coordinates": a permanently
+    unresolvable address gets a row with its failure status so it is not paid
+    for again, and counting it as missing would make the backlog look stuck
+    forever.
+    """
+    print("", flush=True)
+    print("-" * 46)
+    print(f"  geocode run summary")
+    print(f"    sent to Google    : {written}")
+    print(f"      resolved        : {ok}")
+    print(f"      failed          : {fail}")
+    print(f"    customers total   : {total}")
+    print(f"    coverage          : {with_row} ({with_row / total:.1%})" if total
+          else "    coverage          : n/a")
+    print(f"    still to geocode  : {max(backlog - written, 0)}")
+    print("-" * 46, flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backend", choices=["local", "databricks"], required=True)
@@ -395,11 +433,13 @@ def main():
         todo.append((cn, addr, h))
 
     print(f"{len(todo)} to geocode  ({skipped_no_address} have no usable address)")
+    todo_all = list(todo)          # pre-limit, so the summary can report the real backlog
     if a.limit:
         todo = todo[: a.limit]
         print(f"limited to {len(todo)}")
     if not todo:
         print("nothing to do")
+        summary(len(customers), len(done), 0, 0, 0, 0)
         return 0
 
     est = len(todo) / 1000 * 5
@@ -418,6 +458,10 @@ def main():
 
     save = save_local if a.backend == "local" else save_dbx
     rows, ok, fail, written = [], 0, 0, 0
+    # customers persisted this run. Needed because `written` counts API calls,
+    # and a re-geocoded changed address REPLACES its old row -- adding it to the
+    # coverage count would inflate coverage above the customer count.
+    seen = set()
     delay = 1.0 / REQUESTS_PER_SECOND
 
     def flush(batch):
@@ -428,6 +472,7 @@ def main():
             return
         save(batch)
         written += len(batch)
+        seen.update(r[0] for r in batch)
         batch.clear()
 
     try:
@@ -453,8 +498,10 @@ def main():
               file=sys.stderr)
 
     flush(rows)
-    if written:
-        print(f"wrote {written} rows ({ok} resolved, {fail} failed)")
+
+    # set(done), not done: `done` maps customer_no -> address_hash, and unioning
+    # a dict with a set is a TypeError
+    summary(len(customers), len(set(done) | seen), len(todo_all), written, ok, fail)
     if fail:
         print(f"\n{fail} addresses did not resolve — they are stored with their status "
               f"so this run is not repeated. Inspect with:\n"
