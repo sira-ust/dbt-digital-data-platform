@@ -21,7 +21,7 @@ match what was validated by hand:
   * "-" street is dropped, "-" state becomes CA
   * "PICKUP" is stripped out
 
-FAILURES ARE RECORDED, NOT RETRIED FORVER. A row that Google cannot resolve is
+FAILURES ARE RECORDED, NOT RETRIED FOREVER. A row that Google cannot resolve is
 written with null coordinates and its status, so the next run skips it instead
 of paying again. Clear status to retry a batch after fixing the source address.
 
@@ -31,35 +31,33 @@ Flow position:
     dbt build --select stg_nav__customer_locations+
                                  ->  int_rep_customer_presence -> the mart
 
-    # cost nothing, see what WOULD be sent:
-    python scripts/geocode_customers.py --backend databricks --dry-run
+RUN IT FROM A TERMINAL, NOT THE DAILY JOB. It was a task in
+ust_digital_platform_dbt and was removed on 2026-08-17: incremental means a
+normal day sends zero requests, so the job paid a serverless cold start every
+night to do nothing, and a Google outage produced a FAILED task and a morning
+alert for a problem that does not touch the warehouse. See
+scripts/databricks/job.yml for the full reasoning.
 
-    # real run, capped so a mistake cannot spend the whole budget:
+    # against Databricks. Needs TWO credentials:
+    #   GOOGLE_GEOCODING_API_KEY -- third party, no ambient auth exists for it
+    #   DBT_DATABRICKS_TOKEN     -- the same PAT dbt uses; host and http_path
+    #                               come from profiles.yml, so nothing to repeat
     export GOOGLE_GEOCODING_API_KEY=...
-    python scripts/geocode_customers.py --backend databricks --limit 200
+    export DBT_DATABRICKS_TOKEN=...
+    python scripts/geocode_customers.py --backend databricks --dry-run   # free
+    python scripts/geocode_customers.py --backend databricks             # real
 
-AS A DATABRICKS JOB: the Google key is a THIRD-PARTY credential — there is no
-ambient auth for it, so it has to be supplied. Put it in a secret scope and
-reference it from the job's environment, never as a literal:
+WHY NO --limit ON A MANUAL RUN: --limit is a blast-radius cap for UNATTENDED
+runs, where an upstream address rewrite could silently spend ~$36. Watching the
+output, the cap only turns a twenty-minute backfill into a fortnight of partial
+runs. Use it when testing, omit it when draining the backlog.
 
-    databricks secrets create-scope ust
-    databricks secrets put-secret ust google_geocoding_api_key
+THE KEY IS NOT READ FROM THE UC SECRET ON A LOCAL RUN. The Databricks secret at
+ust_databricks.ust_external.google_geocoding_api_key is a Unity Catalog secret;
+the dbutils and SDK fallbacks below target LEGACY secret scopes and will not
+find it. Locally, set GOOGLE_GEOCODING_API_KEY in the environment.
 
-    # in the job task's environment variables:
-    GOOGLE_GEOCODING_API_KEY = {{secrets/ust/google_geocoding_api_key}}
-
-The script reads it with os.getenv, so nothing in the code changes and the key
-never appears in the job definition, the repo, or a log. Databricks auth itself
-needs NO secret on a job — the run-as identity is ambient.
-
-scripts/databricks/geocode_task.json is a task to ADD to the existing daily
-job, upstream of the dbt build — not a second job. A customer added overnight
-then has coordinates before int_rep_customer_presence reads them. Without that
-ordering there is a window where the customer exists with no coordinate, and
-every visit to them silently reports scenario "unknown", which reads as "did not
-visit" to anyone who has not been told otherwise.
-
-    # local dev against the mock parquet
+    # local dev against the mock parquet -- no credentials, no cost
     python scripts/geocode_customers.py --backend local --dry-run
 """
 

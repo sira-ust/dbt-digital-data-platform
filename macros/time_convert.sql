@@ -113,6 +113,30 @@
 {%- endmacro %}
 
 
+{# A typed NULL array of strings, for the empty side of a UNION ALL.
+
+   The type CANNOT be left to inference: in a `union all` both branches must
+   agree, and a bare `null` has no element type to match the array_agg on the
+   other side.
+
+   The spelling is where this bites. duckdb writes `varchar[]`, databricks
+   writes `array<string>`, and NEITHER parses the other -- `cast(null as
+   string[])` fails on databricks with PARSE_SYNTAX_ERROR at the '['. That is a
+   compile-time failure that duckdb cannot surface, so it only ever appears on
+   a real databricks run. #}
+{% macro null_string_array() -%}
+    {{ return(adapter.dispatch('null_string_array', 'ust_digital_platform')()) }}
+{%- endmacro %}
+
+{% macro default__null_string_array() -%}
+    cast(null as {{ dbt.type_string() }}[])
+{%- endmacro %}
+
+{% macro databricks__null_string_array() -%}
+    cast(null as array<{{ dbt.type_string() }}>)
+{%- endmacro %}
+
+
 {# Is this event_time an epoch value (all digits) rather than a datetime string?
    Decides whether the device tz offset must be applied — see event_time_to_utc. #}
 {% macro event_time_is_epoch(column) -%}

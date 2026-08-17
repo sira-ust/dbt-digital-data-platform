@@ -1,0 +1,69 @@
+# The ust_digital_platform_dbt daily job.
+#
+# GEOCODING IS DELIBERATELY NOT A TASK HERE. It was tried as one (a
+# geocode-new-customers task upstream of dbt-build, with run_if ALL_DONE) and
+# removed on 2026-08-17. Reasons, in order of weight:
+#
+#   1. It buys almost nothing on a normal day. The geocode is incremental on
+#      address_hash, so a day with no new customers sends zero requests. The
+#      task existed to cover the rare day a customer is added -- and it paid a
+#      serverless cold start (several minutes of waitingForCompute) every single
+#      night to do nothing.
+#
+#   2. It puts a THIRD-PARTY API in the warehouse's critical path. Even with
+#      run_if ALL_DONE keeping it non-blocking, a Google outage or an expired key
+#      produces a FAILED task and an alert every morning for a problem that does
+#      not affect the warehouse.
+#
+#   3. The cost cap made it a poor backfill mechanism anyway. Unattended runs
+#      need --limit as a blast-radius cap, which means a 7,198-customer backlog
+#      drains over a fortnight rather than in one twenty-minute pass.
+#
+# INSTEAD: run scripts/geocode_customers.py from a terminal when customers have
+# been added. It is incremental and safe to re-run -- see that script's docstring
+# for the command. New customers report scenario "unknown" in
+# mart_rep_customer_activity until it is run, which is the honest reading: we do
+# not know where they are, so we cannot say whether they were visited.
+#
+# THE TRADE BEING ACCEPTED: nothing now reminds anyone to geocode. If the
+# "unknown" scenario count starts climbing in the mart, an un-run geocode is the
+# first thing to check.
+
+resources:
+  jobs:
+    ust_digital_platform_dbt:
+      name: ust-digital-platform-dbt
+      schedule:
+        quartz_cron_expression: 54 0 4 * * ?
+        timezone_id: America/Los_Angeles
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: dbt-build
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              # --exclude tag:social is REQUIRED, not an optimisation. The
+              # mentionlytics models depend on the weekly xlsx conversion and the
+              # offline enrichment, neither of which runs daily -- see
+              # dbt_project.yml, which documents this daily/weekly split.
+              - dbt build --exclude tag:social
+            warehouse_id: 0fa7b986f30f8aab
+            catalog: ust_databricks
+            source: GIT
+          environment_key: dbt-default
+
+      git_source:
+        git_url: https://github.com/sira-ust/dbt-digital-data-platform.git
+        git_provider: gitHub
+        git_branch: main
+      queue:
+        enabled: true
+      environments:
+        - environment_key: dbt-default
+          spec:
+            dependencies:
+              - dbt-databricks>=1.0.0,<2.0.0
+            environment_version: "5"
+
+      performance_target: STANDARD
