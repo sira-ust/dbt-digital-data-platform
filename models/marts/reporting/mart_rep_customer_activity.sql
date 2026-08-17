@@ -1,50 +1,41 @@
--- mart_rep_customer_activity — one row per REP x CUSTOMER x DAY.
--- Answers "on Monday, rep 001 WORKED these 6 customers, spending this many
--- minutes keying on each, at these times, and sent these orders".
+-- mart_rep_customer_activity — one row per REP x CUSTOMER x DAY x SCENARIO.
 --
--- Named ACTIVITY, not "visits", on purpose. This measures app usage; it
--- cannot tell you the rep was physically at the customer. GPS was profiled
--- 2026-08-13 and cannot close that gap: only 44% of location fixes land
--- within a quarter mile of the customer's own median location (p90 is 244
--- miles — a customer stays selected in the app while the rep drives away),
--- so at best 17.7% of customer-days could be confirmed on-site. A column
--- that is blank 80% of the time would be read as "did not visit", which is
--- worse than not having it. Physical presence needs an explicit check-in
--- event from the app team.
+--   Customer | Scenario | Sessions | PDA (mins) | iPad (mins) | On-site (mins)
+--            | Opened at | Orders | Events
 --
--- Also note CUSTOMER, not "store": NAV flags these accounts as MFG, Food
--- Service, Wholesale, Retail and Ecommerce, so many are not shops.
+-- SCENARIO is the point of this model. A rep can work the same customer both
+-- on-site and remotely on one day, and a single per-day label hides that: on
+-- 2026-08-10 rep 025 built three baskets in-store (71/47/79 events) and
+-- submitted all three at 22:42 that evening. Collapsed, that read "on-site,
+-- order M000182028" and implied he sent it there. He did not. Split by
+-- scenario it reads honestly — three on-site rows carrying the minutes, three
+-- "visited, keyed elsewhere" rows carrying the orders.
 --
---   6 stores on Monday  = 6 rows
---   10 minutes          = keying_minutes on that row
---   at x time, x time   = opened_at on that row (one HH:mm per session)
+--   remote                    never on-site, rep did the work
+--   on-site                   session overlaps a GPS-confirmed visit
+--   visited, keyed elsewhere  visited that day, but this session was not there
+--   customer ordered online   arrived already placed (order_channel WEB/APP)
+--   visit only, no app        on-site with NO app activity at all
 --
--- NOT A ROUTE. This aggregates app usage per customer; it does not sequence
--- the rep's day and makes no claim about physical presence. Sessions for
--- different customers legitimately overlap in wall-clock time because reps
--- work several open orders at once — 41% of customer switches on the real
--- mirror happen inside 60 seconds (2026-08-13). Sequencing that into a route
--- would be inventing a story the data does not tell.
+-- The last one is why this is a FULL OUTER JOIN of activity and presence: a
+-- visit that produced no typing has no activity row, so an inner join would
+-- erase exactly the case the business most wants counted.
 --
--- keying_minutes is APPROXIMATE: cart events carry no order number, so a
--- session is inferred from idle gaps (var('activity_gap_minutes'), 30). Exact on
--- every row: the customer, the device split, and orders_submitted / order_ids,
--- since the submit event names its order.
+-- WHAT IS EXACT: the customer, the device split, the order numbers, and the
+-- GPS distance. WHAT IS INFERRED: session boundaries (idle gaps, since cart
+-- events carry no order number) and which customer a fix belongs to when two
+-- sit inside one geofence — see is_ambiguous.
 --
--- Device time is measured in STINTS — a run of consecutive events on one
--- device. PDA -> iPad -> PDA is three stints, each measured end to end, so a
--- handoff is never double-counted and keying_minutes stays under wall-clock
--- elapsed time. Stints are measured in SECONDS and rounded to minutes once,
--- per device — see the stints CTE for why rounding per stint inflates.
+-- WHEN THERE IS NO GPS the scenario cannot be determined, and the row is
+-- labelled `unknown` rather than `remote`. 12% of customers have no
+-- coordinates and 18% of rep-days have no fixes; calling those "remote" would
+-- report absence of evidence as evidence of absence.
 --
--- KNOWN UNDERSTATEMENT: a stint holding one event spans 0 minutes, because
--- first and last are the same timestamp. event_count is published so a
--- dashboard can filter those out rather than averaging them in. Use the
--- has_activity flag for that, NOT event_count -- see its definition below. On
--- the real mirror ~26% of customer-days are a single event (mostly bare
--- order-list opens or a lone submit).
+-- Device minutes are measured in STINTS (unbroken runs on one device) in
+-- SECONDS, rounded once per device, so a PDA -> iPad -> PDA handoff is never
+-- billed to either device and short bursts are not inflated.
 --
--- Full-rebuild table, NOT incremental: session boundaries shift as events land.
+-- Full-rebuild table: session and visit boundaries shift as events land.
 
 with activity_events as (
 
@@ -52,187 +43,262 @@ with activity_events as (
 
 ),
 
--- ── device time: measure each stint, then fold stints up to the day ────────
+presence as (
+
+    select * from {{ ref('int_rep_customer_presence') }}
+
+),
+
+-- ── classify every SESSION against the visits for that customer-day ────────
+-- order_channel (PDA = rep keyed it, WEB/APP = customer placed it) lives on
+-- fct_orders, not the intermediate. fct_orders is unique on increment_id so
+-- this cannot fan out.
+session_bounds as (
+
+    select
+        e.customer_day_key,
+        e.sales_code,
+        e.customer_key,
+        e.activity_date,
+        e.session_seq,
+        min(e.event_at_local)                                            as session_start,
+        max(e.event_at_local)                                            as session_end,
+        count(*)                                                         as event_count,
+        max(case when e.is_submit then e.increment_id end)               as increment_id,
+        max(case when e.is_submit then o.order_channel end)              as order_channel
+    from activity_events as e
+    left join {{ ref('fct_orders') }} as o
+        on o.increment_id = e.increment_id
+    group by e.customer_day_key, e.sales_code, e.customer_key, e.activity_date, e.session_seq
+
+),
+
+session_scenario as (
+
+    select
+        b.*,
+        -- did THIS session happen inside a visit to THIS customer?
+        max(case when v.arrived_at <= b.session_end
+                  and b.session_start <= v.departed_at then 1 else 0 end) as during_visit,
+        max(case when v.customer_day_key is not null then 1 else 0 end)   as visited_that_day,
+        max(case when v.is_ambiguous then 1 else 0 end)                   as is_ambiguous,
+        sum(case when v.arrived_at <= b.session_end
+                  and b.session_start <= v.departed_at
+                 then v.on_site_minutes else 0 end)                       as overlap_on_site_minutes
+    from session_bounds as b
+    left join presence as v
+        on v.customer_day_key = b.customer_day_key
+    group by
+        b.customer_day_key, b.sales_code, b.customer_key, b.activity_date,
+        b.session_seq, b.session_start, b.session_end, b.event_count,
+        b.increment_id, b.order_channel
+
+),
+
+-- a rep-day with no GPS at all cannot be classified: `unknown`, not `remote`
+gps_days as (
+
+    select distinct sales_code, activity_date
+    from presence
+
+),
+
+labelled as (
+
+    select
+        s.*,
+        case
+            when s.order_channel in ('WEB', 'APP')       then 'customer ordered online'
+            when s.during_visit = 1                      then 'on-site'
+            when s.visited_that_day = 1                  then 'visited, keyed elsewhere'
+            when g.sales_code is null                    then 'unknown'
+            else 'remote'
+        end                                                              as scenario
+    from session_scenario as s
+    left join gps_days as g
+        on g.sales_code = s.sales_code and g.activity_date = s.activity_date
+
+),
+
+-- ── device minutes per session, from stints ───────────────────────────────
 stints as (
-
-    -- Measured in SECONDS, deliberately, then rounded to minutes once at the
-    -- end. dbt.datediff(...,'minute') compiles on Databricks to
-    --   timestampdiff(minute, date_trunc('minute', a), date_trunc('minute', b))
-    -- which counts minute BOUNDARIES CROSSED, not elapsed time: 20:57:57 ->
-    -- 21:07:13 scores 10 despite only 9.27 minutes passing, and a two-second
-    -- stint straddling a boundary scores a full minute. Rounding per stint and
-    -- then summing compounded that — it moved 7,159 of 19,994 rows (36%).
-    select
-        customer_day_key,
-        stint_seq,
-        max(device)                                                      as device,
-        {{ dbt.datediff('min(event_at_utc)', 'max(event_at_utc)', 'second') }}
-                                                                         as stint_seconds
-    from activity_events
-    group by customer_day_key, stint_seq
-
-),
-
-device_time as (
-
-    -- rounded per DEVICE (not per stint) so the three device columns always
-    -- add up to keying_minutes, which is what anyone eyeballing a row checks
-    select
-        customer_day_key,
-        cast(round(sum(case when device = 'PDA'            then stint_seconds else 0 end) / 60.0) as int) as pda_minutes,
-        cast(round(sum(case when device = 'iPad'           then stint_seconds else 0 end) / 60.0) as int) as ipad_minutes,
-        cast(round(sum(case when device = 'Android tablet' then stint_seconds else 0 end) / 60.0) as int) as android_tablet_minutes
-    from stints
-    group by customer_day_key
-
-),
-
--- ── the "at x time, x time": one entry per SESSION on that customer ───────
-sessions as (
 
     select
         customer_day_key,
         session_seq,
-        min(event_at_local)                                              as opened_at_ts
-    from activity_events
+        device,
+        {{ dbt.datediff('min(event_at_utc)', 'max(event_at_utc)', 'second') }} as stint_seconds
+    from (
+        select
+            customer_day_key, session_seq, device, event_at_utc,
+            row_number() over (partition by customer_day_key, session_seq
+                               order by event_at_utc, entity_id)
+          - row_number() over (partition by customer_day_key, session_seq, device
+                               order by event_at_utc, entity_id)          as stint_grp
+        from activity_events
+    ) as runs
+    group by customer_day_key, session_seq, device, stint_grp
+
+),
+
+session_device as (
+
+    select
+        customer_day_key,
+        session_seq,
+        sum(case when device = 'PDA'            then stint_seconds else 0 end) as pda_seconds,
+        sum(case when device = 'iPad'           then stint_seconds else 0 end) as ipad_seconds,
+        sum(case when device = 'Android tablet' then stint_seconds else 0 end) as tablet_seconds
+    from stints
     group by customer_day_key, session_seq
 
 ),
 
-open_times as (
+-- ── roll sessions up to customer x day x scenario ──────────────────────────
+by_scenario as (
 
     select
-        customer_day_key,
-        count(*)                                                         as times_opened,
-        -- sorted AFTER aggregating: array_agg gives no ordering guarantee, and
-        -- ordering its input subquery does not survive (verified on Databricks,
-        -- which returned "18:00, 17:11"). 'HH:mm' sorts lexically the same as
-        -- chronologically, so a plain ascending sort is the correct fix.
-        {{ sort_array('array_agg(' ~ format_hhmm('opened_at_ts') ~ ')') }}
-                                                                         as opened_at
-    from sessions
-    group by customer_day_key
+        l.customer_day_key,
+        l.sales_code,
+        l.customer_key,
+        l.activity_date,
+        l.scenario,
+        count(*)                                                         as sessions,
+        -- rounded per DEVICE, not per stint, so the columns sum to keying_minutes
+        cast(round(sum(d.pda_seconds)    / 60.0) as {{ dbt.type_int() }}) as pda_minutes,
+        cast(round(sum(d.ipad_seconds)   / 60.0) as {{ dbt.type_int() }}) as ipad_minutes,
+        cast(round(sum(d.tablet_seconds) / 60.0) as {{ dbt.type_int() }}) as android_tablet_minutes,
+        max(l.overlap_on_site_minutes)                                   as on_site_minutes,
+        {{ sort_array('array_agg(' ~ format_hhmm('l.session_start') ~ ')') }}   as opened_at,
+        min(l.session_start)                                             as first_touch_local,
+        max(l.session_end)                                               as last_touch_local,
+        sum(l.event_count)                                               as event_count,
+        max(l.is_ambiguous) = 1                                          as is_ambiguous
+    from labelled as l
+    left join session_device as d
+        on d.customer_day_key = l.customer_day_key
+       and d.session_seq      = l.session_seq
+    group by l.customer_day_key, l.sales_code, l.customer_key, l.activity_date, l.scenario
 
 ),
 
-days as (
+-- orders per scenario, deduped (a resubmit logs the same increment_id twice)
+scenario_orders as (
 
     select
-        customer_day_key,
-        max(sales_code)                                                  as sales_code,
-        max(customer_key)                                                as customer_key,
-        max(activity_date)                                                  as activity_date,
-        min(event_at_local)                                              as first_touch_local,
-        max(event_at_local)                                              as last_touch_local,
-        count(*)                                                         as event_count
-    from activity_events
-    group by customer_day_key
-
-),
-
--- Orders come from a PRE-FILTERED, pre-deduped set rather than
--- array_agg(distinct case when ...): array_agg keeps NULLs (verified on duckdb,
--- which returned [NULL, 'M000000002']) and array_agg(DISTINCT ...) is not
--- reliably portable. A resubmit logs the same increment_id twice; distinct
--- collapses it.
--- order_channel splits orders the rep KEYED from orders the customer placed
--- themselves. Observed as a perfect split with no crossover on the real mirror
--- (2026-08-13) — "Order List/Detail: Customer" carries only WEB (1,030) and
--- APP (946), "Sales" only PDA (8,795) — and CONFIRMED by the dev team the same
--- day: Customer vs Sales tracks WHO PLACED the order, not the entry screen,
--- and these codes fire on "Sent successfully", never on opening or viewing.
--- That is why a customer-day can hold an order with 0 keying minutes: the
--- customer submitted it self-service, so the rep had nothing to key.
---
--- The payload also carries a `duration` field. It is NOT order-building time —
--- median 1s, p90 3s, only 0.315 correlated with item count, i.e. submit
--- request latency. Do not mistake it for rep effort.
-day_orders as (
-
-    select
-        customer_day_key,
+        customer_day_key, scenario,
         count(*)                                                         as orders_submitted,
-        array_agg(increment_id)                                          as order_ids,
         sum(case when order_channel = 'PDA'          then 1 else 0 end)  as orders_keyed,
-        sum(case when order_channel in ('WEB','APP') then 1 else 0 end)  as orders_received
+        sum(case when order_channel in ('WEB','APP') then 1 else 0 end)  as orders_received,
+        array_agg(increment_id)                                          as order_ids
     from (
-        -- fct_orders is unique on increment_id, so this cannot fan out
-        select distinct
-            v.customer_day_key,
-            v.increment_id,
-            o.order_channel
-        from activity_events as v
-        left join {{ ref('fct_orders') }} as o
-            on o.increment_id = v.increment_id
-        where v.is_submit
-          and v.increment_id is not null
+        select distinct customer_day_key, scenario, increment_id, order_channel
+        from labelled
+        where increment_id is not null
     ) as deduped
-    group by customer_day_key
+    group by customer_day_key, scenario
+
+),
+
+-- ── the FULL OUTER half: visits with no app activity at all ───────────────
+visit_only as (
+
+    select
+        v.customer_day_key,
+        v.sales_code,
+        v.customer_key,
+        v.activity_date,
+        sum(v.on_site_minutes)                                           as on_site_minutes,
+        max(v.is_ambiguous)                                              as is_ambiguous
+    from presence as v
+    left join by_scenario as a
+        on a.customer_day_key = v.customer_day_key
+    where a.customer_day_key is null
+    group by v.customer_day_key, v.sales_code, v.customer_key, v.activity_date
 
 ),
 
 -- one display name per territory code (guard against join fan-out)
 reps as (
 
-    select
-        salesperson_code,
-        max(first_name || ' ' || last_name)                              as rep_name
+    select salesperson_code, max(first_name || ' ' || last_name)         as rep_name
     from {{ ref('stg_mysql__admin_users') }}
     where salesperson_code is not null
     group by salesperson_code
 
+),
+
+combined as (
+
+    select
+        a.customer_day_key, a.sales_code, a.customer_key, a.activity_date,
+        a.scenario, a.sessions,
+        a.pda_minutes, a.ipad_minutes, a.android_tablet_minutes,
+        a.on_site_minutes, a.opened_at,
+        a.first_touch_local, a.last_touch_local,
+        coalesce(o.orders_submitted, 0)                                  as orders_submitted,
+        coalesce(o.orders_keyed, 0)                                      as orders_keyed,
+        coalesce(o.orders_received, 0)                                   as orders_received,
+        o.order_ids,
+        a.event_count,
+        a.is_ambiguous
+    from by_scenario as a
+    left join scenario_orders as o
+        on o.customer_day_key = a.customer_day_key and o.scenario = a.scenario
+
+    union all
+
+    select
+        v.customer_day_key, v.sales_code, v.customer_key, v.activity_date,
+        'visit only, no app'                                             as scenario,
+        0                                                                as sessions,
+        0, 0, 0,
+        v.on_site_minutes,
+        cast(null as {{ dbt.type_string() }}[])                          as opened_at,
+        cast(null as timestamp), cast(null as timestamp),
+        0, 0, 0,
+        cast(null as {{ dbt.type_string() }}[])                          as order_ids,
+        0                                                                as event_count,
+        v.is_ambiguous
+    from visit_only as v
+
 )
 
 select
-    d.customer_day_key,
-    d.sales_code,
+    c.customer_day_key,
+    c.sales_code,
     r.rep_name,
-    d.customer_key,
-    d.activity_date,
+    c.customer_key,
+    c.activity_date,
+    c.scenario,
+    c.sessions,
 
-    -- the headline: minutes actually keying on this customer that day
-    coalesce(v.pda_minutes, 0)
-        + coalesce(v.ipad_minutes, 0)
-        + coalesce(v.android_tablet_minutes, 0)                          as keying_minutes,
-    v.pda_minutes,
-    v.ipad_minutes,
-    v.android_tablet_minutes,
+    c.pda_minutes,
+    c.ipad_minutes,
+    c.android_tablet_minutes,
+    c.pda_minutes + c.ipad_minutes + c.android_tablet_minutes            as keying_minutes,
+    c.on_site_minutes,
 
-    -- when he opened it: one HH:mm per session, in time order
-    s.times_opened,
-    s.opened_at,
-    d.first_touch_local,
-    d.last_touch_local,
+    c.opened_at,
+    c.first_touch_local,
+    c.last_touch_local,
 
-    coalesce(o.orders_submitted, 0)                                      as orders_submitted,
-    coalesce(o.orders_keyed, 0)                                          as orders_keyed,
-    coalesce(o.orders_received, 0)                                       as orders_received,
-    o.order_ids,
-    d.event_count,
+    c.orders_submitted,
+    c.orders_keyed,
+    c.orders_received,
+    c.order_ids,
 
-    -- The noise filter, defined once here instead of in every query.
-    --
-    -- NOT applied as a WHERE: a customer-day with no time and no order is real
-    -- data (the rep opened the customer and did nothing — 7,297 abandoned
-    -- Create Order clicks on the real mirror), and a churn or coverage question
-    -- may well want those rows. Hiding them would also stop counts reconciling
-    -- with fct_events.
-    --
-    -- Do NOT filter on event_count instead: `event_count >= 4` looks sensible
-    -- but drops 4,503 orders — 31% of every order in this table — because a
-    -- submit that lands with no preceding cart activity is a legitimate
-    -- one-event row. This rule keeps 100% of orders and 100% of minutes, and
-    -- drops only the 4,240 rows that carry neither (2026-08-13).
-    (coalesce(v.pda_minutes, 0)
-        + coalesce(v.ipad_minutes, 0)
-        + coalesce(v.android_tablet_minutes, 0) > 0
-     or coalesce(o.orders_submitted, 0) > 0)                             as has_activity
-from days as d
-left join device_time as v
-    on v.customer_day_key = d.customer_day_key
-left join open_times as s
-    on s.customer_day_key = d.customer_day_key
-left join day_orders as o
-    on o.customer_day_key = d.customer_day_key
+    c.event_count,
+    c.is_ambiguous,
+
+    -- the standard noise filter: the rep spent measurable time, sent/handled an
+    -- order, or was physically there. False only when none of those hold.
+    -- Do NOT filter on event_count instead — `event_count >= 4` discards 31% of
+    -- all orders, because a submit landing with no preceding cart activity is a
+    -- legitimate one-event row.
+    (c.pda_minutes + c.ipad_minutes + c.android_tablet_minutes > 0
+     or c.orders_submitted > 0
+     or coalesce(c.on_site_minutes, 0) > 0)                              as has_activity
+from combined as c
 left join reps as r
-    on r.salesperson_code = d.sales_code
+    on r.salesperson_code = c.sales_code

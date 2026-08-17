@@ -147,3 +147,23 @@
                ) }}
     end
 {%- endmacro %}
+
+
+{# Great-circle distance between two lat/lon pairs, in METRES.
+
+   Pure arithmetic, so no adapter dispatch is needed — sin/cos/asin/sqrt/radians
+   are spelled the same on duckdb and databricks.
+
+   ALWAYS pair this with a bounding-box prefilter in the join condition. On
+   415k GPS fixes x 2.8k stores a naive cross join took 27s; adding
+   `abs(lat_a - lat_b) < r/110000` first took it to 7.8s (measured 2026-08-13).
+   1 degree of latitude is ~110km everywhere; 1 degree of longitude is ~85km at
+   37N, so the longitude divisor is the tighter, latitude-dependent one — the
+   values above are deliberately generous so the box never clips a true match. #}
+{% macro haversine_metres(lat_a, lon_a, lat_b, lon_b) -%}
+    (2 * 6371000 * asin(sqrt(
+        pow(sin(radians(({{ lat_b }}) - ({{ lat_a }})) / 2), 2)
+        + cos(radians({{ lat_a }})) * cos(radians({{ lat_b }}))
+        * pow(sin(radians(({{ lon_b }}) - ({{ lon_a }})) / 2), 2)
+    )))
+{%- endmacro %}

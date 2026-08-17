@@ -499,3 +499,57 @@ models:
         description: PDA / iPad / Android tablet.
       - name: increment_id
         description: Order number; populated on submit rows only, and exact.
+
+  - name: int_rep_customer_presence
+    description: >
+      Where a rep physically was, from GPS. One row per rep x customer x VISIT
+      (the same customer twice in a day is two rows). Derived INDEPENDENTLY of
+      app activity on purpose: a visit that produced no typing has no activity
+      row to hang off, so joining GPS onto activity would erase exactly the case
+      the business most wants counted. Pipeline, each step justified by a
+      measured failure: split per device (97% of impossible-travel hops are
+      device changes); drop hops over presence_max_mph; exclude the company
+      office (it is a customer row and would otherwise be every rep's
+      most-visited store); match each fix to the nearest customer within
+      presence_geofence_metres; group consecutive fixes into visits on
+      presence_visit_gap_minutes; drop visits under presence_min_dwell_minutes;
+      merge visits seen by two devices. Ambiguity is PUBLISHED not hidden —
+      21.2% of customers have another customer within 100m.
+    columns:
+      - name: customer_day_key
+        description: sales_code-customer_key-activity_date; joins to the activity models.
+        tests: [not_null]
+      - name: sales_code
+        description: Rep territory code.
+        tests: [not_null]
+      - name: customer_key
+        description: The customer whose geofence the rep was inside.
+        tests: [not_null]
+      - name: activity_date
+        description: Date in the rep's local time (modal offset per rep-day).
+        tests: [not_null]
+      - name: visit_seq
+        description: 1st, 2nd visit to that customer that day.
+      - name: arrived_at
+        description: First fix inside the geofence, rep local time.
+      - name: departed_at
+        description: Last fix inside the geofence, rep local time.
+      - name: on_site_minutes
+        description: >
+          Minutes between arrival and departure. Measured per visit, NOT
+          first-to-last across the day: min-to-max lumped two stops plus lunch
+          into one 187-minute "visit" during prototyping.
+      - name: closest_metres
+        description: Nearest any fix in this visit got to the customer's address.
+      - name: fix_count
+        description: GPS fixes behind this visit.
+      - name: is_ambiguous
+        description: >
+          True when another customer also sat inside the geofence for any fix in
+          this visit — the match is plausible, not proven. 10.3% of customers
+          have a neighbour within 25m, which is inside GPS error, so "nearest"
+          there is a coin flip rather than a measurement. Exclude these from
+          strict visit counts.
+      - name: devices
+        description: Which device(s) recorded the visit, sorted.
+

@@ -31,31 +31,23 @@ models:
 
   - name: mart_rep_customer_activity
     description: >
-      One row per REP x CUSTOMER x DAY. "On Monday rep 001 worked these 6
-      customers, spending this many minutes keying on each, at these times, and
-      sent these orders." 6 customers on Monday = 6 rows; keying_minutes is the
-      per-customer time; opened_at is the "at x time, x time".
-      NAMED ACTIVITY, NOT VISITS, on purpose: this measures APP USAGE and
-      cannot tell you the rep was physically there. GPS was profiled 2026-08-13
-      and cannot close the gap — only 44% of fixes land within a quarter mile
-      of the customer's median location (p90 is 244 miles, since a customer
-      stays selected while the rep drives away), so at best 17.7% of
-      customer-days could be confirmed on-site. Physical presence needs an
-      explicit check-in event from the app team. Also CUSTOMER, not "store":
-      NAV flags these accounts as MFG, Food Service, Wholesale, Retail and
-      Ecommerce, so many are not shops.
-      NOT A ROUTE either: it makes no claim about the order the rep worked in. Sessions for
-      different customers legitimately overlap, because reps work several open
-      orders at once (41% of customer switches happen inside 60 seconds on the
-      real mirror). keying_minutes is APPROXIMATE, because cart events carry no
-      order number, so sessions are inferred from idle gaps of
-      var('activity_gap_minutes') (30). Exact per row: customer, device split,
-      orders_submitted and order_ids. Filter `where has_activity` for
-      reporting; see that column for why event_count is the wrong filter.
+      One row per REP x CUSTOMER x DAY x SCENARIO. Answers "on Monday rep 001
+      worked these customers, this long, on this device, at these times, and
+      was he actually there". Splitting by scenario is the point: a rep can work
+      one customer both on-site and remotely in a day, and a single per-day
+      label hides it. On 2026-08-10 rep 025 built three baskets in-store then
+      submitted all three at 22:42 that evening; collapsed it read "on-site,
+      order M000182028" and implied he sent it there. Scenarios: remote /
+      on-site / visited, keyed elsewhere / customer ordered online / visit only,
+      no app / unknown. FULL OUTER JOIN of activity and presence, so a visit
+      that produced no typing still gets a row. EXACT per row: customer, device
+      split, order numbers, GPS distance. INFERRED: session boundaries (idle
+      gaps, since cart events carry no order number) and which customer a fix
+      belongs to when two share a geofence (see is_ambiguous).
     columns:
       - name: customer_day_key
-        description: sales_code-customer_key-activity_date. PK; join key to the event mart.
-        tests: [not_null, unique]
+        description: sales_code-customer_key-activity_date. NOT unique here — one row per scenario.
+        tests: [not_null]
       - name: sales_code
         description: Rep territory code.
         tests: [not_null]
@@ -68,77 +60,67 @@ models:
         description: >
           Date in the REP's local time. One timezone offset is chosen per
           rep-day (the modal one) because device_timezone is a device setting,
-          not a location: only 43% of rep-days carry a single value.
+          not a location — only 43% of rep-days carry a single value.
         tests: [not_null]
+      - name: scenario
+        description: >
+          How this block of work happened. `unknown` means there was no GPS for
+          that rep-day, or the customer has no coordinates (12% of customers) —
+          it is NOT the same as `remote`, and must never be read as "did not
+          visit".
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["remote", "on-site", "visited, keyed elsewhere",
+                         "customer ordered online", "visit only, no app", "unknown"]
+      - name: sessions
+        description: Separate sittings on this customer in this scenario. 0 for visit-only rows.
+      - name: pda_minutes
+        description: Minutes keying on the PDA.
+      - name: ipad_minutes
+        description: Minutes keying on the iPad (CatalogFS iOS).
+      - name: android_tablet_minutes
+        description: Minutes keying on the Android tablet (CatalogFS Android).
       - name: keying_minutes
         description: >
-          The headline number, in MINUTES, and always equal to pda_minutes +
-          ipad_minutes + android_tablet_minutes. Measured in seconds and
-          rounded once per device, so short bursts are not inflated. Time
-          actually keying on this customer that
-          day, summed across device stints. Excludes idle gaps and device
-          handoffs, so it is lower than last_touch minus first_touch.
-      - name: pda_minutes
-        description: Of keying_minutes, the share spent on the PDA.
-      - name: ipad_minutes
-        description: Of keying_minutes, the share spent on the iPad (CatalogFS iOS).
-      - name: android_tablet_minutes
+          Always equals pda + ipad + android_tablet. Measured in stints (unbroken
+          runs on one device) in seconds and rounded once per device, so a
+          PDA -> iPad -> PDA handoff is never billed to either and short bursts
+          are not inflated.
+      - name: on_site_minutes
         description: >
-          Of keying_minutes, the share on the Android tablet (CatalogFS
-          Android). Kept so the three device columns sum to keying_minutes.
-      - name: times_opened
-        description: >
-          How many separate times the rep pulled this customer up that day. A
-          30-minute idle gap starts a new one.
+          Minutes physically at the customer, from GPS. Null/0 when the rep was
+          not there or there is no GPS.
       - name: opened_at
-        description: >
-          One HH:mm per session, ascending — the "at x time, x time". NOTE this
-          is NOT the app's Login event (family 02): those record signing into
-          the APP, carry no customer 92% of the time, and Logout fires only 53
-          times in the whole log, so they cannot bracket per-customer work.
-          opened_at is INFERRED from idle gaps: it is when the rep started
-          working this customer, not a recorded login.
+        description: One HH:mm per session, ascending. Inferred from idle gaps, not a recorded login event.
       - name: first_touch_local
-        description: First work event on this customer that day, rep local time.
+        description: First work event in this scenario, rep local time.
       - name: last_touch_local
-        description: Last work event on this customer that day, rep local time.
+        description: Last work event in this scenario, rep local time.
       - name: orders_submitted
         description: >
-          Distinct orders SUCCESSFULLY SUBMITTED on this customer-day (EXACT).
-          Total of orders_keyed + orders_received. Confirmed by the dev team
-          2026-08-13: the 04 codes fire on "Sent successfully", never on
-          opening or viewing an order — the payload carries grand_total,
-          subtotal, total_item_count and duration, which only exist once an
-          order has actually gone through.
+          Distinct orders in this scenario (EXACT — the submit event names its
+          order). Confirmed by the dev team 2026-08-13 that the 04 codes fire on
+          successful submission, never on opening or viewing.
       - name: orders_keyed
-        description: >
-          Orders the rep BUILT on the PDA (order_channel = PDA). These are the
-          ones keying_minutes actually measures.
+        description: Orders the rep BUILT on the PDA (order_channel = PDA).
       - name: orders_received
-        description: >
-          Orders the CUSTOMER placed online (order_channel WEB or APP),
-          submitted self-service and attributed to this rep. Confirmed by the
-          dev team 2026-08-13: "Customer" vs "Sales" in the event names tracks
-          WHO PLACED the order, not the entry screen. This is why a
-          customer-day can hold an order with 0 keying_minutes — the rep never
-          keyed it, the customer submitted it themselves.
+        description: Orders the CUSTOMER placed online (WEB/APP) and the rep handled.
       - name: order_ids
-        description: The increment_ids submitted; NULL when none were sent.
+        description: The increment_ids in this scenario; NULL when none.
       - name: event_count
-        description: Work events on this customer that day (cart edits, features, order create/send).
+        description: Work events (cart edits, features, order create/send).
+      - name: is_ambiguous
+        description: >
+          True when another customer also sat inside the geofence — the visit is
+          plausible, not proven. Exclude from strict visit counts.
       - name: has_activity
         description: >
-          Did anything actually come of this customer-day? True when the rep
-          spent measurable time OR sent an order; false only when both are
-          zero, which is almost always a lone abandoned Create Order tap.
-          Use `where has_activity` rather than rolling your own
-          rule. Do NOT filter on event_count instead — `event_count >= 4` looks
-          reasonable but discards 4,503 orders (31% of all orders here),
-          because a submit landing with no preceding cart activity is a
-          legitimate one-event row. has_activity keeps 100% of orders and
-          minutes and drops only the 4,240 rows carrying neither. Rows are kept
-          rather than filtered out of the model, since "rep opened the customer
-          and did nothing" is real and matters for coverage questions.
+          The standard noise filter: true when the rep spent measurable time,
+          handled an order, OR was physically there. Use `where has_activity`.
+          Do NOT filter on event_count — `event_count >= 4` discards 31% of all
+          orders, because a submit with no preceding cart activity is a
+          legitimate one-event row.
 
   - name: mart_rep_customer_activity_events
     description: >

@@ -122,6 +122,16 @@ sources:
             description: "Payment method."
           - name: gen_bus_posting_group
             description: "General business posting group — the customer side of NAV's GL posting matrix."
+          - name: latitude
+            description: >
+              Geocoded latitude of the customer's street address. NOT native NAV —
+              added to this table so rep GPS fixes can be matched to a physical
+              customer location (see int_rep_customer_presence). Null until the
+              address is geocoded; a null here means presence can never be
+              confirmed for that customer, which must read as unknown, not "did
+              not visit".
+          - name: longitude
+            description: Geocoded longitude, same provenance and caveat as latitude.
           - name: post_code
             description: "Postal/ZIP code."
           - name: county
