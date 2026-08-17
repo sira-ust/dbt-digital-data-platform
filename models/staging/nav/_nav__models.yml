@@ -8,6 +8,9 @@ models:
       physically is — so that if geocoding later moves to a different table only
       this model changes. customer_no is the same code as mysql ust_customer_no
       and jdawms stcust (confirmed exact), so it joins straight to customer_key.
+      Coordinates come from nav.customer_geocode, written out-of-band by
+      scripts/geocode_customers.py — navrep.customer is a read-only replication
+      target, so a geocode written there would be wiped by the next replication.
       Customers WITHOUT coordinates are excluded rather than carried as nulls:
       they can never be geofenced, and downstream that must read as "unknown",
       never as "did not visit". Excluding them makes it a left-join miss, which
@@ -38,3 +41,10 @@ models:
         description: >
           The rep NAV says owns this account. Note this is the ASSIGNED rep,
           which is not necessarily the rep whose GPS matched the location.
+      - name: geocoded_address
+        description: >
+          The exact address string sent to Google, after the team's cleaning
+          rules. Kept so a suspicious coordinate can be traced back to what was
+          actually resolved.
+      - name: geocoded_at
+        description: When the coordinate was resolved.
