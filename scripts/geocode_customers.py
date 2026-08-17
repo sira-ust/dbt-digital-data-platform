@@ -52,11 +52,12 @@ The script reads it with os.getenv, so nothing in the code changes and the key
 never appears in the job definition, the repo, or a log. Databricks auth itself
 needs NO secret on a job — the run-as identity is ambient.
 
-A ready-made job spec is in scripts/databricks/geocode_job.json: it runs this
-task and THEN the daily dbt build, so a customer added overnight has coordinates
-before int_rep_customer_presence reads them. Without that ordering there is a
-window where a new customer exists but has no coordinate, and every visit to
-them silently reports scenario "unknown".
+scripts/databricks/geocode_task.json is a task to ADD to the existing daily
+job, upstream of the dbt build — not a second job. A customer added overnight
+then has coordinates before int_rep_customer_presence reads them. Without that
+ordering there is a window where the customer exists with no coordinate, and
+every visit to them silently reports scenario "unknown", which reads as "did not
+visit" to anyone who has not been told otherwise.
 
     # local dev against the mock parquet
     python scripts/geocode_customers.py --backend local --dry-run
@@ -78,6 +79,11 @@ GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 # Google's free tier allows well above this; 10/s is deliberately polite and
 # keeps a full 7k run at roughly 12 minutes.
 REQUESTS_PER_SECOND = 10
+
+# Persist every N results. A 7,198-row run takes ~20 minutes; without
+# checkpointing, an interruption at minute 19 loses everything and has still
+# been billed for it.
+CHECKPOINT_EVERY = 50
 
 LOCAL_CUSTOMER = "data/mock/navrep/customer.parquet"
 LOCAL_GEOCODE = "data/mock/navrep/customer_geocode.parquet"
@@ -188,17 +194,52 @@ def _spark():
         return None
 
 
+def _profile_target():
+    """host + http_path from profiles.yml, so a local run needs no duplicate config.
+
+    dbt already knows how to reach the workspace; making the operator re-declare
+    it as env vars is a second copy that can drift. Env vars still win when set,
+    for anyone running outside a dbt checkout.
+    """
+    import yaml
+    for candidate in (
+        os.environ.get("DBT_PROFILES_DIR", "") + "/profiles.yml",
+        "profiles.yml",
+        os.path.expanduser("~/.dbt/profiles.yml"),
+    ):
+        if candidate and os.path.exists(candidate):
+            with open(candidate) as fh:
+                cfg = yaml.safe_load(fh) or {}
+            for prof in cfg.values():
+                if not isinstance(prof, dict):
+                    continue
+                out = (prof.get("outputs") or {}).get("databricks")
+                if out and out.get("host") and out.get("http_path"):
+                    return out["host"], out["http_path"], candidate
+    return None, None, None
+
+
 def _sql_conn():
-    """SQL-connector fallback for LOCAL runs against Databricks (needs a PAT)."""
+    """SQL-connector path for LOCAL runs against Databricks (needs a PAT)."""
     from databricks import sql as dbsql
-    host = os.environ.get("DATABRICKS_HOST", "")
+    host = os.environ.get("DATABRICKS_HOST")
     path = os.environ.get("DATABRICKS_HTTP_PATH")
+    src = "env vars"
+    if not (host and path):
+        host, path, src = _profile_target()
     tok = os.environ.get("DATABRICKS_TOKEN") or os.environ.get("DBT_DATABRICKS_TOKEN")
-    if not (host and path and tok):
+
+    if not (host and path):
         raise SystemExit(
-            "Need a Databricks host + http path + token for a LOCAL run: set "
-            "DATABRICKS_HOST / DATABRICKS_HTTP_PATH / DATABRICKS_TOKEN. "
-            "On Databricks compute none of these are needed (ambient auth).")
+            "Cannot find the Databricks workspace. Either run this on Databricks "
+            "compute (ambient auth, nothing to set), or make sure profiles.yml has "
+            "a `databricks` output, or set DATABRICKS_HOST / DATABRICKS_HTTP_PATH.")
+    if not tok:
+        raise SystemExit(
+            "No Databricks token: set DBT_DATABRICKS_TOKEN (the same one dbt uses) "
+            "or DATABRICKS_TOKEN. Not needed when running on Databricks compute.")
+
+    print(f"connecting to {host} (from {src})")
     return dbsql.connect(server_hostname=host.replace("https://", ""),
                          http_path=path, access_token=tok)
 
@@ -317,23 +358,45 @@ def main():
         print(f"ERROR: {API_KEY_ENV} is not set", file=sys.stderr)
         return 1
 
-    rows, ok, fail = [], 0, 0
+    save = save_local if a.backend == "local" else save_dbx
+    rows, ok, fail, written = [], 0, 0, 0
     delay = 1.0 / REQUESTS_PER_SECOND
-    for i, (cn, addr, h) in enumerate(todo, 1):
-        lat, lon, status = geocode(addr, key)
-        if status == "OVER_QUERY_LIMIT":
-            # stop immediately: continuing just burns quota on guaranteed failures
-            print("OVER_QUERY_LIMIT — stopping. Saving what completed.", file=sys.stderr)
-            break
-        rows.append((cn, lat, lon, status, addr, h, None))
-        ok, fail = (ok + 1, fail) if status == "OK" else (ok, fail + 1)
-        if i % 100 == 0:
-            print(f"   {i}/{len(todo)}  ok={ok} failed={fail}")
-        time.sleep(delay)
 
-    if rows:
-        total = save_local(rows) if a.backend == "local" else save_dbx(rows)
-        print(f"wrote {len(rows)} rows ({ok} resolved, {fail} failed); table now {total} rows")
+    def flush(batch):
+        """Persist a batch. CHECKPOINTING MATTERS: without it, a run killed at
+        row 6,000 of 7,198 loses every geocode AND has still paid for them."""
+        nonlocal written
+        if not batch:
+            return
+        save(batch)
+        written += len(batch)
+        batch.clear()
+
+    try:
+        for i, (cn, addr, h) in enumerate(todo, 1):
+            lat, lon, status = geocode(addr, key)
+            if status == "OVER_QUERY_LIMIT":
+                # stop immediately: continuing just burns quota on guaranteed failures
+                print("OVER_QUERY_LIMIT — stopping. Saving what completed.", file=sys.stderr)
+                break
+            rows.append((cn, lat, lon, status, addr, h, None))
+            ok, fail = (ok + 1, fail) if status == "OK" else (ok, fail + 1)
+
+            # every 10, not every 100: at ~3 requests/sec real-world, 100 is
+            # forty seconds of silence and looks like a hang
+            if i % 10 == 0 or i == len(todo):
+                print(f"   {i}/{len(todo)}  ok={ok} failed={fail}", flush=True)
+            if len(rows) >= CHECKPOINT_EVERY:
+                flush(rows)
+                print(f"   ...checkpointed {written}", flush=True)
+            time.sleep(delay)
+    except KeyboardInterrupt:
+        print("interrupted — saving what completed so it is not paid for twice",
+              file=sys.stderr)
+
+    flush(rows)
+    if written:
+        print(f"wrote {written} rows ({ok} resolved, {fail} failed)")
     if fail:
         print(f"\n{fail} addresses did not resolve — they are stored with their status "
               f"so this run is not repeated. Inspect with:\n"
