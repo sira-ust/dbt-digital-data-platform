@@ -3,10 +3,12 @@
 Sibling of scripts/resolve_trending_concepts.py — same shape: dbt stays
 deterministic and never calls an external API; this writes a table dbt reads.
 
-WHY A SEPARATE TABLE, not columns on navrep.customer: navrep.customer is a
-read-only replication target. Anything written into it is overwritten by the
-next replication run. customer_geocode survives, and lets the geocode carry its
-own provenance (when it was resolved, from which address, how confidently).
+WHY A SEPARATE TABLE IN A SEPARATE SCHEMA: navrep is a read-only replication
+target owned by the ingestion process -- anything written there is overwritten
+by the next replication run, and a hand-written table could be dropped by a
+schema sync with nothing to restore it. It would also read as though it were
+part of the NAV feed, which it is not. ust_external.nav_customer_geocode says
+both things at once: ours, produced out-of-band, derived FROM nav.
 
 WHY IT IS INCREMENTAL: Google Geocoding bills ~$5 per 1,000 lookups. A full
 pass over 7,198 customers is ~$36. Re-geocoding an address that has not changed
@@ -25,7 +27,7 @@ of paying again. Clear status to retry a batch after fixing the source address.
 
 Flow position:
     (NAV replication)            ->  navrep.customer
- >> geocode_customers (THIS)     ->  navrep.customer_geocode
+ >> geocode_customers (THIS)     ->  ust_external.nav_customer_geocode
     dbt build --select stg_nav__customer_locations+
                                  ->  int_rep_customer_presence -> the mart
 
@@ -60,7 +62,8 @@ REQUESTS_PER_SECOND = 10
 LOCAL_CUSTOMER = "data/mock/navrep/customer.parquet"
 LOCAL_GEOCODE = "data/mock/navrep/customer_geocode.parquet"
 DBX_CUSTOMER = "ust_databricks.navrep.customer"
-DBX_GEOCODE = "ust_databricks.navrep.customer_geocode"
+DBX_SCHEMA  = "ust_databricks.ust_external"
+DBX_GEOCODE = "ust_databricks.ust_external.nav_customer_geocode"
 
 
 # ── address cleaning: verbatim from the team's geocoding.py ──────────────────
@@ -154,6 +157,9 @@ def _dbx():
 
 def load_dbx():
     con = _dbx(); cur = con.cursor()
+    # ust_external, NOT navrep: navrep is a read-only replication target and a
+    # hand-written table there could be dropped by a schema sync
+    cur.execute(f"create schema if not exists {DBX_SCHEMA}")
     cur.execute(f"""create table if not exists {DBX_GEOCODE} (
         customer_no string, latitude double, longitude double,
         geocode_status string, geocoded_address string,

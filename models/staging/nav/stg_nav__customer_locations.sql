@@ -1,12 +1,14 @@
 -- stg_nav__customer_locations — one row per customer with a usable coordinate.
 --
--- Joins the NAV customer master (the address) to nav.customer_geocode (the
--- coordinate resolved from it by scripts/geocode_customers.py).
+-- Joins the NAV customer master (the address) to
+-- ust_external.nav_customer_geocode (the coordinate resolved from it by
+-- scripts/geocode_customers.py).
 --
--- WHY TWO TABLES: navrep.customer is a read-only replication target — anything
--- written into it is overwritten by the next replication run, so the geocode
--- cannot live there. Keeping it separate also lets the geocode carry its own
--- provenance (which address string was resolved, when, and whether it worked).
+-- WHY THE GEOCODE IS NOT IN navrep: that schema is a read-only replication
+-- target owned by the ingestion process. A hand-written table there could be
+-- dropped by a schema sync with nothing to restore it, and would read as though
+-- it were part of the NAV feed. ust_external says it is ours and produced
+-- out-of-band; the nav_ prefix records what it was derived from.
 --
 -- customer_no is the same code as mysql ust_customer_no and jdawms stcust
 -- (confirmed exact, no normalisation) — so it joins straight to customer_key.
@@ -24,7 +26,7 @@ with customer as (
 
 geocode as (
 
-    select * from {{ source('nav', 'customer_geocode') }}
+    select * from {{ source('ust_external', 'nav_customer_geocode') }}
 
 )
 

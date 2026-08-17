@@ -165,49 +165,6 @@ sources:
           - name: loaddate
             description: "Ingestion watermark — set to the pipeline run time. Full load, so this advances every run regardless of whether the row changed."
 
-      - name: customer_geocode
-        description: >
-          Geocoded coordinates per customer, written by
-          scripts/geocode_customers.py via the Google Geocoding API. NOT part of
-          the NAV replication — it lives in the same schema for convenience but
-          is produced out-of-band, because navrep.customer is a read-only
-          replication target and anything written into it is overwritten by the
-          next replication run.
-          INCREMENTAL BY DESIGN: address_hash records which address string was
-          resolved, so only new or changed addresses are re-sent. Google bills
-          ~$5/1,000, so a full 7,198-customer pass is ~$36 and a second run is
-          free. Failures are stored with their status rather than retried
-          forever.
-        config:
-          external_location: "read_parquet('data/mock/navrep/customer_geocode.parquet')"
-          loaded_at_field: geocoded_at
-          freshness:
-            # geocoding runs on demand, not on a schedule -- a stale geocode is
-            # only a problem if new customers have been added since
-            warn_after: {count: 30, period: day}
-        columns:
-          - name: customer_no
-            description: Customer number — the PK, joins to nav.customer and to customer_key.
-          - name: latitude
-            description: Resolved latitude; NULL when geocoding failed.
-          - name: longitude
-            description: Resolved longitude; NULL when geocoding failed.
-          - name: geocode_status
-            description: >
-              Google's status for this address — OK, ZERO_RESULTS,
-              OVER_QUERY_LIMIT, or a local REQUEST_ERROR/HTTP_nnn. Anything but
-              OK means the coordinates are null and presence can never be
-              confirmed for that customer.
-          - name: geocoded_address
-            description: >
-              The exact single-line address sent to Google, after the team's
-              cleaning rules (drop placeholder streets, strip PICKUP, default a
-              "-" state to CA). Kept so a bad match can be diagnosed.
-          - name: address_hash
-            description: Hash of geocoded_address; changes only when the address changes.
-          - name: geocoded_at
-            description: When this row was resolved.
-
       - name: customer_ethnicity
         description: >
           Ethnicity mix per customer — grain customer_no + ethnicity, with a
