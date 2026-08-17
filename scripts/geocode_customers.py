@@ -52,6 +52,12 @@ The script reads it with os.getenv, so nothing in the code changes and the key
 never appears in the job definition, the repo, or a log. Databricks auth itself
 needs NO secret on a job — the run-as identity is ambient.
 
+A ready-made job spec is in scripts/databricks/geocode_job.json: it runs this
+task and THEN the daily dbt build, so a customer added overnight has coordinates
+before int_rep_customer_presence reads them. Without that ordering there is a
+window where a new customer exists but has no coordinate, and every visit to
+them silently reports scenario "unknown".
+
     # local dev against the mock parquet
     python scripts/geocode_customers.py --backend local --dry-run
 """
