@@ -29,6 +29,155 @@ models:
       - name: avg_days_to_close
         description: Average calendar days from first cycle event to submit (approximate).
 
+  - name: mart_rep_customer_activity
+    description: >
+      One row per REP x CUSTOMER x DAY x SCENARIO. Answers "on Monday rep 001
+      worked these customers, this long, on this device, at these times, and
+      was he actually there". Splitting by scenario is the point: a rep can work
+      one customer both on-site and remotely in a day, and a single per-day
+      label hides it. On 2026-08-10 rep 025 built three baskets in-store then
+      submitted all three at 22:42 that evening; collapsed it read "on-site,
+      order M000182028" and implied he sent it there. Scenarios: remote /
+      on-site / visited, keyed elsewhere / customer ordered online / visit only,
+      no app / unknown. FULL OUTER JOIN of activity and presence, so a visit
+      that produced no typing still gets a row. EXACT per row: customer, device
+      split, order numbers, GPS distance. INFERRED: session boundaries (idle
+      gaps, since cart events carry no order number) and which customer a fix
+      belongs to when two share a geofence (see is_ambiguous).
+    columns:
+      - name: customer_day_key
+        description: sales_code-customer_key-activity_date. NOT unique here — one row per scenario.
+        tests: [not_null]
+      - name: sales_code
+        description: Rep territory code.
+        tests: [not_null]
+      - name: rep_name
+        description: Display name from admin_users (max per territory code).
+      - name: customer_key
+        description: Unified customer key, the account worked.
+        tests: [not_null]
+      - name: activity_date
+        description: >
+          Date in the REP's local time. One timezone offset is chosen per
+          rep-day (the modal one) because device_timezone is a device setting,
+          not a location — only 43% of rep-days carry a single value.
+        tests: [not_null]
+      - name: scenario
+        description: >
+          How this block of work happened. `unknown` means there was no GPS for
+          that rep-day, or the customer has no coordinates (12% of customers) —
+          it is NOT the same as `remote`, and must never be read as "did not
+          visit".
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["remote", "on-site", "visited, keyed elsewhere",
+                         "customer ordered online", "visit only, no app", "unknown"]
+      - name: sessions
+        description: Separate sittings on this customer in this scenario. 0 for visit-only rows.
+      - name: pda_minutes
+        description: Minutes keying on the PDA.
+      - name: ipad_minutes
+        description: Minutes keying on the iPad (CatalogFS iOS).
+      - name: android_tablet_minutes
+        description: Minutes keying on the Android tablet (CatalogFS Android).
+      - name: keying_minutes
+        description: >
+          Always equals pda + ipad + android_tablet. Measured in stints (unbroken
+          runs on one device) in seconds and rounded once per device, so a
+          PDA -> iPad -> PDA handoff is never billed to either and short bursts
+          are not inflated.
+      - name: on_site_minutes
+        description: >
+          Minutes physically at the customer, from GPS. Null/0 when the rep was
+          not there or there is no GPS.
+      - name: opened_at
+        description: One HH:mm per session, ascending. Inferred from idle gaps, not a recorded login event.
+      - name: first_touch_local
+        description: First work event in this scenario, rep local time.
+      - name: last_touch_local
+        description: Last work event in this scenario, rep local time.
+      - name: orders_submitted
+        description: >
+          Distinct orders in this scenario (EXACT — the submit event names its
+          order). Confirmed by the dev team 2026-08-13 that the 04 codes fire on
+          successful submission, never on opening or viewing.
+      - name: orders_keyed
+        description: Orders the rep BUILT on the PDA (order_channel = PDA).
+      - name: orders_received
+        description: Orders the CUSTOMER placed online (WEB/APP) and the rep handled.
+      - name: order_ids
+        description: The increment_ids in this scenario; NULL when none.
+      - name: event_count
+        description: Work events (cart edits, features, order create/send).
+      - name: is_ambiguous
+        description: >
+          True when another customer also sat inside the geofence — the visit is
+          plausible, not proven. Exclude from strict visit counts.
+      - name: has_activity
+        description: >
+          The standard noise filter: true when the rep spent measurable time,
+          handled an order, OR was physically there. Use `where has_activity`.
+          Do NOT filter on event_count — `event_count >= 4` discards 31% of all
+          orders, because a submit with no preceding cart activity is a
+          legitimate one-event row.
+
+  - name: mart_rep_customer_activity_events
+    description: >
+      Drill-down behind mart_rep_customer_activity. One row per rep work event,
+      stamped with the rep-customer-day it belongs to. Filter on
+      customer_day_key and order by event_seq to replay the work. Grain is
+      entity_id, so no day-level metric is repeated onto event rows and sum()
+      is safe. increment_id is populated on submit rows only and is exact; it
+      is deliberately NOT back-filled onto preceding events, which carry no
+      order number.
+    columns:
+      - name: customer_day_key
+        description: FK to mart_rep_customer_activity.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('mart_rep_customer_activity')
+                field: customer_day_key
+      - name: entity_id
+        description: Event id, the PK. Join to fct_events for anything not here.
+        tests: [not_null, unique]
+      - name: sales_code
+        description: Rep territory code; denormalised so a rep filters without a join.
+        tests: [not_null]
+      - name: customer_key
+        description: The account; denormalised for the same reason.
+        tests: [not_null]
+      - name: activity_date
+        description: Date in the rep's local time.
+      - name: session_seq
+        description: Which sitting on this customer the event belongs to.
+      - name: event_seq
+        description: Position within the customer-day (1 = first), the replay order.
+      - name: event_at_local
+        description: When it happened, in the rep's local time.
+      - name: seconds_since_prev_event
+        description: >
+          Dwell on the previous step. Null on a session's first event. Bounded
+          by the 30-minute gap rule, which starts a new session.
+      - name: device
+        description: PDA / iPad / Android tablet.
+      - name: function_name
+        description: The dev team's name for the event, verbatim.
+      - name: feature_name
+        description: search / filter / catalog_view / item_detail / icon_click / oos_check.
+      - name: page_context
+        description: Catalog section. promo / backorder / history / suggest.
+      - name: is_submit
+        description: True on the one event per order that actually sent it.
+      - name: increment_id
+        description: Order number. Populated on submit rows only; exact.
+      - name: order_channel
+        description: >
+          PDA = the rep keyed it; WEB / APP = the customer placed it online and
+          it arrived for the rep to process. Null on non-submit rows.
+
   - name: mart_customer_weekly
     description: >
       Customer behaviour, one row per customer_key x week. Event-based metrics

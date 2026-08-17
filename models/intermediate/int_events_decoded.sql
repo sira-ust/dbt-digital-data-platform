@@ -49,11 +49,11 @@ select
     substr(description_code, 7, 2)                                      as l4_code,
 
     -- ── timestamps ─────────────────────────────────────────────────────
-    -- event_time is device LOCAL; convert to UTC via the row timezone offset.
-    {{ add_hours(
-        event_time_to_ts('event_time'),
-        '-coalesce(' ~ tz_offset_hours('timezone') ~ ', 0)'
-    ) }}                                                                as event_at_utc,
+    -- event_time is epoch (live MySQL, already UTC) OR a device-LOCAL datetime
+    -- string (local JSON sample, needs the tz offset). event_time_to_utc
+    -- branches on the format; applying the offset to both was a double
+    -- conversion that skewed the whole warehouse by up to 9h until 2026-08-13.
+    {{ event_time_to_utc('event_time', 'timezone') }}                   as event_at_utc,
     timezone                                                            as device_timezone,
     -- created_at / updated_at are server PST (UTC-8, no DST): constant +8h.
     {{ add_hours('created_at', 8) }}                                   as created_at_utc,

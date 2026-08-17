@@ -35,6 +35,27 @@ vars:
   cycle_abandon_days: 7       # open cycle with no activity this long = abandoned
   churn_consecutive_weeks: 3  # removes > adds this many weeks running = churn signal
 
+  # mart_rep_customer_activity — a rep's stop at one customer. Deliberately TIGHTER
+  # than cycle_gap_minutes (60): 60 min is tuned for "is this the same shopping
+  # cycle", which survives a lunch break; a store visit does not. 30 min is long
+  # enough to absorb a chat with the owner mid-order, short enough that drive
+  # time to the next stop always splits the visit.
+  activity_gap_minutes: 30
+
+  # int_rep_customer_presence — matching rep GPS to a customer's address.
+  # 100m matches the geofence Annie's sales-geo process already uses; keeping
+  # them equal matters more than the exact number, so the two never disagree on
+  # how many visits a rep made.
+  presence_geofence_metres: 100
+  presence_visit_gap_minutes: 20   # away from the store this long = a new visit
+  presence_min_dwell_minutes: 3    # below this it is driving past, not a visit
+  presence_max_mph: 80             # a faster hop is bad data, not travel
+  # the company address, marked OFF001 in Annie's process. It is a row in the
+  # customer table, so without this it becomes every rep's most-visited store.
+  office_latitude: 37.6449309
+  office_longitude: -122.1362259
+  office_radius_metres: 150
+
   # system_event_log production go-live: event_at_utc is device time, so a
   # few rows carry clock-skewed dates before this — int_item_demand_daily
   # clamps to [go-live, now].
@@ -149,12 +170,9 @@ models:
       # (`nav`), so lineage/freshness/selection stay independent. duckdb reads
       # mock parquet from data/mock/navrep/.
       #
-      # Commented out until the first stg_nav__* model exists — dbt warns
-      # "unused configuration paths" for a config block that matches no models.
-      # Uncomment together with that first model.
-      # nav:
-      #   +materialized: view
-      #   +tags: ["staging", "nav", "erp"]
+      nav:
+        +materialized: view
+        +tags: ["staging", "nav", "erp"]
       mentionlytics:
         # Social-listening feed. Weekly xlsx drop → parquet via
         # scripts/convert_mentionlytics.py (run before dbt build); duckdb globs

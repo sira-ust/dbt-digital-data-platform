@@ -1,0 +1,67 @@
+# Add to the EXISTING bundle job `ust_digital_platform_dbt` — do not create a
+# second job. Two jobs both running dbt would race on the same tables.
+#
+# Two edits to resources/<your bundle file>:
+#   1. add the `geocode-new-customers` task below to `tasks:`
+#   2. add `depends_on` to the existing `dbt-build` task so it waits for it
+#
+# WHY IN THE DAILY JOB and not its own schedule: the geocode table is a hard
+# dependency of int_rep_customer_presence. Split across two schedules there is a
+# window where a customer exists in navrep.customer with no coordinate, and every
+# visit to them silently reports scenario "unknown" — which reads as "did not
+# visit" to anyone who has not been told otherwise.
+#
+# WHY DAILY IS CHEAP: the script is incremental on address_hash. A day with no
+# new customers sends zero requests and costs nothing; five new customers is
+# about 3 cents.
+#
+# --limit 500 is a BLAST-RADIUS CAP, not a throughput setting. If an upstream
+# change ever rewrites every address (a formatting fix, a trailing-space
+# cleanup), address_hash changes for all 7,198 rows and an uncapped unattended
+# run would spend ~$36. Capped, the worst case is ~$2.50 and the backlog drains
+# over following days. Remove it only for a deliberate, attended backfill.
+
+tasks:
+  # ── NEW: goes before dbt-build ──────────────────────────────────────────
+  - task_key: geocode-new-customers
+    description: >
+      Geocode NAV customers whose address is new or changed. No-op on a quiet day.
+    spark_python_task:
+      python_file: scripts/geocode_customers.py
+      source: GIT                       # same repo as the dbt task
+      parameters:
+        - "--backend"
+        - "databricks"
+        - "--limit"
+        - "500"
+    environment_key: geocode-env
+
+  # ── EXISTING: add depends_on only; everything else unchanged ────────────
+  - task_key: dbt-build
+    depends_on:
+      - task_key: geocode-new-customers
+    # ... your existing dbt_task block, unchanged ...
+
+environments:
+  # ── NEW: the geocode task needs requests + the SDK ──────────────────────
+  # The SDK supplies the run-as identity ambiently on serverless, so no PAT and
+  # no Databricks secret are needed to reach our own workspace.
+  - environment_key: geocode-env
+    spec:
+      environment_version: "5"
+      dependencies:
+        - requests
+        - databricks-sdk
+        - databricks-sql-connector
+
+# ── SECRET ────────────────────────────────────────────────────────────────
+# Only the GOOGLE key needs one — it is third-party, so there is no ambient
+# auth for it. Set as an env var on the geocode task:
+#
+#   GOOGLE_GEOCODING_API_KEY: "{{secrets/<scope>/google_geocoding_api_key}}"
+#
+# Confirm the exact reference in the Catalog UI: the secret is stored at
+# ust_databricks.ust_external.google_geocoding_api_key, and UC-managed secrets
+# may not use the legacy {{secrets/scope/key}} form.
+#
+# run_as needs: read on navrep, write on ust_external, read on the secret.
