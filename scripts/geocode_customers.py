@@ -219,8 +219,28 @@ def _profile_target():
     return None, None, None
 
 
+def _ambient_token():
+    """Token from the Databricks SDK credential chain, when running on Databricks.
+
+    Needed for SERVERLESS python tasks: those may have no SparkSession, and no
+    PAT is injected either — but the SDK resolves the run-as identity ambiently.
+    Without this, a serverless task would have no way to authenticate at all.
+    Returns (host, token) or (None, None) off-platform.
+    """
+    try:
+        from databricks.sdk.core import Config
+        cfg = Config()
+        headers = cfg.authenticate()                 # raises off-platform
+        auth = headers.get("Authorization", "")
+        if auth.startswith("Bearer ") and cfg.host:
+            return cfg.host, auth[len("Bearer "):]
+    except Exception:
+        pass
+    return None, None
+
+
 def _sql_conn():
-    """SQL-connector path for LOCAL runs against Databricks (needs a PAT)."""
+    """SQL-connector path: serverless job task, or a local run with a PAT."""
     from databricks import sql as dbsql
     host = os.environ.get("DATABRICKS_HOST")
     path = os.environ.get("DATABRICKS_HTTP_PATH")
@@ -228,6 +248,11 @@ def _sql_conn():
     if not (host and path):
         host, path, src = _profile_target()
     tok = os.environ.get("DATABRICKS_TOKEN") or os.environ.get("DBT_DATABRICKS_TOKEN")
+    if not tok:
+        amb_host, amb_tok = _ambient_token()
+        if amb_tok:
+            tok, src = amb_tok, "ambient (Databricks run-as identity)"
+            host = host or amb_host
 
     if not (host and path):
         raise SystemExit(
@@ -236,8 +261,9 @@ def _sql_conn():
             "a `databricks` output, or set DATABRICKS_HOST / DATABRICKS_HTTP_PATH.")
     if not tok:
         raise SystemExit(
-            "No Databricks token: set DBT_DATABRICKS_TOKEN (the same one dbt uses) "
-            "or DATABRICKS_TOKEN. Not needed when running on Databricks compute.")
+            "No Databricks token. On Databricks the run-as identity should supply "
+            "one ambiently; locally set DBT_DATABRICKS_TOKEN (the same one dbt "
+            "uses) or DATABRICKS_TOKEN.")
 
     print(f"connecting to {host} (from {src})")
     return dbsql.connect(server_hostname=host.replace("https://", ""),
