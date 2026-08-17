@@ -38,6 +38,20 @@ Flow position:
     export GOOGLE_GEOCODING_API_KEY=...
     python scripts/geocode_customers.py --backend databricks --limit 200
 
+AS A DATABRICKS JOB: the Google key is a THIRD-PARTY credential — there is no
+ambient auth for it, so it has to be supplied. Put it in a secret scope and
+reference it from the job's environment, never as a literal:
+
+    databricks secrets create-scope ust
+    databricks secrets put-secret ust google_geocoding_api_key
+
+    # in the job task's environment variables:
+    GOOGLE_GEOCODING_API_KEY = {{secrets/ust/google_geocoding_api_key}}
+
+The script reads it with os.getenv, so nothing in the code changes and the key
+never appears in the job definition, the repo, or a log. Databricks auth itself
+needs NO secret on a job — the run-as identity is ambient.
+
     # local dev against the mock parquet
     python scripts/geocode_customers.py --backend local --dry-run
 """
@@ -147,23 +161,59 @@ def save_local(rows):
     return len(new)
 
 
-def _dbx():
+DDL = f"""create table if not exists {DBX_GEOCODE} (
+    customer_no string, latitude double, longitude double,
+    geocode_status string, geocoded_address string,
+    address_hash string, geocoded_at timestamp)"""
+
+
+def _spark():
+    """Spark session when running ON Databricks compute, else None.
+
+    Same shape as enrich_mentions.py / resolve_trending_concepts.py: on
+    Databricks the job's run-as identity authenticates ambiently, so no PAT and
+    no secret are needed just to reach our own workspace. A PAT is only for
+    local runs.
+    """
+    try:
+        from pyspark.sql import SparkSession
+        return SparkSession.builder.getOrCreate()
+    except Exception:
+        return None
+
+
+def _sql_conn():
+    """SQL-connector fallback for LOCAL runs against Databricks (needs a PAT)."""
     from databricks import sql as dbsql
-    return dbsql.connect(
-        server_hostname=os.environ["DATABRICKS_HOST"].replace("https://", ""),
-        http_path=os.environ["DATABRICKS_HTTP_PATH"],
-        access_token=os.environ["DBT_DATABRICKS_TOKEN"])
+    host = os.environ.get("DATABRICKS_HOST", "")
+    path = os.environ.get("DATABRICKS_HTTP_PATH")
+    tok = os.environ.get("DATABRICKS_TOKEN") or os.environ.get("DBT_DATABRICKS_TOKEN")
+    if not (host and path and tok):
+        raise SystemExit(
+            "Need a Databricks host + http path + token for a LOCAL run: set "
+            "DATABRICKS_HOST / DATABRICKS_HTTP_PATH / DATABRICKS_TOKEN. "
+            "On Databricks compute none of these are needed (ambient auth).")
+    return dbsql.connect(server_hostname=host.replace("https://", ""),
+                         http_path=path, access_token=tok)
 
 
 def load_dbx():
-    con = _dbx(); cur = con.cursor()
     # ust_external, NOT navrep: navrep is a read-only replication target and a
     # hand-written table there could be dropped by a schema sync
+    spark = _spark()
+    if spark is not None:
+        spark.sql(f"create schema if not exists {DBX_SCHEMA}")
+        spark.sql(DDL)
+        cust = [tuple(r) for r in spark.sql(
+            f"select customer_no, address, city, county, post_code from {DBX_CUSTOMER}"
+        ).collect()]
+        done = {r[0]: r[1] for r in spark.sql(
+            f"select customer_no, address_hash from {DBX_GEOCODE}").collect()}
+        return cust, done
+
+    con = _sql_conn(); cur = con.cursor()
     cur.execute(f"create schema if not exists {DBX_SCHEMA}")
-    cur.execute(f"""create table if not exists {DBX_GEOCODE} (
-        customer_no string, latitude double, longitude double,
-        geocode_status string, geocoded_address string,
-        address_hash string, geocoded_at timestamp)""")
+    cur.execute(DDL)
     cur.execute(f"select customer_no, address, city, county, post_code from {DBX_CUSTOMER}")
     cust = cur.fetchall()
     cur.execute(f"select customer_no, address_hash from {DBX_GEOCODE}")
@@ -173,9 +223,26 @@ def load_dbx():
 
 
 def save_dbx(rows):
-    con = _dbx(); cur = con.cursor()
+    spark = _spark()
     keys = ", ".join("'%s'" % r[0].replace("'", "''") for r in rows)
-    cur.execute(f"delete from {DBX_GEOCODE} where customer_no in ({keys})")
+    # delete-then-insert so a re-geocoded customer replaces its old row rather
+    # than accumulating duplicates
+    delete = f"delete from {DBX_GEOCODE} where customer_no in ({keys})"
+
+    if spark is not None:
+        import datetime as _dt
+        spark.sql(delete)
+        now = _dt.datetime.utcnow()
+        df = spark.createDataFrame(
+            [(r[0], r[1], r[2], r[3], r[4], r[5], now) for r in rows],
+            "customer_no string, latitude double, longitude double, "
+            "geocode_status string, geocoded_address string, "
+            "address_hash string, geocoded_at timestamp")
+        df.write.mode("append").saveAsTable(DBX_GEOCODE)
+        return spark.sql(f"select count(*) from {DBX_GEOCODE}").collect()[0][0]
+
+    con = _sql_conn(); cur = con.cursor()
+    cur.execute(delete)
     values = ", ".join(
         "('{}', {}, {}, '{}', '{}', '{}', current_timestamp())".format(
             r[0].replace("'", "''"),
