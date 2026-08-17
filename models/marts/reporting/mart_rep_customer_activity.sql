@@ -254,10 +254,10 @@ combined as (
         0                                                                as sessions,
         0, 0, 0,
         v.on_site_minutes,
-        cast(null as {{ dbt.type_string() }}[])                          as opened_at,
+        {{ null_string_array() }}                                        as opened_at,
         cast(null as timestamp), cast(null as timestamp),
         0, 0, 0,
-        cast(null as {{ dbt.type_string() }}[])                          as order_ids,
+        {{ null_string_array() }}                                        as order_ids,
         0                                                                as event_count,
         v.is_ambiguous
     from visit_only as v
