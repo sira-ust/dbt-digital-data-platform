@@ -36,3 +36,11 @@ data/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Working data files — customer addresses and other extracts staged by hand.
+# These are inputs to scripts/, not repo artifacts: they carry real customer
+# data, they are large and binary (so every revision bloats the clone), and
+# nothing in dbt reads them. 1.address.xlsx reached main by accident in PR #7.
+*.xlsx
+*.xls
+

@@ -73,6 +73,17 @@ import time
 
 import requests
 
+# The Windows console defaults to cp1252, where printing any non-ASCII character
+# raises UnicodeEncodeError. That killed a run *after* the Google calls had been
+# billed -- the worst possible place to fail. Force UTF-8 and downgrade an
+# unencodable character to a replacement rather than an exception: a garbled
+# glyph in a log is a cosmetic problem, a crash costs money.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):                  # already wrapped/redirected
+        pass
+
 API_KEY_ENV = "GOOGLE_GEOCODING_API_KEY"
 GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
@@ -92,7 +103,7 @@ DBX_SCHEMA  = "ust_databricks.ust_external"
 DBX_GEOCODE = "ust_databricks.ust_external.nav_customer_geocode"
 
 
-# ── address cleaning: verbatim from the team's geocoding.py ──────────────────
+# -- address cleaning: verbatim from the team's geocoding.py ------------------
 def build_address(street, city, zip_code, state):
     """Return the single-line address string Google is asked to resolve.
 
@@ -142,7 +153,7 @@ def geocode(addr: str, api_key: str):
     return None, None, status or "UNKNOWN"
 
 
-# ── backends ────────────────────────────────────────────────────────────────
+# -- backends ----------------------------------------------------------------
 def load_local():
     import duckdb
     con = duckdb.connect()
@@ -217,6 +228,35 @@ def _profile_target():
                 if out and out.get("host") and out.get("http_path"):
                     return out["host"], out["http_path"], candidate
     return None, None, None
+
+
+def _api_key(scope, name):
+    """The Google key: env var first, then the Databricks secret store.
+
+    Reading the secret HERE rather than injecting it as a task environment
+    variable means the job needs no env-var wiring — serverless task specs do
+    not reliably support it, and a value passed as a task parameter would be
+    visible in the job definition and run history.
+    """
+    key = os.getenv(API_KEY_ENV)
+    if key:
+        return key
+    try:
+        from databricks.sdk.runtime import dbutils
+        return dbutils.secrets.get(scope=scope, key=name)
+    except Exception:
+        pass
+    try:                                             # off-runtime SDK fallback
+        from databricks.sdk import WorkspaceClient
+        import base64
+        raw = WorkspaceClient().secrets.get_secret(scope=scope, key=name).value
+        return base64.b64decode(raw).decode()
+    except Exception as e:
+        print(f"ERROR: no Google API key. Set {API_KEY_ENV}, or store it as a "
+              f"Databricks secret at scope='{scope}' key='{name}' "
+              f"(override with --secret-scope / --secret-key). "
+              f"Last error: {type(e).__name__}", file=sys.stderr)
+        return None
 
 
 def _ambient_token():
@@ -332,6 +372,33 @@ def save_dbx(rows):
     return n
 
 
+def summary(total, with_row, backlog, written, ok, fail):
+    """One scannable block at the end of every run.
+
+    This is the ONLY place per-run volume is visible: the Databricks task log
+    keeps stdout, but nothing else records how much this particular run did. It
+    prints even when there was nothing to do -- on a daily schedule that is the
+    normal case, and a run that says nothing is indistinguishable from a run
+    that did not fire.
+
+    `coverage` is deliberately "has a row", not "has coordinates": a permanently
+    unresolvable address gets a row with its failure status so it is not paid
+    for again, and counting it as missing would make the backlog look stuck
+    forever.
+    """
+    print("", flush=True)
+    print("-" * 46)
+    print(f"  geocode run summary")
+    print(f"    sent to Google    : {written}")
+    print(f"      resolved        : {ok}")
+    print(f"      failed          : {fail}")
+    print(f"    customers total   : {total}")
+    print(f"    coverage          : {with_row} ({with_row / total:.1%})" if total
+          else "    coverage          : n/a")
+    print(f"    still to geocode  : {max(backlog - written, 0)}")
+    print("-" * 46, flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backend", choices=["local", "databricks"], required=True)
@@ -341,6 +408,10 @@ def main():
                     help="cap the number of API calls, so a mistake cannot spend the whole budget")
     ap.add_argument("--retry-failed", action="store_true",
                     help="also re-send rows previously recorded as failures")
+    ap.add_argument("--secret-scope", default="ust_external",
+                    help="Databricks secret scope holding the Google key")
+    ap.add_argument("--secret-key", default="google_geocoding_api_key",
+                    help="secret name within that scope")
     a = ap.parse_args()
 
     customers, done = (load_local() if a.backend == "local" else load_dbx())
@@ -362,11 +433,13 @@ def main():
         todo.append((cn, addr, h))
 
     print(f"{len(todo)} to geocode  ({skipped_no_address} have no usable address)")
+    todo_all = list(todo)          # pre-limit, so the summary can report the real backlog
     if a.limit:
         todo = todo[: a.limit]
         print(f"limited to {len(todo)}")
     if not todo:
         print("nothing to do")
+        summary(len(customers), len(done), 0, 0, 0, 0)
         return 0
 
     est = len(todo) / 1000 * 5
@@ -379,13 +452,16 @@ def main():
             print(f"   ... and {len(todo) - 10} more")
         return 0
 
-    key = os.getenv(API_KEY_ENV)
+    key = _api_key(a.secret_scope, a.secret_key)
     if not key:
-        print(f"ERROR: {API_KEY_ENV} is not set", file=sys.stderr)
         return 1
 
     save = save_local if a.backend == "local" else save_dbx
     rows, ok, fail, written = [], 0, 0, 0
+    # customers persisted this run. Needed because `written` counts API calls,
+    # and a re-geocoded changed address REPLACES its old row -- adding it to the
+    # coverage count would inflate coverage above the customer count.
+    seen = set()
     delay = 1.0 / REQUESTS_PER_SECOND
 
     def flush(batch):
@@ -396,6 +472,7 @@ def main():
             return
         save(batch)
         written += len(batch)
+        seen.update(r[0] for r in batch)
         batch.clear()
 
     try:
@@ -421,8 +498,10 @@ def main():
               file=sys.stderr)
 
     flush(rows)
-    if written:
-        print(f"wrote {written} rows ({ok} resolved, {fail} failed)")
+
+    # set(done), not done: `done` maps customer_no -> address_hash, and unioning
+    # a dict with a set is a TypeError
+    summary(len(customers), len(set(done) | seen), len(todo_all), written, ok, fail)
     if fail:
         print(f"\n{fail} addresses did not resolve — they are stored with their status "
               f"so this run is not repeated. Inspect with:\n"
