@@ -219,6 +219,35 @@ def _profile_target():
     return None, None, None
 
 
+def _api_key(scope, name):
+    """The Google key: env var first, then the Databricks secret store.
+
+    Reading the secret HERE rather than injecting it as a task environment
+    variable means the job needs no env-var wiring — serverless task specs do
+    not reliably support it, and a value passed as a task parameter would be
+    visible in the job definition and run history.
+    """
+    key = os.getenv(API_KEY_ENV)
+    if key:
+        return key
+    try:
+        from databricks.sdk.runtime import dbutils
+        return dbutils.secrets.get(scope=scope, key=name)
+    except Exception:
+        pass
+    try:                                             # off-runtime SDK fallback
+        from databricks.sdk import WorkspaceClient
+        import base64
+        raw = WorkspaceClient().secrets.get_secret(scope=scope, key=name).value
+        return base64.b64decode(raw).decode()
+    except Exception as e:
+        print(f"ERROR: no Google API key. Set {API_KEY_ENV}, or store it as a "
+              f"Databricks secret at scope='{scope}' key='{name}' "
+              f"(override with --secret-scope / --secret-key). "
+              f"Last error: {type(e).__name__}", file=sys.stderr)
+        return None
+
+
 def _ambient_token():
     """Token from the Databricks SDK credential chain, when running on Databricks.
 
@@ -341,6 +370,10 @@ def main():
                     help="cap the number of API calls, so a mistake cannot spend the whole budget")
     ap.add_argument("--retry-failed", action="store_true",
                     help="also re-send rows previously recorded as failures")
+    ap.add_argument("--secret-scope", default="ust_external",
+                    help="Databricks secret scope holding the Google key")
+    ap.add_argument("--secret-key", default="google_geocoding_api_key",
+                    help="secret name within that scope")
     a = ap.parse_args()
 
     customers, done = (load_local() if a.backend == "local" else load_dbx())
@@ -379,9 +412,8 @@ def main():
             print(f"   ... and {len(todo) - 10} more")
         return 0
 
-    key = os.getenv(API_KEY_ENV)
+    key = _api_key(a.secret_scope, a.secret_key)
     if not key:
-        print(f"ERROR: {API_KEY_ENV} is not set", file=sys.stderr)
         return 1
 
     save = save_local if a.backend == "local" else save_dbx

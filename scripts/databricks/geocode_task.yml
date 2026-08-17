@@ -1,67 +1,89 @@
-# Add to the EXISTING bundle job `ust_digital_platform_dbt` — do not create a
-# second job. Two jobs both running dbt would race on the same tables.
+# The COMPLETE ust_digital_platform_dbt job with geocoding added.
+# Copy this over your existing bundle resource file.
 #
-# Two edits to resources/<your bundle file>:
-#   1. add the `geocode-new-customers` task below to `tasks:`
-#   2. add `depends_on` to the existing `dbt-build` task so it waits for it
+# Three changes from the original:
+#   1. new task `geocode-new-customers`
+#   2. `depends_on` added to `dbt-build` so it waits for the geocode
+#   3. new `geocode-env` environment
 #
-# WHY IN THE DAILY JOB and not its own schedule: the geocode table is a hard
+# WHY IN THIS JOB and not its own schedule: the geocode table is a hard
 # dependency of int_rep_customer_presence. Split across two schedules there is a
 # window where a customer exists in navrep.customer with no coordinate, and every
-# visit to them silently reports scenario "unknown" — which reads as "did not
+# visit to them silently reports scenario "unknown" -- which reads as "did not
 # visit" to anyone who has not been told otherwise.
 #
-# WHY DAILY IS CHEAP: the script is incremental on address_hash. A day with no
-# new customers sends zero requests and costs nothing; five new customers is
-# about 3 cents.
+# NO SECRET WIRING IS NEEDED HERE. The script reads the Google key from the
+# Databricks secret store itself (scope ust_external, key
+# google_geocoding_api_key -- override with --secret-scope / --secret-key).
+# Serverless task specs do not reliably support environment variables, and a key
+# passed as a task parameter would be visible in the job definition and run
+# history. Databricks auth needs no secret at all: the run_as identity is
+# ambient.
 #
 # --limit 500 is a BLAST-RADIUS CAP, not a throughput setting. If an upstream
-# change ever rewrites every address (a formatting fix, a trailing-space
-# cleanup), address_hash changes for all 7,198 rows and an uncapped unattended
-# run would spend ~$36. Capped, the worst case is ~$2.50 and the backlog drains
-# over following days. Remove it only for a deliberate, attended backfill.
+# change ever rewrites every address, address_hash changes for all 7,198 rows and
+# an uncapped unattended run would spend ~$36. Capped, the worst case is ~$2.50
+# and the backlog drains over following days.
 
-tasks:
-  # ── NEW: goes before dbt-build ──────────────────────────────────────────
-  - task_key: geocode-new-customers
-    description: >
-      Geocode NAV customers whose address is new or changed. No-op on a quiet day.
-    spark_python_task:
-      python_file: scripts/geocode_customers.py
-      source: GIT                       # same repo as the dbt task
-      parameters:
-        - "--backend"
-        - "databricks"
-        - "--limit"
-        - "500"
-    environment_key: geocode-env
+resources:
+  jobs:
+    ust_digital_platform_dbt:
+      name: ust-digital-platform-dbt
+      schedule:
+        quartz_cron_expression: 54 0 4 * * ?
+        timezone_id: America/Los_Angeles
+        pause_status: UNPAUSED
+      tasks:
 
-  # ── EXISTING: add depends_on only; everything else unchanged ────────────
-  - task_key: dbt-build
-    depends_on:
-      - task_key: geocode-new-customers
-    # ... your existing dbt_task block, unchanged ...
+        # ── NEW ──────────────────────────────────────────────────────────
+        - task_key: geocode-new-customers
+          description: >
+            Geocode NAV customers whose address is new or changed.
+            Incremental on address_hash, so a quiet day sends no requests.
+          spark_python_task:
+            python_file: scripts/geocode_customers.py
+            source: GIT
+            parameters:
+              - "--backend"
+              - "databricks"
+              - "--limit"
+              - "500"
+          environment_key: geocode-env
 
-environments:
-  # ── NEW: the geocode task needs requests + the SDK ──────────────────────
-  # The SDK supplies the run-as identity ambiently on serverless, so no PAT and
-  # no Databricks secret are needed to reach our own workspace.
-  - environment_key: geocode-env
-    spec:
-      environment_version: "5"
-      dependencies:
-        - requests
-        - databricks-sdk
-        - databricks-sql-connector
+        # ── EXISTING, with depends_on added ──────────────────────────────
+        - task_key: dbt-build
+          depends_on:
+            - task_key: geocode-new-customers
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build
+            warehouse_id: 0fa7b986f30f8aab
+            catalog: ust_databricks
+            source: GIT
+          environment_key: dbt-default
 
-# ── SECRET ────────────────────────────────────────────────────────────────
-# Only the GOOGLE key needs one — it is third-party, so there is no ambient
-# auth for it. Set as an env var on the geocode task:
-#
-#   GOOGLE_GEOCODING_API_KEY: "{{secrets/<scope>/google_geocoding_api_key}}"
-#
-# Confirm the exact reference in the Catalog UI: the secret is stored at
-# ust_databricks.ust_external.google_geocoding_api_key, and UC-managed secrets
-# may not use the legacy {{secrets/scope/key}} form.
-#
-# run_as needs: read on navrep, write on ust_external, read on the secret.
+      git_source:
+        git_url: https://github.com/sira-ust/dbt-digital-data-platform.git
+        git_provider: gitHub
+        git_branch: main
+      queue:
+        enabled: true
+      environments:
+        - environment_key: dbt-default
+          spec:
+            dependencies:
+              - dbt-databricks>=1.0.0,<2.0.0
+            environment_version: "5"
+
+        # ── NEW ──────────────────────────────────────────────────────────
+        - environment_key: geocode-env
+          spec:
+            environment_version: "5"
+            dependencies:
+              - requests
+              - databricks-sdk
+              - databricks-sql-connector
+
+      performance_target: STANDARD
