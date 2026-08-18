@@ -26,18 +26,14 @@
 # unattended run spends ~$5 instead of ~$36, and the log's `still to geocode`
 # line shows the backlog so the truncation is visible rather than silent.
 #
-# PREREQUISITE -- A LEGACY SECRET SCOPE, NOT THE UC SECRET. The script reads the
-# Google key via dbutils.secrets / WorkspaceClient().secrets, which address
-# secret SCOPES. The key stored at ust_databricks.ust_external.
-# google_geocoding_api_key is a UNITY CATALOG secret, a different store that
-# those calls do not see. Create the scope once:
+# THE GOOGLE KEY comes from the Unity Catalog secret
+# ust_databricks.ust_external.google_geocoding_api_key. Nothing to wire here:
+# the script reads it itself, so the key never appears in this job definition,
+# in the run history, or in a log.
 #
-#     databricks secrets create-scope --scope ust_external
-#     databricks secrets put --scope ust_external --key google_geocoding_api_key \
-#         --string-value "<the rotated key>"
-#
-# Without it every run fails with "ERROR: no Google API key" -- loudly, and
-# before spending anything.
+# environment_version 5 is LOAD-BEARING for that. Reading a UC secret with
+# dbutils needs serverless environment version 4+ (or DBR 17.3 LTS+); on an
+# older version the read fails and the run cannot geocode anything.
 
 resources:
   jobs:

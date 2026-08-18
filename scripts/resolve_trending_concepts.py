@@ -5,6 +5,23 @@ via the workspace serving endpoint, ambient auth on the databricks backend). dbt
 stays deterministic and never calls the LLM; this writes a table dbt then reads.
 GATED: only the top-N ranked concepts are resolved, so the long tail costs nothing.
 
+TWO PASSES, because precision is what this table is judged on (v5). One model
+proposing matches is not accurate enough on its own — it will pad a basket with
+plausible-sounding but wrong items ("DF TOMYUM PASTE" under a rice-noodle-curry
+dish), and nothing downstream can tell a wrong-but-real SKU from a right one:
+  ① PROPOSE — read the mention snippets + the catalog, classify, pick items.
+  ② VERIFY  — a SECOND, INDEPENDENT call that sees only the concept, the same
+              snippets, and the candidates rendered with their AUTHORITATIVE
+              catalog names, and is prompted to REFUTE each one. Items it can't
+              defend are dropped, and ITS confidence (not the proposer's) is what
+              the mart's social_resolve_min_confidence floor gates on. If the
+              verify call fails we write NOTHING for that concept — it stays
+              unresolved and is retried next run, rather than shipping an
+              unverified guess.
+The proposer's self-rated confidence is kept alongside as proposer_confidence, so
+the two can be compared (v4 clustered at 0.72 — just above a 0.70 floor, which
+made the floor inert).
+
 WHY IT READS MENTION SNIPPETS (learned 2026-07-30): a bare token like "pork" or
 "7-eleven" has no meaning on its own — "pork" might be หมูกระจก (crispy pork jerky)
 or หมูกระทะ (Thai BBQ), never "pork skin". So for each trending concept the model
@@ -14,6 +31,10 @@ is given a few REAL mention snippets (title/content + the AI arrays) and must:
   2. CLASSIFY       — carried / substitute / basket / none (see INSTRUCTIONS).
   3. MATCH SEMANTICALLY against the real catalog, reading the context — NOT by
      string overlap.
+Snippets are therefore load-bearing: a concept with zero snippets is a bare token
+and the model WILL guess. _concept_key() must stay byte-identical to how
+int_social_concept_trends builds concept_norm or the lookup silently misses and
+every affected concept is resolved blind — see the SQL PARITY note below.
 
 Flow position (weekly social job):
     parse_mentions  ->  social.mentions
@@ -94,19 +115,23 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v4"                    # v4 = carried-first (inventory match wins over baskets)
+PROMPT_VERSION = "v5"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
 _CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
+VERIFY_MAX_TOKENS = 1200                 # per-candidate verdicts + reasons
+TEMPERATURE = 0.0                        # matching is a judgment, not a creative task — same
+                                         # concept must resolve the same way run to run
 CONCURRENCY = 4
 MAX_RETRIES = 8
 MAX_ATTEMPTS = 2
 BATCH_SIZE = 100
+MAX_RECOMMENDATIONS = 5                  # hard cap after verification (basket rule says 2-5)
 # gate: resolve concepts at trend_rank <= this. Reads dbt_project.yml's
 # social_trend_top_n — the same var the mart uses — instead of a second,
 # independent hardcoded "20" that could quietly drift from it.
 TOP_N = _dbt_var("social_trend_top_n", 20)
-SNIPPETS_PER_CONCEPT = 6               # representative mentions shown to the model
-SNIPPET_CHARS = 220
+SNIPPETS_PER_CONCEPT = 8               # representative mentions shown to the model
+SNIPPET_CHARS = 400
 
 LOCAL_DUCKDB_PATH = "dev.duckdb"
 LOCAL_RESOLUTION_PATH = "data/mock/mentionlytics/concept_resolution.parquet"
@@ -126,17 +151,24 @@ time together with a few REAL social-mention snippets that mention it.
 
 READ THE SNIPPETS to understand what people are actually talking about before you \
 decide — a word alone is ambiguous ("pork" may be crispy pork jerky หมูกระจก or a \
-BBQ, never "pork skin").
+BBQ, never "pork skin"). If NO snippets are shown, you are looking at a bare token \
+with no context: do NOT guess a basket from the token's literal words — return \
+"none" with low confidence and let a human look at it.
 
 Then return ONE JSON object — no markdown, no prose — exactly:
 {
   "canonical_label": string,       // one clean display name; merge language/spelling
-                                   //   variants (som tam / ส้มตำ -> "Som Tam (green papaya salad)")
+                                   //   variants (som tam / ส้มตำ -> "Som Tam (green papaya salad)").
+                                   //   ONE dish, not a list of guesses — never
+                                   //   "A (B / C)" where B and C are different dishes.
   "concept_type": string,          // "dish" | "category" | "ingredient" | "product" | "brand"
   "result_type": string,           // see below
   "matched_prtnum": string|null,   // only for "carried"
-  "recommended_prtnums": [string], // for "substitute"/"basket"; [] otherwise
-  "recommended_item_names": [string], // display names, SAME ORDER as recommended_prtnums
+  "recommended_prtnums": [string], // for "substitute"/"basket"; [] otherwise. Max 5.
+  "recommended_item_names": [string], // catalog item_name COPIED VERBATIM, SAME ORDER
+                                   //   as recommended_prtnums — do not paraphrase or
+                                   //   tidy them; a name that disagrees with its
+                                   //   part number is treated as an error.
   "match_confidence": number       // 0.0–1.0
 }
 
@@ -161,14 +193,17 @@ result_type decides what we show marketing:
   - "none"      : nothing in the catalog is a real fit -> empty arrays.
 
 PREFER "none" OR AN EMPTY BASKET OVER A WEAK MATCH. If no catalog item is genuinely \
-the same kind of food, return "none" — do NOT stretch. Two hard rules: a substitute \
+the same kind of food, return "none" — do NOT stretch. Three hard rules: a substitute \
 must be something a shopper would actually accept in place of the trending item; a \
-basket item must be a defining ingredient of THAT dish. NEVER include generic, \
-tangential, or different-cuisine items (do NOT put green jackfruit or Korean beef \
-bulgogi under a Thai/Vietnamese dish just because they are food). Set \
-match_confidence to reflect precision — high ONLY when the items clearly define the \
-dish; lower it when the basket is loose. A low value is fine and far better than a \
-confident-looking wrong match.
+basket item must be a defining ingredient of THAT dish; and never list two part \
+numbers for the same product (the catalog holds duplicate names — pick one). NEVER \
+include generic, tangential, or different-cuisine items (do NOT put green jackfruit \
+or Korean beef bulgogi under a Thai/Vietnamese dish just because they are food), and \
+never include an all-purpose staple every kitchen already buys (plain rice, sugar, \
+salt, cooking oil) as a "defining" ingredient. Set match_confidence to reflect \
+precision — high ONLY when the items clearly define the dish; lower it when the \
+basket is loose. A low value is fine and far better than a confident-looking wrong \
+match.
 
 Rules: every prtnum you output MUST exist in the catalog exactly; names line up \
 1:1 with prtnums. Judge on MEANING across Thai / Vietnamese / English, never on \
@@ -178,11 +213,56 @@ a snippet and a catalog item name is meaningless unless the underlying PRODUCT i
 genuinely the same kind of food (a brand called "XYZ" on a banh mi post does not \
 make "XYZ Noodles" a match)."""
 
+VERIFY_INSTRUCTIONS = """You are a STRICT REVIEWER. Another model proposed a match \
+between a TRENDING FOOD CONCEPT from Thai/Vietnamese social listening and items in \
+a food distributor's catalog. Your job is to REFUTE what does not hold up, not to \
+be agreeable. A rejected item costs us nothing; a wrong one goes onto a board the \
+sales team acts on, so DEFAULT TO REJECTING whenever you are unsure.
+
+You see the concept, the REAL mention snippets behind it, and each candidate with \
+its AUTHORITATIVE catalog name (the proposer's own wording is deliberately hidden — \
+judge the item that part number actually is). If no snippets are shown, you have no \
+evidence of what people meant: reject everything and return "none".
+
+Keep a candidate ONLY if it passes the test for how it was proposed:
+  - "matched" (carried): this item IS the trending thing itself, ready to sell —
+    not an ingredient of it, not a related product.
+  - "recommended" as a substitute: someone who wanted the trending item would
+    accept THIS instead — the same kind of food.
+  - "recommended" as a basket item: it is a CORE, DEFINING ingredient of THIS
+    specific dish, from the SAME cuisine — the dish is not that dish without it.
+
+REJECT, always:
+  - a different cuisine's ingredient placed under this dish;
+  - a generic all-purpose staple (plain rice, sugar, salt, cooking oil, plain flour)
+    dressed up as "defining";
+  - a merely adjacent or thematically similar item ("Thai food, so fish sauce");
+  - an item you cannot confidently identify from its catalog name;
+  - a near-duplicate of a candidate you already kept (same product, another part
+    number) — keep exactly one;
+  - anything where the concept itself is too vague to pin down.
+
+Return ONE JSON object — no markdown, no prose — exactly:
+{
+  "verdicts": [                    // one entry per candidate, same part numbers you were given
+    {"prtnum": string, "keep": boolean, "reason": string}   // reason <= 120 chars, concrete
+  ],
+  "result_type": string,           // final call: "carried" | "substitute" | "basket" | "none".
+                                   //   "none" if you kept nothing.
+  "canonical_label": string,       // the proposer's display name, CORRECTED if it is wrong or
+                                   //   merges several different dishes into one label.
+  "confidence": number             // 0.0–1.0 — calibrated certainty in the items you KEPT.
+                                   //   This is the number a 0.7 cutoff is applied to, so do not
+                                   //   inflate it: 0.9+ only when the kept items unambiguously
+                                   //   define the concept and the snippets prove the meaning.
+}"""
+
 _REQUIRED_KEYS = {
     "canonical_label", "concept_type", "result_type", "matched_prtnum",
     "recommended_prtnums", "recommended_item_names", "match_confidence",
 }
 _VALID_RESULT = {"carried", "substitute", "basket", "none"}
+_MATCHED_RESULTS = {"carried", "substitute", "basket"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -220,6 +300,30 @@ def get_client(backend):
     )
 
 
+# Whether the serving proxy accepts `temperature`. Determinism matters here (the
+# same concept must not resolve differently run to run), but the Databricks
+# Anthropic-compatible proxy is a moving target and a rejected parameter would
+# otherwise fail EVERY concept in the run. So: try it once, and if the endpoint
+# objects to the parameter specifically, fall back to default sampling for the
+# rest of the run instead of dying. Benign race under the thread pool — the worst
+# case is a couple of extra attempts before the flag settles.
+_TEMPERATURE_SUPPORTED = True
+
+
+def _create_message(client, **kwargs):
+    global _TEMPERATURE_SUPPORTED
+    if _TEMPERATURE_SUPPORTED:
+        try:
+            return client.messages.create(temperature=TEMPERATURE, **kwargs)
+        except Exception as e:
+            if "temperature" not in str(e).lower():
+                raise
+            _TEMPERATURE_SUPPORTED = False
+            print("  NOTE: serving endpoint rejected `temperature`; continuing with "
+                  "the endpoint default (results may vary run to run).", file=sys.stderr)
+    return client.messages.create(**kwargs)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Backend I/O
 # ─────────────────────────────────────────────────────────────────────────────
@@ -235,61 +339,124 @@ def _top_concepts_sql(trends_rel, top_n):
     """
 
 
-def _snippet_source_sql(fct_rel):
-    """Mentions carrying the specific-product arrays + text, for snippet buckets."""
+def _window_sql(trends_rel):
+    """The trend window the board covers — snippets are scoped to it (below)."""
     return f"""
-        select mention_id,
-               coalesce(title, substr(content, 1, {SNIPPET_CHARS})) as snippet,
-               mentioned_dishes, ingredients, brands,
-               coalesce(total_engagement, 0) as engagement
-        from {fct_rel}
-        where mentioned_dishes is not null or brands is not null
+        select max(window_start) as window_start, max(window_end) as window_end
+        from {trends_rel}
     """
 
 
-def read_all(backend, top_n, duckdb_path):
-    """Return (concepts, snippets_by_concept, catalog, already_resolved_count)."""
+def _snippet_source_sql(fct_rel, window_start=None, window_end=None):
+    """Mentions carrying the dish array + text, for snippet buckets.
+
+    SCOPED TO THE TREND WINDOW: the concept is trending NOW, so the evidence shown
+    to the model must be what people are saying now — an all-time query can fill
+    every slot with a loud post from months ago that made the token mean something
+    else. `brands` is NOT selected as a match key any more: concepts are built from
+    mentioned_dishes only (int_social_concept_trends), so a brand whose name folds
+    to the same string can only ever pull in an off-topic post — and the prompt
+    already tells the model a shared brand token is not a match.
+    """
+    where = ["mentioned_dishes is not null"]
+    if window_start and window_end:
+        where.append(f"posted_date between date '{window_start}' and date '{window_end}'")
+    return f"""
+        select mention_id, title, content,
+               mentioned_dishes, ingredients, brands,
+               coalesce(total_engagement, 0) as engagement
+        from {fct_rel}
+        where {' and '.join(where)}
+    """
+
+
+def _current_rows_sql(table, version):
+    """Current-version resolution rows, deduped the same way staging does
+    (latest resolved_at per concept). Read so alias harmonisation (below) can
+    see concepts resolved in EARLIER runs, not just this batch."""
+    return f"""
+        select * from (
+            select *, row_number() over (
+                partition by concept_norm order by resolved_at desc) as _rn
+            from {table}
+            where model_version = '{version}'
+        ) where _rn = 1
+    """
+
+
+def _as_date_str(v):
+    if v is None:
+        return None
+    try:
+        return v.strftime("%Y-%m-%d")
+    except AttributeError:
+        s = str(v).strip()
+        return s[:10] or None
+
+
+def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
+    """Return (new_concepts, snippets_by_concept, catalog, existing_rows)."""
     if backend == "databricks":
         spark = _get_spark()
         concepts = [r.asDict() for r in
                     spark.sql(_top_concepts_sql(DBX_TRENDS_TABLE, top_n)).collect()]
+        wb = spark.sql(_window_sql(DBX_TRENDS_TABLE)).collect()
+        w_start, w_end = ((_as_date_str(wb[0][0]), _as_date_str(wb[0][1])) if wb else (None, None))
         mentions = [r.asDict() for r in
-                    spark.sql(_snippet_source_sql(DBX_FCT_TABLE)).collect()]
+                    spark.sql(_snippet_source_sql(DBX_FCT_TABLE, w_start, w_end)).collect()]
         catalog = [r.asDict() for r in spark.table(DBX_ITEMS_TABLE)
-                   .select("prtnum", "item_name", "item_family").collect()]
+                   .select("prtnum", "item_name", "item_short_name", "item_family").collect()]
         try:
             # VERSION-AWARE: only concepts resolved at the CURRENT model+prompt
             # version count as done. Bumping PROMPT_VERSION drops every stale row
             # out of this set, so the next run re-resolves it automatically — no
             # manual truncate needed, still incremental (only stale + new).
-            resolved = {r.concept_norm for r in spark.sql(
-                f"select concept_norm from {DBX_RESOLUTION_TABLE} "
-                f"where model_version = '{_CURRENT_VERSION}'").collect()}
+            existing = [r.asDict() for r in
+                        spark.sql(_current_rows_sql(DBX_RESOLUTION_TABLE, version)).collect()]
         except Exception:
-            resolved = set()
+            existing = []
     else:
         import duckdb
         con = duckdb.connect(duckdb_path, read_only=True)
         concepts = con.sql(_top_concepts_sql(DUCKDB_TRENDS_REL, top_n)).df().to_dict("records")
-        mentions = con.sql(_snippet_source_sql(DUCKDB_FCT_REL)).df().to_dict("records")
+        wb = con.sql(_window_sql(DUCKDB_TRENDS_REL)).df()
+        w_start = _as_date_str(wb["window_start"][0]) if len(wb) else None
+        w_end = _as_date_str(wb["window_end"][0]) if len(wb) else None
+        mentions = con.sql(
+            _snippet_source_sql(DUCKDB_FCT_REL, w_start, w_end)
+        ).df().to_dict("records")
         catalog = con.sql(
-            f"select prtnum, item_name, item_family from {DUCKDB_ITEMS_REL}"
+            f"select prtnum, item_name, item_short_name, item_family from {DUCKDB_ITEMS_REL}"
         ).df().to_dict("records")
         con.close()
         try:
             import duckdb as _d
-            resolved = set(_d.connect().sql(
-                f"select concept_norm from read_parquet('{LOCAL_RESOLUTION_PATH}') "
-                f"where model_version = '{_CURRENT_VERSION}'"
-            ).df()["concept_norm"].tolist())
+            existing = _d.connect().sql(
+                _current_rows_sql(f"read_parquet('{LOCAL_RESOLUTION_PATH}')", version)
+            ).df().to_dict("records")
         except Exception:
-            resolved = set()
+            existing = []
 
     wanted = {c["concept_norm"] for c in concepts}
     snippets = bucket_snippets(mentions, wanted)
+    resolved = {r.get("concept_norm") for r in existing}
     new = [c for c in concepts if c["concept_norm"] not in resolved]
-    return new, snippets, catalog, len(resolved)
+    print(f"snippet window: {w_start} .. {w_end}  ({len(mentions)} dish-bearing mentions)")
+    return new, snippets, catalog, existing
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SQL PARITY — concept keys must match int_social_concept_trends EXACTLY
+# ─────────────────────────────────────────────────────────────────────────────
+# concept_norm is built in SQL as fold_concept(strip_parenthetical_gloss(dish)),
+# so a key built here with only the fold step MISSES every dish string that
+# carries a trailing gloss — and the LLM appends one often ("ข้าวมัน (rice with
+# chicken fat)"). That was a real, silent bug (fixed 2026-08-18): those concepts
+# matched no snippets at all, the prompt said "(no snippets found)", and the model
+# resolved a bare Thai token against 2.5k abbreviated catalog names — which is
+# exactly how "DF TOMYUM PASTE" ended up under a rice-noodle-curry dish. Both
+# steps are mirrored below and both are guarded by
+# scripts/check_fold_consistency.py.
 
 # Copied character-for-character from macros/fold_concept.sql's translate()
 # call, so the two can't silently drift apart again. A general Unicode
@@ -300,6 +467,13 @@ _FOLD_FROM = "àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêề�
 _FOLD_TO = "aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd"
 _FOLD_TABLE = str.maketrans(_FOLD_FROM, _FOLD_TO)
 
+# Copied from macros/strip_parenthetical_gloss.sql's default__ regex (DuckDB
+# spelling; the databricks__ variant is the same pattern with doubled
+# backslashes for its string-literal parser). ONE trailing parenthetical only,
+# anchored to end of string — deliberately conservative, same as the macro.
+_GLOSS_PATTERN = r"\s*\([^)]*\)$"
+_GLOSS_RE = re.compile(_GLOSS_PATTERN)
+
 
 def _fold(s):
     """Match macros/fold_concept.sql EXACTLY: lower+trim, translate() over the
@@ -309,34 +483,67 @@ def _fold(s):
     return re.sub(" +", " ", s)
 
 
-def _norm_list(v):
+def _strip_gloss(s):
+    """Match macros/strip_parenthetical_gloss.sql: strip ONE trailing '(...)'."""
+    return _GLOSS_RE.sub("", str(s).strip())
+
+
+def _concept_key(s):
+    """The SQL's concept_norm, in Python: strip the trailing gloss, then fold.
+    Mirrors int_social_concept_trends' fallback for a concept that is ENTIRELY
+    parenthetical — deglossing to '' falls back to the original text rather than
+    dropping the row."""
+    deglossed = _strip_gloss(s)
+    return _fold(deglossed if deglossed else s)
+
+
+def _raw_list(v):
+    """Array column -> list of original (un-normalised) strings. The model reads
+    these, so they keep their real casing and diacritics; only the MATCH key is
+    folded. duckdb hands back numpy arrays, spark hands back lists."""
     if v is None:
         return []
     try:
-        return [_fold(x) for x in list(v) if x is not None and str(x).strip()]
+        return [str(x).strip() for x in list(v) if x is not None and str(x).strip()]
     except TypeError:
         return []
 
 
+def _snippet_text(m):
+    title = (m.get("title") or "").strip()
+    content = (m.get("content") or "").strip()
+    if title and content and not content.lower().startswith(title.lower()):
+        text = f"{title} — {content}"
+    else:
+        text = content or title
+    return re.sub(r"\s+", " ", text)[:SNIPPET_CHARS]
+
+
 def bucket_snippets(mentions, wanted):
-    """{concept_norm: [ (engagement, snippet_dict), ... ]} keeping the loudest few."""
+    """{concept_norm: [snippet_dict, ...]} keeping the most useful few.
+
+    Ordered by (has text, engagement): a caption-less row carries almost no
+    evidence, so it must not take a slot from a post that actually says something.
+    """
     buckets = defaultdict(list)
     for m in mentions:
-        keys = set(_norm_list(m.get("mentioned_dishes")) + _norm_list(m.get("brands")))
-        hit = keys & wanted
+        dishes = _raw_list(m.get("mentioned_dishes"))
+        hit = {_concept_key(d) for d in dishes} & wanted
         if not hit:
             continue
+        text = _snippet_text(m)
         snip = {
-            "text": (m.get("snippet") or "").replace("\n", " ")[:SNIPPET_CHARS],
-            "dishes": _norm_list(m.get("mentioned_dishes")),
-            "ingredients": _norm_list(m.get("ingredients")),
-            "brands": _norm_list(m.get("brands")),
+            "text": text,
+            "dishes": dishes,
+            "ingredients": _raw_list(m.get("ingredients")),
+            "brands": _raw_list(m.get("brands")),
         }
         eng = m.get("engagement") or 0
         for cn in hit:
-            buckets[cn].append((eng, snip))
-    for cn in buckets:
-        buckets[cn] = [s for _, s in sorted(buckets[cn], key=lambda t: -t[0])][:SNIPPETS_PER_CONCEPT]
+            buckets[cn].append((1 if text else 0, eng, snip))
+    for cn in list(buckets):
+        ranked = sorted(buckets[cn], key=lambda t: (-t[0], -t[1]))
+        buckets[cn] = [s for _, _, s in ranked][:SNIPPETS_PER_CONCEPT]
     return buckets
 
 
@@ -360,21 +567,55 @@ def write_resolution(backend, records):
 
 def _dbx_resolution_schema():
     from pyspark.sql.types import (
-        StructType, StructField, StringType, DoubleType, ArrayType, TimestampType,
+        StructType, StructField, StringType, DoubleType, IntegerType, ArrayType,
+        TimestampType,
     )
     arr = ArrayType(StringType())
     return StructType([
         StructField("concept_norm", StringType()),
         StructField("canonical_label", StringType()),
+        StructField("canonical_key", StringType()),
+        StructField("alias_of", StringType()),
         StructField("concept_type", StringType()),
         StructField("result_type", StringType()),
         StructField("matched_prtnum", StringType()),
         StructField("recommended_prtnums", arr),
         StructField("recommended_item_names", arr),
+        StructField("recommended_reasons", arr),
+        StructField("rejected_prtnums", arr),
+        StructField("rejected_reasons", arr),
+        StructField("name_mismatch_prtnums", arr),
         StructField("match_confidence", DoubleType()),
+        StructField("proposer_confidence", DoubleType()),
+        StructField("snippet_count", IntegerType()),
         StructField("resolved_at", TimestampType()),
         StructField("model_version", StringType()),
     ])
+
+
+_RECORD_DEFAULTS = {
+    "concept_norm": None, "canonical_label": None, "canonical_key": None,
+    "alias_of": None, "concept_type": None, "result_type": None,
+    "matched_prtnum": None, "recommended_prtnums": [], "recommended_item_names": [],
+    "recommended_reasons": [], "rejected_prtnums": [], "rejected_reasons": [],
+    "name_mismatch_prtnums": [], "match_confidence": None,
+    "proposer_confidence": None, "snippet_count": None, "resolved_at": None,
+    "model_version": None,
+}
+
+
+def _coerce_record(row):
+    """Normalise a row read back from the resolution table into exactly the
+    schema above — an older row may be missing a column and duckdb hands arrays
+    back as numpy arrays, neither of which spark.createDataFrame accepts."""
+    out = {}
+    for k, default in _RECORD_DEFAULTS.items():
+        v = row.get(k, default)
+        if isinstance(default, list):
+            out[k] = _raw_list(v)
+        else:
+            out[k] = None if v is None or (isinstance(v, float) and v != v) else v
+    return out
 
 
 def _get_spark():
@@ -386,11 +627,17 @@ def _get_spark():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LLM core
+# LLM core — pass ① propose, pass ② verify
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_catalog_block(catalog):
     """Catalog reference, sent once as a cached system block.
+
+    SORTED BY PART NUMBER: the block is the cache key and part of the prompt, so a
+    query-order-dependent block both misses the prompt cache and makes the same
+    concept resolvable differently run to run. item_short_name is included because
+    the long name is heavily abbreviated ("DF COCONT MILK (CURRY)(M)") and the two
+    together disambiguate more items than either alone.
 
     TODO(scale): ~2.5k active rows is fine as one cached block. If it grows, prefer
     an EMBEDDING-based candidate shortlist over a lexical/brand-token prefilter — a
@@ -398,22 +645,26 @@ def build_catalog_block(catalog):
     keep a false one (e.g. "banh mi XYZ" token-matching "XYZ Noodles"), with no
     broader catalog left for the model to notice the mismatch.
     """
-    lines = [f"{c['prtnum']}\t{c.get('item_name')}\t{c.get('item_family')}"
-             for c in catalog]
-    return "CATALOG (prtnum<TAB>item_name<TAB>item_family):\n" + "\n".join(lines)
-
-
-def build_user_prompt(concept, snippets):
+    rows = sorted(catalog, key=lambda c: str(c.get("prtnum") or ""))
     lines = [
-        f"Concept (raw): {concept['concept_norm']}",
-        f"Seen as: {concept.get('concept_source')}   Mentions: {concept.get('mention_count')}",
-        "",
-        "Representative mentions:",
+        "\t".join([
+            str(c.get("prtnum")),
+            str(c.get("item_name") or ""),
+            str(c.get("item_short_name") or ""),
+            str(c.get("item_family") or ""),
+        ])
+        for c in rows
     ]
+    return ("CATALOG (prtnum<TAB>item_name<TAB>item_short_name<TAB>item_family):\n"
+            + "\n".join(lines))
+
+
+def _render_snippets(snippets):
+    lines = ["Representative mentions:"]
     if not snippets:
-        lines.append("  (no snippets found)")
+        lines.append("  (no snippets found — you have NO evidence of what this token means)")
     for s in snippets:
-        lines.append(f"  - {s['text']}")
+        lines.append(f"  - {s['text'] or '(no caption text)'}")
         extra = []
         if s["dishes"]:
             extra.append("dishes=" + ", ".join(s["dishes"][:6]))
@@ -423,7 +674,34 @@ def build_user_prompt(concept, snippets):
             extra.append("brands=" + ", ".join(s["brands"][:6]))
         if extra:
             lines.append("      (" + "; ".join(extra) + ")")
-    return "\n".join(lines)
+    return lines
+
+
+def build_user_prompt(concept, snippets):
+    lines = [
+        f"Concept (raw): {concept['concept_norm']}",
+        f"Seen as: {concept.get('concept_source')}   Mentions: {concept.get('mention_count')}",
+        "",
+    ]
+    return "\n".join(lines + _render_snippets(snippets))
+
+
+def build_verify_prompt(concept, snippets, proposal, candidates):
+    lines = [
+        f"Concept (raw): {concept['concept_norm']}",
+        f"Proposed label: {proposal.get('canonical_label')}",
+        f"Proposed result_type: {proposal.get('result_type')}",
+        "",
+        "Candidates (part number, AUTHORITATIVE catalog name, short name, family, "
+        "how it was proposed):",
+    ]
+    for c in candidates:
+        lines.append(
+            f"  - {c['prtnum']}\t{c['item_name']}\t{c['item_short_name']}\t"
+            f"{c['item_family']}\t[{c['role']}]"
+        )
+    lines.append("")
+    return "\n".join(lines + _render_snippets(snippets))
 
 
 def extract_json(text):
@@ -438,19 +716,19 @@ def extract_json(text):
         return json.loads(m.group(0)) if m else None
 
 
-def resolve_one(client, catalog_block, concept, snippets):
+def _call_json(client, instructions, catalog_block, user_prompt, max_tokens,
+               is_valid, stage, label):
+    """One prompted-JSON call with our own retry on unusable output. Shared by
+    both passes so the retry/parse/diagnostic behaviour can't diverge."""
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            resp = client.messages.create(
-                model=MODEL,
-                max_tokens=MAX_TOKENS,
-                system=[
-                    {"type": "text", "text": INSTRUCTIONS},
-                    {"type": "text", "text": catalog_block,
-                     "cache_control": {"type": "ephemeral"}},
-                ],
-                messages=[{"role": "user",
-                           "content": build_user_prompt(concept, snippets)}],
+            system = [{"type": "text", "text": instructions}]
+            if catalog_block:
+                system.append({"type": "text", "text": catalog_block,
+                               "cache_control": {"type": "ephemeral"}})
+            resp = _create_message(
+                client, model=MODEL, max_tokens=max_tokens, system=system,
+                messages=[{"role": "user", "content": user_prompt}],
             )
             # TEMP DIAGNOSTIC (remove after confirming whether the Databricks
             # serving proxy honors cache_control — see cache_creation vs
@@ -458,28 +736,215 @@ def resolve_one(client, catalog_block, concept, snippets):
             # caching isn't taking effect and the catalog is being sent at
             # full price on every call).
             u = resp.usage
-            print(f"  [cache-check] {concept['concept_norm']!r}: "
+            print(f"  [cache-check/{stage}] {label!r}: "
                   f"input={u.input_tokens} "
                   f"cache_create={getattr(u, 'cache_creation_input_tokens', None)} "
                   f"cache_read={getattr(u, 'cache_read_input_tokens', None)} "
                   f"output={u.output_tokens}")
-            text = next((b.text for b in resp.content if b.type == "text"), "")
-            data = extract_json(text)
-            if (data and _REQUIRED_KEYS.issubset(data)
-                    and data.get("result_type") in _VALID_RESULT):
+            data = extract_json(next((b.text for b in resp.content if b.type == "text"), ""))
+            if data and is_valid(data):
                 return data
         except Exception as e:
             if attempt == MAX_ATTEMPTS:
-                print(f"  WARN concept {concept['concept_norm']!r}: {e}", file=sys.stderr)
+                print(f"  WARN {stage} {label!r}: {e}", file=sys.stderr)
     return None
 
 
-def resolve_batch(client, catalog_block, concepts, snippets_by_concept, concurrency):
+def _proposal_ok(d):
+    return _REQUIRED_KEYS.issubset(d) and d.get("result_type") in _VALID_RESULT
+
+
+def _verdict_ok(d):
+    return (isinstance(d.get("verdicts"), list)
+            and d.get("result_type") in _VALID_RESULT
+            and all(isinstance(v, dict) and "prtnum" in v and "keep" in v
+                    for v in d["verdicts"]))
+
+
+def propose_one(client, catalog_block, concept, snippets):
+    return _call_json(client, INSTRUCTIONS, catalog_block,
+                      build_user_prompt(concept, snippets), MAX_TOKENS,
+                      _proposal_ok, "propose", concept["concept_norm"])
+
+
+def verify_one(client, concept, snippets, proposal, candidates):
+    """Pass ②. Deliberately does NOT get the catalog block: the candidates are
+    already rendered with their authoritative names, and withholding the other
+    2.5k rows keeps the reviewer from shopping for a replacement item instead of
+    judging the ones in front of it."""
+    return _call_json(client, VERIFY_INSTRUCTIONS, None,
+                      build_verify_prompt(concept, snippets, proposal, candidates),
+                      VERIFY_MAX_TOKENS, _verdict_ok, "verify", concept["concept_norm"])
+
+
+def _norm_name(s):
+    return re.sub(r"[^A-Z0-9]+", " ", str(s or "").upper()).strip()
+
+
+def _name_agrees(claimed, authoritative):
+    """Did the proposer's own name for this SKU match what the SKU actually is?
+    A disagreement means its prtnum and its intent came apart (the arrays are 1:1
+    by convention only), so the pair is suspect — recorded, and left for pass ② to
+    judge against the AUTHORITATIVE name."""
+    a, b = _norm_name(claimed), _norm_name(authoritative)
+    if not a or not b:
+        return True          # nothing claimed -> nothing to contradict
+    return a == b or a in b or b in a
+
+
+def build_candidates(proposal, catalog_by_prtnum):
+    """Proposer output -> verifiable candidate list. Drops hallucinated part
+    numbers (not in the ACTIVE catalog) and de-dupes, preserving the proposer's
+    order; returns the name-mismatch diagnostic alongside."""
+    candidates, mismatches, seen = [], [], set()
+    matched = str(proposal["matched_prtnum"]) if proposal.get("matched_prtnum") else None
+    claimed_names = proposal.get("recommended_item_names") or []
+
+    def _add(prtnum, role, claimed=None):
+        item = catalog_by_prtnum.get(prtnum)
+        if item is None or prtnum in seen:
+            return
+        seen.add(prtnum)
+        if claimed is not None and not _name_agrees(claimed, item.get("item_name")):
+            mismatches.append(prtnum)
+        candidates.append({
+            "prtnum": prtnum,
+            "item_name": str(item.get("item_name") or ""),
+            "item_short_name": str(item.get("item_short_name") or ""),
+            "item_family": str(item.get("item_family") or ""),
+            "role": role,
+        })
+
+    if matched:
+        _add(matched, "matched")
+    for i, p in enumerate(proposal.get("recommended_prtnums") or []):
+        _add(str(p), "recommended",
+             claimed_names[i] if i < len(claimed_names) else None)
+    return candidates, mismatches, matched
+
+
+def _clamp(x, lo=0.0, hi=1.0):
+    try:
+        return max(lo, min(hi, float(x)))
+    except (TypeError, ValueError):
+        return lo
+
+
+def reconcile(proposal, verdict, candidates, matched):
+    """Apply pass ②'s verdicts. result_type is DERIVED from what actually
+    survived rather than taken on trust — a reviewer that rejects every item but
+    still answers "basket" must not leave an empty basket labelled as one."""
+    keep, reject = {}, []
+    for v in verdict["verdicts"]:
+        p = str(v.get("prtnum"))
+        if v.get("keep"):
+            keep[p] = str(v.get("reason") or "")[:200]
+        else:
+            reject.append((p, str(v.get("reason") or "")[:200]))
+
+    matched_ok = bool(matched) and matched in keep
+    kept = [c["prtnum"] for c in candidates
+            if c["role"] == "recommended" and c["prtnum"] in keep][:MAX_RECOMMENDATIONS]
+
+    if matched_ok:
+        result_type = "carried"
+        kept = []                       # a carried match stands on its own
+    elif kept:
+        for source in (verdict.get("result_type"), proposal.get("result_type")):
+            if source in ("substitute", "basket"):
+                result_type = source
+                break
+        else:
+            result_type = "basket"
+    else:
+        result_type = "none"
+
+    by_prtnum = {c["prtnum"]: c for c in candidates}
+    return {
+        "result_type": result_type,
+        "matched_prtnum": matched if matched_ok else None,
+        "recommended_prtnums": kept,
+        "recommended_item_names": [by_prtnum[p]["item_name"] for p in kept],
+        "recommended_reasons": [keep[p] for p in kept],
+        "rejected_prtnums": [p for p, _ in reject],
+        "rejected_reasons": [r for _, r in reject],
+        "confidence": _clamp(verdict.get("confidence")) if result_type != "none" else 0.0,
+        "canonical_label": (str(verdict.get("canonical_label") or "").strip()
+                            or str(proposal.get("canonical_label") or "").strip()),
+    }
+
+
+def resolve_one(client, catalog_block, catalog_by_prtnum, concept, snippets, verify=True):
+    """Full two-pass resolution for one concept. Returns a record dict, or None
+    to leave the concept unresolved for a later run (fail closed — an unverified
+    match must never reach the board)."""
+    label = concept["concept_norm"]
+    proposal = propose_one(client, catalog_block, concept, snippets)
+    if proposal is None:
+        return None
+
+    candidates, mismatches, matched = build_candidates(proposal, catalog_by_prtnum)
+    base = {
+        "concept_norm": str(label),
+        "canonical_label": str(proposal.get("canonical_label") or label),
+        "concept_type": str(proposal["concept_type"]),
+        "name_mismatch_prtnums": mismatches,
+        "proposer_confidence": _clamp(proposal.get("match_confidence")),
+        "snippet_count": len(snippets),
+    }
+
+    if not verify:
+        # --no-verify is a smoke-test path only; model_version is tagged so these
+        # rows can never be mistaken for verified ones (and are re-resolved once
+        # the script runs normally again).
+        base.update({
+            "result_type": proposal["result_type"] if candidates or proposal["result_type"] == "none" else "none",
+            "matched_prtnum": matched,
+            "recommended_prtnums": [c["prtnum"] for c in candidates if c["role"] == "recommended"],
+            "recommended_item_names": [c["item_name"] for c in candidates if c["role"] == "recommended"],
+            "recommended_reasons": [], "rejected_prtnums": [], "rejected_reasons": [],
+            "match_confidence": _clamp(proposal.get("match_confidence")),
+        })
+        return base
+
+    if not candidates:
+        # nothing to check — the proposer already said "nothing fits"
+        base.update({
+            "result_type": "none", "matched_prtnum": None,
+            "recommended_prtnums": [], "recommended_item_names": [],
+            "recommended_reasons": [], "rejected_prtnums": [], "rejected_reasons": [],
+            "match_confidence": 0.0,
+        })
+        return base
+
+    verdict = verify_one(client, concept, snippets, proposal, candidates)
+    if verdict is None:
+        print(f"  SKIP {label!r}: verification failed — left unresolved for the "
+              f"next run (no unverified match written)", file=sys.stderr)
+        return None
+
+    applied = reconcile(proposal, verdict, candidates, matched)
+    base.update({
+        "canonical_label": applied["canonical_label"] or base["canonical_label"],
+        "result_type": applied["result_type"],
+        "matched_prtnum": applied["matched_prtnum"],
+        "recommended_prtnums": applied["recommended_prtnums"],
+        "recommended_item_names": applied["recommended_item_names"],
+        "recommended_reasons": applied["recommended_reasons"],
+        "rejected_prtnums": applied["rejected_prtnums"],
+        "rejected_reasons": applied["rejected_reasons"],
+        "match_confidence": applied["confidence"],
+    })
+    return base
+
+
+def resolve_batch(client, catalog_block, catalog_by_prtnum, concepts,
+                  snippets_by_concept, concurrency, verify=True):
     out = {}
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = {
-            pool.submit(resolve_one, client, catalog_block, c,
-                        snippets_by_concept.get(c["concept_norm"], [])): c
+            pool.submit(resolve_one, client, catalog_block, catalog_by_prtnum, c,
+                        snippets_by_concept.get(c["concept_norm"], []), verify): c
             for c in concepts
         }
         for fut in futures:
@@ -490,38 +955,85 @@ def resolve_batch(client, catalog_block, concepts, snippets_by_concept, concurre
     return out
 
 
-def to_records(by_concept, resolved_at, catalog_by_prtnum):
-    """Build enrichment rows, VALIDATING every prtnum the LLM returned against the
-    real catalog: drop any recommended/matched prtnum that isn't a real SKU, and
-    take the item name from the catalog (never the LLM's self-reported name — it
-    can drift from the prtnum). This guarantees downstream only ever sees real
-    SKUs with their true names."""
-    model_version = _CURRENT_VERSION
+def finalize_records(by_concept, resolved_at, model_version):
+    """Stamp the run metadata and fill the canonical key used for alias
+    harmonisation. Deglossed+folded so "Som Tam (green papaya salad)" and
+    "Som Tam (Green Papaya Salad)" land on the same key."""
     records = []
-    for concept_norm, a in by_concept.items():
-        # keep only recommended prtnums that exist; name comes from the catalog
-        prtnums, names = [], []
-        for p in (a.get("recommended_prtnums") or []):
-            p = str(p)
-            if p in catalog_by_prtnum:
-                prtnums.append(p)
-                names.append(str(catalog_by_prtnum[p]))
-        matched = (str(a["matched_prtnum"]) if a.get("matched_prtnum") else None)
-        if matched is not None and matched not in catalog_by_prtnum:
-            matched = None  # LLM hallucinated a SKU that doesn't exist
-        records.append({
-            "concept_norm": str(concept_norm),
-            "canonical_label": str(a.get("canonical_label") or concept_norm),
-            "concept_type": str(a["concept_type"]),
-            "result_type": str(a["result_type"]),
-            "matched_prtnum": matched,
-            "recommended_prtnums": prtnums,
-            "recommended_item_names": names,
-            "match_confidence": float(a["match_confidence"]),
-            "resolved_at": resolved_at,
-            "model_version": model_version,
-        })
+    for r in by_concept.values():
+        r = dict(r)
+        r["canonical_key"] = _concept_key(r.get("canonical_label") or r["concept_norm"])
+        r.setdefault("alias_of", None)
+        r["resolved_at"] = resolved_at
+        r["model_version"] = model_version
+        records.append(_coerce_record(r))
     return records
+
+
+_RESULT_RANK = {"carried": 3, "substitute": 2, "basket": 2, "none": 1}
+
+
+def _alias_sort_key(r):
+    n_items = len(r.get("recommended_prtnums") or []) + (1 if r.get("matched_prtnum") else 0)
+    return (_RESULT_RANK.get(r.get("result_type"), 0),
+            float(r.get("match_confidence") or 0.0),
+            n_items,
+            str(r.get("concept_norm") or ""))
+
+
+_PAYLOAD_KEYS = ("canonical_label", "concept_type", "result_type", "matched_prtnum",
+                 "recommended_prtnums", "recommended_item_names",
+                 "recommended_reasons", "match_confidence")
+
+
+def _payload(r):
+    return tuple(tuple(r.get(k) or []) if isinstance(_RECORD_DEFAULTS[k], list)
+                 else r.get(k) for k in _PAYLOAD_KEYS)
+
+
+def harmonize_aliases(new_records, existing_records, resolved_at):
+    """One dish must not get two different answers.
+
+    fold_concept only merges Latin diacritic variants — cross-SCRIPT twins stay
+    separate concepts (som tam / ส้มตำ, boat noodles / ก๋วยเตี๋ยวเรือ), so the same dish is
+    resolved twice, independently, and the two answers disagree (2026-08: rank 1
+    "som tam" -> none, rank 13 "ส้มตำ" -> a jackfruit basket). Where the LLM's own
+    canonical label says two concepts are the same thing, the better-grounded
+    answer (real match > none, then higher verified confidence) is copied onto the
+    other and the loser is stamped alias_of, so the board can't contradict itself.
+
+    Includes rows resolved in EARLIER runs, and returns the rows to write: the new
+    ones plus any older row whose answer changed (append-only + staging's
+    latest-resolved_at-wins makes the rewrite an update).
+    """
+    existing = [_coerce_record(r) for r in existing_records]
+    new_ids = {r["concept_norm"] for r in new_records}
+    existing = [r for r in existing if r["concept_norm"] not in new_ids]
+
+    by_key = defaultdict(list)
+    for r in existing + list(new_records):
+        by_key[r.get("canonical_key") or r["concept_norm"]].append(r)
+
+    rewritten = []
+    for group in by_key.values():
+        if len(group) < 2:
+            continue
+        winner = max(group, key=_alias_sort_key)
+        for r in group:
+            if r["concept_norm"] == winner["concept_norm"]:
+                r["alias_of"] = None
+                continue
+            if _payload(r) == _payload(winner) and r.get("alias_of") == winner["concept_norm"]:
+                continue
+            for k in _PAYLOAD_KEYS:
+                r[k] = winner[k]
+            r["alias_of"] = winner["concept_norm"]
+            print(f"  alias: {r['concept_norm']!r} <- {winner['concept_norm']!r} "
+                  f"({winner['result_type']}, conf {winner['match_confidence']})")
+            if r["concept_norm"] not in new_ids:
+                r["resolved_at"] = resolved_at
+                rewritten.append(r)
+    return list(new_records) + rewritten
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -529,21 +1041,36 @@ def to_records(by_concept, resolved_at, catalog_by_prtnum):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
-         concurrency=CONCURRENCY, duckdb_path=LOCAL_DUCKDB_PATH):
-    concepts, snippets, catalog, n_resolved = read_all(backend, top_n, duckdb_path)
+         concurrency=CONCURRENCY, duckdb_path=LOCAL_DUCKDB_PATH, verify=True):
+    model_version = _CURRENT_VERSION if verify else f"{_CURRENT_VERSION}-noverify"
+    concepts, snippets, catalog, existing = read_all(backend, top_n, duckdb_path,
+                                                     model_version)
     if limit:
         concepts = concepts[:limit]
-    print(f"{n_resolved} already resolved; {len(concepts)} new top-{top_n} "
+    print(f"{len(existing)} already resolved; {len(concepts)} new top-{top_n} "
           f"concepts to resolve; catalog has {len(catalog)} items")
+
+    # The snippet lookup is load-bearing (see SQL PARITY above) and used to fail
+    # silently. Every ranked concept exists BECAUSE some in-window mention named
+    # that dish, so zero snippets means the keys have drifted apart again — say so
+    # loudly rather than resolving a bare token.
+    starved = [c["concept_norm"] for c in concepts
+               if not snippets.get(c["concept_norm"])]
+    if starved:
+        print(f"WARN {len(starved)}/{len(concepts)} concepts matched NO in-window "
+              f"snippets — these resolve blind and will be returned as 'none'. "
+              f"Run scripts/check_fold_consistency.py: {starved[:5]}", file=sys.stderr)
+
     if not concepts:
         print("nothing to do.")
         return
 
     catalog_block = build_catalog_block(catalog)
-    catalog_by_prtnum = {str(c["prtnum"]): c.get("item_name") for c in catalog}
+    catalog_by_prtnum = {str(c["prtnum"]): c for c in catalog}
 
     if dry_run:
-        print(f"[dry-run] would resolve {len(concepts)} concepts with {MODEL}.")
+        print(f"[dry-run] would resolve {len(concepts)} concepts with {MODEL} "
+              f"({'propose + verify' if verify else 'propose only'}).")
         print(f"catalog block: {len(catalog_block)} chars. First prompt:\n")
         c0 = concepts[0]
         print(build_user_prompt(c0, snippets.get(c0["concept_norm"], [])))
@@ -551,19 +1078,33 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
 
     client = get_client(backend)
     total = len(concepts)
-    written = 0
+    resolved_at = datetime.now(timezone.utc)
+    all_records = {}
     for start in range(0, total, BATCH_SIZE):
         chunk = concepts[start:start + BATCH_SIZE]
-        res = resolve_batch(client, catalog_block, chunk, snippets, concurrency)
-        write_resolution(backend, to_records(res, datetime.now(timezone.utc),
-                                             catalog_by_prtnum))
-        written += len(res)
-        print(f"  batch {start // BATCH_SIZE + 1}: wrote {len(res)}/{len(chunk)} "
-              f"(cumulative {written}/{total})")
+        res = resolve_batch(client, catalog_block, catalog_by_prtnum, chunk,
+                            snippets, concurrency, verify)
+        recs = finalize_records(res, resolved_at, model_version)
+        # harmonisation needs every row for a canonical key at once, so batches
+        # accumulate and the write happens after the loop. Batches exist to bound
+        # concurrency, not to checkpoint — top-N is ~20 rows.
+        all_records.update({r["concept_norm"]: r for r in recs})
+        print(f"  batch {start // BATCH_SIZE + 1}: resolved {len(res)}/{len(chunk)} "
+              f"(cumulative {len(all_records)}/{total})")
 
+    to_write = harmonize_aliases(list(all_records.values()), existing, resolved_at)
+    write_resolution(backend, to_write)
+
+    written = len(all_records)
     failed = total - written
-    print(f"DONE. wrote {written} resolution rows"
-          + (f"; {failed} failed — re-run to backfill (incremental)" if failed else ""))
+    kinds = defaultdict(int)
+    for r in all_records.values():
+        kinds[r["result_type"]] += 1
+    print(f"DONE. wrote {len(to_write)} rows ({written} newly resolved"
+          + (f", {len(to_write) - written} re-harmonised" if len(to_write) > written else "")
+          + f"): {dict(kinds)}"
+          + (f"; {failed} unresolved (propose or verify failed) — re-run to "
+             f"backfill (incremental)" if failed else ""))
 
 
 if __name__ == "__main__":
@@ -577,10 +1118,15 @@ if __name__ == "__main__":
     p.add_argument("--duckdb", default=LOCAL_DUCKDB_PATH,
                    help=f"local duckdb build path (default {LOCAL_DUCKDB_PATH})")
     p.add_argument("--dry-run", action="store_true", help="build prompts only; no API call")
+    p.add_argument("--no-verify", dest="verify", action="store_false",
+                   help="SMOKE TEST ONLY: skip the verification pass. Rows are "
+                        "written under a '-noverify' model_version so they can't "
+                        "pass as verified.")
     args = p.parse_args()
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # concepts carry Thai/Vietnamese text
     except Exception:
         pass
     main(backend=args.backend, limit=args.limit, top_n=args.top_n,
-         dry_run=args.dry_run, concurrency=args.concurrency, duckdb_path=args.duckdb)
+         dry_run=args.dry_run, concurrency=args.concurrency,
+         duckdb_path=args.duckdb, verify=args.verify)
