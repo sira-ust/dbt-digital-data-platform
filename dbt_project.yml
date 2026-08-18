@@ -77,16 +77,27 @@ vars:
   # least this confident, so a shaky spam call doesn't silently hide a real mention
   social_spam_confidence_min: 0.7
 
-  # int_social_concept_trends / mart_social_trending_items — "currently trending"
-  # board. The mart is a SINGLE CURRENT SNAPSHOT of the top items over a trailing
-  # window of all mentions (not one calendar week), so a sustained trend keeps
-  # showing until it fades out of the window. Ranking is deterministic (pure social
-  # signal), VOLUME-forward; the LLM only resolves the top-N concepts to WMS SKUs,
-  # offline (scripts/resolve_trending_concepts.py).
-  social_trend_window_weeks: 4       # trailing window (weeks) of mentions = "currently trending"
-  social_trend_top_n: 20             # how many trending items the mart shows
-  social_trend_min_mentions: 2       # ignore concepts below this over the window (noise floor)
-  social_trend_link_count: 5         # source_links per concept — the top links by reach then engagement
+  # int_social_concept_trends / mart_social_trending_items — the weekly trending
+  # board. The UNIT IS THE CALENDAR WEEK (Monday-anchored): the report runs weekly,
+  # and each row aggregates and ranks exactly one week's mentions, so week-over-week
+  # movement compares equal, non-overlapping periods. Known cost: a spike that
+  # straddles a Sunday splits across two weeks and ranks lower in both (an earlier
+  # design used a trailing multi-week window to avoid that, at the price of
+  # overlapping periods that can't be compared week to week — this grain takes the
+  # other side of that trade). NOTE: a mid-week run leaves the newest week partial
+  # (is_partial_week / days_observed) — read mention_share, not raw counts, across
+  # such a week. Ranking is deterministic (pure social signal) and author-diversity
+  # based (see the v2 block below); the LLM only resolves the top-N concepts to WMS
+  # SKUs, offline (scripts/resolve_trending_concepts.py).
+  social_trend_history_weeks: 13     # calendar weeks of board history kept = ~3 months, ROLLING.
+                                     # The model is a full rebuild each run, so week 14 pushing in
+                                     # means week 1 is gone — nothing archives it. Raise this to keep
+                                     # more (cost is linear and tiny); permanent history would need a
+                                     # snapshot or incremental table, which is a different design.
+  social_trend_top_n: 20             # how many trending items the mart shows PER CLASS PER WEEK
+  social_trend_min_mentions: 2       # ignore concepts below this IN A WEEK (noise floor). Bites harder at a
+                                     # 7-day grain than over a multi-week window: expect gaps in trajectories.
+  social_trend_link_count: 5         # source_links per concept-week — the top links by reach then engagement
   # trend_score = mentions x (1 + ln(1+engagement)/eng_weight + ln(1+views)/views_weight).
   # engagement = active reactions (likes+comments+shares); views tracked separately.
   # Both log-dampened so one viral post can't dominate; a BIGGER weight = that signal
@@ -97,22 +108,42 @@ vars:
   social_resolve_min_confidence: 0.7 # below this, ANY match (carried/substitute/basket) is suppressed
                                      # (shown as none/source_new). Inventory wins only when confident — a
                                      # 0.45 carried guess (sushi -> corn oil) is dropped like a shaky basket.
-  # The trending UNIT is mentioned_dishes only (the AI's specific-product signal).
-  # Ingredients (too generic) and brands (retailers / delivery platforms /
-  # influencers / restaurants — unbounded, none stockable) are NOT ranked; see
-  # int_social_concept_trends. The LLM resolver still reads brand context from each
-  # concept's mention snippets.
+  # TWO ranking classes, ranked SEPARATELY so a flood of viral dishes can't crowd
+  # stockable items off the board (concept_class in int_social_concept_trends):
+  #   'dish' <- mentioned_dishes   (Som Tam, Pho — what people talk about)
+  #   'item' <- mentioned_products (Tiparos fish sauce, canned coconut milk, tom yum
+  #             paste — SELLABLE goods a grocery or restaurant could order as a line
+  #             item). The product/commodity judgment is made at EXTRACTION time
+  #             (scripts/enrich_mentions.py prompt v2), not by filtering here: raw
+  #             commodities and produce (durian, matcha, pork) stay in `ingredients`,
+  #             which is never ranked but still feeds the resolver's basket side.
+  #             Expect this board to be much thinner than the dish board — people
+  #             post about dishes far more than about SKUs. seed_social_generic_terms
+  #             remains as a BACKSTOP for commodity tokens that slip through.
+  # Brands are still NOT ranked — that array is dominated by retailers / delivery
+  # platforms / influencers / restaurants: unbounded, none stockable. The LLM
+  # resolver still reads brand context from each concept's mention snippets.
 
   # trend_score v2 (distinct_authors_adj-based, replacing pure mention-volume
   # ranking) — see int_social_concept_trends. STARTING POINTS pending backtest,
   # same as the legacy weights above were never re-tuned after launch:
   social_trend_v2_engagement_weight: 5   # divisor on ln(1+engagement_norm); lower = quality moves rank more
   social_trend_v2_views_weight: 10       # divisor on ln(1+views_norm)
+  social_trend_v2_min_channel_baseline_mentions: 10  # a channel's WEEKLY median needs at least this many
+                                                     # mentions to be a baseline; below it, fall back to the
+                                                     # channel's all-history median (a median over 2 rows is
+                                                     # not a baseline, it's one of the two rows). Load-bearing
+                                                     # at a 7-day grain — raise it if a channel is thin most
+                                                     # weeks rather than trusting a 3-row median.
   social_trend_v2_single_channel_dampener: 0.85  # multiplier for channel_count < 2 (flag, not exclude —
                                                   # confirmed only ~5% of the actual top-20 is single-channel,
                                                   # so this is low-stakes either way; see Step 3 findings)
   # author_quality thresholds (named/non-anonymised authors only — see
-  # int_social_concept_trends for why anonymised profiles can't use this test):
+  # int_social_concept_trends for why anonymised profiles can't use this test).
+  # Judged on ONE calendar week now, so most concepts land on 'unverifiable' (which
+  # stays ranked, flag visible) and the repeat_poster exclusion fires less often
+  # than it did over a multi-week window — lower the floor if the anti-spam guard
+  # needs to bite weekly:
   social_trend_v2_min_named_mentions: 5        # below this, too little signal to judge -> 'unverifiable'
   social_trend_v2_max_mentions_per_named_author: 3  # above this among named authors -> 'repeat_poster', excluded
 
@@ -263,6 +294,19 @@ seeds:
         app_category_code: string
         app_id: string
         ust_category_id: string
+
+    # Generic-commodity stoplist for the social 'item' ranking class — see
+    # int_social_concept_trends. TAGGED social on purpose: the weekly job runs
+    # `dbt build --select tag:social`, and an untagged seed would never be built
+    # there, leaving the anti-join pointing at a table that doesn't exist.
+    seed_social_generic_terms:
+      +tags: ["social", "reference"]
+      +column_types:
+        term: string
+        applies_to: string
+        language: string
+        reason: string
+        is_active: boolean
 
     # Disabled: these decode the LEGACY two-tier tracking/activity streams,
     # whose staging/int/mart models were removed 2026-07-08 (superseded by the

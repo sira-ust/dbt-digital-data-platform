@@ -1,0 +1,91 @@
+# A SEPARATE weekly job that geocodes new NAV customers. Nothing else.
+#
+# WHY NOT A TASK IN THE DAILY JOB: that was tried on 2026-08-17 and removed.
+# The geocode is incremental on address_hash, so a normal day sends zero
+# requests -- and the task still paid a serverless cold start every night to
+# find that out. It also put a third-party API beside the warehouse: even
+# non-blocking, a Google outage produced a FAILED task and a morning alert for
+# something that does not affect any table. Weekly, in its own job, the cold
+# start is paid 52 times a year instead of 365 and a failure alert means
+# something actually needs attention.
+#
+# WHY WEEKLY IS ENOUGH: a customer without coordinates is not wrong in the
+# warehouse, only unresolved -- mart_rep_customer_activity reports scenario
+# `unknown` for them, which is the honest reading. The cost of waiting is that
+# visits to a brand-new customer are unclassified for up to a week.
+#
+# TIMED TO LAND BEFORE THE DAILY BUILD. Sunday 03:00, and the daily dbt job runs
+# 04:00 -- so the coordinates written here are picked up an hour later by the
+# normal build and reach the mart with no dbt task in this job. Moving the daily
+# job earlier than 04:00 breaks that, and new coordinates would then sit unused
+# for a further 24 hours.
+#
+# --limit 1000 is a BLAST-RADIUS CAP, not a throughput setting. Weekly volume is
+# a handful of customers. The cap matters only if an upstream change rewrites
+# every address, making all 7,198 address_hash values look new: capped, an
+# unattended run spends ~$5 instead of ~$36, and the log's `still to geocode`
+# line shows the backlog so the truncation is visible rather than silent.
+#
+# THE GOOGLE KEY comes from the Unity Catalog secret
+# ust_databricks.ust_external.google_geocoding_api_key. Nothing to wire here:
+# the script reads it itself, so the key never appears in this job definition,
+# in the run history, or in a log.
+#
+# environment_version 5 is LOAD-BEARING for that. Reading a UC secret with
+# dbutils needs serverless environment version 4+ (or DBR 17.3 LTS+); on an
+# older version the read fails and the run cannot geocode anything.
+
+resources:
+  jobs:
+    ust_geocode_customers_weekly:
+      name: ust-geocode-customers-weekly
+      schedule:
+        # Sunday 03:00 PT -- one hour ahead of the daily dbt build
+        quartz_cron_expression: 0 0 3 ? * SUN
+        timezone_id: America/Los_Angeles
+        pause_status: UNPAUSED
+
+      # This job is unattended and its whole point is to be ignorable, so a
+      # silent failure would go unnoticed until the `unknown` scenario count
+      # started climbing in the mart weeks later.
+      email_notifications:
+        on_failure:
+          - sirasasitorn@ustrading.com
+
+      # A run that somehow hangs must not still be holding compute a day later.
+      timeout_seconds: 3600
+
+      tasks:
+        - task_key: geocode-new-customers
+          description: >
+            Geocode NAV customers whose address is new or changed. Incremental
+            on address_hash, so a quiet week sends no requests and costs
+            nothing. Per-run counts are printed at the end of the task log.
+          spark_python_task:
+            python_file: scripts/geocode_customers.py
+            source: GIT
+            parameters:
+              - "--backend"
+              - "databricks"
+              - "--limit"
+              - "1000"
+          environment_key: geocode-env
+
+      git_source:
+        git_url: https://github.com/sira-ust/dbt-digital-data-platform.git
+        git_provider: gitHub
+        git_branch: main
+
+      queue:
+        enabled: true
+
+      environments:
+        - environment_key: geocode-env
+          spec:
+            environment_version: "5"
+            dependencies:
+              - requests
+              - databricks-sdk
+              - databricks-sql-connector
+
+      performance_target: STANDARD

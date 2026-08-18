@@ -353,54 +353,111 @@ models:
 
   - name: int_social_concept_trends
     description: >
-      "Currently trending" snapshot — one row per concept, DETERMINISTIC and
-      LLM-free. NOT per-week: aggregates ALL mentions in a TRAILING WINDOW of
-      social_trend_window_weeks ending at the latest data (window_end = max
-      posted_date), so a dish talked about for weeks keeps ranking until its
-      mentions age out of the window. Recomputed/replaced each run.
+      WEEKLY trending boards — one row per (week_start, concept_class,
+      concept_norm), DETERMINISTIC and LLM-free, recomputed/replaced each run.
+
+      GRAIN: the CALENDAR WEEK (Monday-anchored posted_week). Each row aggregates
+      only that week's mentions and is ranked against only that week's other
+      concepts, because the report runs weekly and the point is to compare week
+      against week — equal, non-overlapping periods, so "up 3 places" means exactly
+      that. Known cost: a spike straddling a Sunday splits across two weeks and
+      ranks lower in both (an earlier design used a trailing multi-week window to
+      avoid that, at the price of overlapping periods that can't be compared week to
+      week). History is bounded by social_trend_history_weeks. A mid-week run leaves
+      the newest week partial — see is_partial_week / days_observed.
+
+      TWO RANKING CLASSES, ranked separately: 'dish' (from mentioned_dishes) and
+      'item' (from ingredients, minus seed_social_generic_terms). trend_rank is
+      row_number() partitioned by (week_start, concept_class), so a flood of viral
+      dishes can no longer crowd stockable items off the board. Brands are still not
+      ranked (retailers / delivery platforms / influencers / restaurants — unbounded,
+      none stockable).
+
       trend_score is AUTHOR-DIVERSITY based (distinct_authors_adj x log-dampened,
       per-channel-normalised engagement/views), replacing a pure mention-volume
       score that correlated ~0.86 with raw mention_count — see trend_score_legacy,
       kept alongside for comparison, and author_quality below for why the
       exclusion rule runs on named (non-anonymised) authors, not the raw count.
-      is_rising (recent half vs older half of the window) is a secondary flag,
-      not the sort. The trending UNIT is mentioned_dishes only; ingredients and
-      brands are not ranked. Cross-language dupes (som tam / ส้มตำ) rank separately —
-      the LLM resolver canonicalises them downstream. The GATE
-      scripts/resolve_trending_concepts.py reads to pick top-N concepts (only
-      rows with a non-null trend_rank — see trend_rank below).
+      Channel medians are per (week, channel) with an all-history fallback for thin
+      windows; the shared-post divisor is per mention within class. For rise, use
+      mention_share / mention_share_change (volume-neutral) over is_rising.
+
+      Cross-language dupes (som tam / ส้มตำ) rank separately — the LLM resolver
+      canonicalises them downstream. The GATE scripts/resolve_trending_concepts.py
+      reads to pick the CURRENT week's top-N concepts per class (only rows with a
+      non-null trend_rank — see trend_rank below).
     config:
       tags: ["social"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, concept_class, concept_norm]
     columns:
+      - name: week_start
+        description: >
+          The as-of week (Monday-anchored) this row's board belongs to. Grain leader.
+          "Now" is max(week_start); each row summarises the trailing window ending
+          in this week, not this week's mentions alone.
+        tests: [not_null]
+      - name: concept_class
+        description: >
+          Which ranking space this row belongs to — 'dish' (from mentioned_dishes:
+          what people talk about) or 'item' (from ingredients minus the generic
+          stoplist: things that can plausibly be a SKU). Ranked separately on
+          purpose; the same folded string can appear in both.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['dish', 'item']
       - name: concept_norm
-        description: Normalised concept text (lower+trim, accent-folded, trailing LLM gloss stripped). Unique key; joins to concept_resolution.
-        tests: [unique, not_null]
-      - name: concept_source
-        description: Specific-product stream the text came from — always 'dish' (brands/ingredients not ranked; reserved for v2).
-      - name: window_start
-        description: First day of the trailing window (window_end minus social_trend_window_weeks).
+        description: Normalised concept text (lower+trim, accent-folded, trailing LLM gloss stripped). Joins to concept_resolution; unique only WITH week_start + concept_class.
         tests: [not_null]
-      - name: window_end
-        description: Last day of the trailing window = latest mention date in the data ("now").
+      - name: week_end
+        description: Last day of the calendar week (week_start + 6). Present so a consumer never has to re-derive the period.
         tests: [not_null]
+      - name: week_of_year
+        description: >
+          ISO week number (1-53) of week_start — "week 34". Report-facing; week_start
+          is still the column to sort and join on.
+      - name: year_week
+        description: >
+          Sortable ISO week label, "2026-W34". The YEAR is the ISO year (taken from the
+          week's Thursday), not the calendar year of week_start: Monday 2025-12-29
+          belongs to 2026-W01, and labelling it "2025-W01" would be wrong.
+      - name: days_observed
+        description: >
+          How many of the week's 7 days we actually hold data for. Short at both ends
+          of the series — the first week ever collected and the week currently in
+          progress.
+      - name: is_partial_week
+        description: >
+          days_observed < 7, so this week's volume is low for a reason unrelated to
+          the trend (a mid-week run, or the first week collected). Exclude these weeks
+          from week-over-week reads, or use mention_share, which is a share of the same
+          short week and stays comparable.
       - name: mention_count
-        description: Distinct food-relevant, non-spam mentions naming this concept over the window.
+        description: Distinct food-relevant, non-spam mentions naming this concept THAT WEEK.
+      - name: mention_share
+        description: >
+          mention_count / all (concept, mention) pairs that week in that class. The
+          measure to trust across weeks: shares sum to ~1 within a class, so if
+          collection volume doubles — or a week is partial — every share is still
+          comparable. Guarded by assert_social_concept_trends_mention_share_sums.
       - name: total_engagement
         description: Summed ACTIVE engagement (likes + comments + shares) across those mentions (deduped per mention). Feeds trend_score_legacy only.
       - name: total_views
         description: Summed views across those mentions (video/post view counts). Feeds trend_score_legacy only.
       - name: net_sentiment
         description: positives − negatives over those mentions (model-judged sentiment).
-      - name: recent_mentions
-        description: Mentions in the recent HALF of the window (for is_rising).
-      - name: prior_mentions
-        description: Mentions in the older half of the window (for is_rising).
       - name: is_rising
         description: >
-          recent_mentions > prior_mentions — a secondary "accelerating" flag; does NOT drive
-          the rank. Known to be dominated by the data collection ramp-up (85% of concepts
-          currently read as "rising") rather than real trend dynamics — out of scope, reported
-          separately, not fixed here.
+          mention_share went UP versus the previous week with a row. REDEFINED at this
+          grain: it used to compare the recent half of a multi-week window against the
+          older half, which was noisy and volume-driven (~85% of concepts read as
+          "rising"). A real previous week is now available, so this is a true
+          week-over-week rise. NULL on a concept's first week — nothing to compare to,
+          which is not the same as "not rising". Does NOT drive the rank.
       - name: distinct_authors_adj
         description: >
           Distinct authors naming this concept, channel-scoped (author_key = channel + profile,
@@ -460,13 +517,51 @@ models:
               arguments:
                 expression: ">= 0"
       - name: source_links
-        description: Array of the top social_trend_link_count mention URLs (by reach then engagement). Top-N set, order not guaranteed.
+        description: Array of the top social_trend_link_count mention URLs behind this concept THAT WEEK (by reach then engagement). Top-N set, order not guaranteed.
       - name: trend_rank
         description: >
-          1..N by trend_score desc, among concepts where author_quality != 'repeat_poster' only —
-          excluded concepts get NULL here (not a rank past the end), so they stay in this table for
-          inspection but a plain `trend_rank <= N` filter (used by both the mart and
-          scripts/resolve_trending_concepts.py) already excludes them with no extra clause needed.
+          1..N by trend_score desc WITHIN (week_start, concept_class) — each week's
+          dishes and items have their own 1..N, which is the mechanism that stops one
+          class masking the other. Among concepts where author_quality !=
+          'repeat_poster' only: excluded concepts get NULL here (not a rank past the
+          end), so they stay in this table for inspection but a plain `trend_rank <= N`
+          filter (used by both the mart and scripts/resolve_trending_concepts.py)
+          already excludes them with no extra clause needed. NULL is also legitimate
+          mid-trajectory — author_quality is judged per window, so a concept can be
+          excluded in one week and ranked in the next. Density within each rank space
+          is asserted by assert_social_concept_trends_rank_is_dense, and separation of
+          the two classes by assert_social_concept_trends_classes_ranked_separately.
+      - name: prev_week_start
+        description: >
+          The concept's previous week WITH A ROW in this class — which is NOT always
+          last week: lag() runs over OBSERVED weeks, and a week where the concept fell
+          below social_trend_min_mentions produces no row and is skipped. Always
+          populated when the concept has an earlier row, even a distant one, so a
+          longer-range comparison stays available to anyone who explicitly wants it.
+      - name: prev_trend_rank
+        description: trend_rank in prev_week_start (null if that week had no rank).
+      - name: rank_change
+        description: >
+          prev_trend_rank - trend_rank, so POSITIVE means the concept moved UP the
+          board (8 -> 3 is +5). STRICT: populated only when prev_week_start is exactly
+          the previous calendar week, so a number here always means "versus last week".
+          NULL means no like-for-like comparison exists — first appearance, a skipped
+          week, or a week either side was excluded as repeat_poster. NEVER coalesce it
+          to 0, which reads as "held rank".
+      - name: prev_mention_count
+        description: mention_count in prev_week_start.
+      - name: mention_count_wow_pct
+        description: >
+          Fractional change in mention_count vs LAST WEEK (0.75 = +75%). Same strict
+          consecutive-week rule as rank_change. Not volume-neutral — prefer
+          mention_share_change, especially across a partial week.
+      - name: prev_mention_share
+        description: mention_share in prev_week_start.
+      - name: mention_share_change
+        description: >
+          mention_share - prev_mention_share, under the same strict consecutive-week
+          rule. The volume-neutral movement signal: unaffected by the corpus growing or
+          shrinking, or by the week being partial.
 
   - name: int_rep_customer_activity
     description: >

@@ -1,0 +1,59 @@
+term,applies_to,language,reason,is_active
+salt,item,en,commodity — named in nearly every recipe and carries no trend signal,true
+sugar,item,en,commodity,true
+water,item,en,commodity,true
+ice,item,en,commodity,true
+oil,item,en,commodity — too broad to be a SKU (the specific oils we stock are named),true
+cooking oil,item,en,commodity,true
+vegetable oil,item,en,commodity,true
+flour,item,en,commodity — too broad,true
+rice,item,en,commodity — the specific rices we stock are named,true
+egg,item,en,commodity,true
+eggs,item,en,commodity,true
+pork,item,en,commodity — a building block not the trending thing,true
+chicken,item,en,commodity,true
+beef,item,en,commodity,true
+meat,item,en,too_broad,true
+seafood,item,en,too_broad,true
+vegetables,item,en,too_broad,true
+fruit,item,en,too_broad,true
+garlic,item,en,commodity,true
+onion,item,en,commodity,true
+pepper,item,en,commodity — ambiguous between the spice and the vegetable,true
+black pepper,item,en,commodity,true
+butter,item,en,commodity,true
+milk,item,en,too_broad — the specific milks/creams we stock are named,true
+cheese,item,en,too_broad,true
+bread,item,en,too_broad,true
+noodles,item,en,too_broad — the specific noodles we stock are named,true
+เกลือ,item,th,commodity (salt),true
+น้ำตาล,item,th,commodity (sugar),true
+น้ำ,item,th,commodity (water),true
+น้ำแข็ง,item,th,commodity (ice),true
+น้ำมัน,item,th,commodity (oil) — too broad,true
+แป้ง,item,th,commodity (flour) — too broad,true
+ข้าว,item,th,commodity (rice),true
+ไข่,item,th,commodity (egg),true
+หมู,item,th,commodity (pork),true
+ไก่,item,th,commodity (chicken),true
+เนื้อ,item,th,commodity (beef/meat) — too broad,true
+กระเทียม,item,th,commodity (garlic),true
+หอม,item,th,commodity (shallot/onion),true
+ผัก,item,th,too_broad (vegetables),true
+muối,item,vi,commodity (salt),true
+đường,item,vi,commodity (sugar),true
+nước,item,vi,commodity (water),true
+dầu ăn,item,vi,commodity (cooking oil),true
+bột,item,vi,commodity (flour) — too broad,true
+gạo,item,vi,commodity (rice),true
+trứng,item,vi,commodity (egg),true
+thịt heo,item,vi,commodity (pork),true
+thịt gà,item,vi,commodity (chicken),true
+thịt bò,item,vi,commodity (beef),true
+tỏi,item,vi,commodity (garlic),true
+hành,item,vi,commodity (onion/shallot),true
+rau,item,vi,too_broad (vegetables),true
+bún,item,vi,ambiguous_across_languages — vi bún (generic rice noodle) folds onto en "bun" (a specific baked item),false
+đá,item,vi,ambiguous_across_languages — vi đá (ice) folds onto "da" which is also vi da (skin),false
+chili,item,en,ambiguous_across_languages — generic as a raw commodity but the chili pastes/sauces we stock are specific,false
+พริก,item,th,ambiguous_across_languages — same as chili,false

@@ -334,33 +334,97 @@ models:
 
   - name: mart_social_trending_items
     description: >
-      Marketing-facing "currently trending" board — a SINGLE CURRENT SNAPSHOT: the
-      top social_trend_top_n concepts over the trailing social_trend_window_weeks
-      window (see int_social_concept_trends), always ~social_trend_top_n rows. A
-      sustained trend KEEPS SHOWING until it fades out of the window; recomputed and
-      REPLACED each run (no per-week history). Per trending thing it answers: what's
-      trending, how hard, and is it rising (rank, mentions, score, is_rising); where
-      to see it (source_links); do we carry it (result_type + matched item + CURRENT
-      stock); if not, what similar to offer (recommended_items); and what to DO
-      (action_signal). Ranking is deterministic and author-diversity based (see
+      Marketing-facing "currently trending" board, kept as a WEEKLY SERIES OF
+      BOARDS. Grain: one row per (week_start, concept_class, concept_norm);
+      recomputed and REPLACED each run.
+
+      Grain: one row per (CALENDAR WEEK, concept_class, concept_norm) — the report
+      runs weekly, and each row covers exactly one Monday-anchored week's mentions,
+      ranked against only that week's other concepts, so week-to-week movement
+      compares equal, non-overlapping periods.
+
+      TWO QUESTIONS, ONE TABLE. "What's trending THIS WEEK" is
+      `where is_top_n and week_start = (select max(week_start) ...)`
+      (~social_trend_top_n rows per class). "What's RISING" is a concept's rows
+      across week_start, read through rank_change, mention_share_change and
+      is_rising. Mind the newest week: a mid-week run leaves it partial
+      (is_partial_week / days_observed), so read mention_share rather than raw
+      counts across it. See int_social_concept_trends for the boundary-splitting
+      trade-off this grain accepts.
+
+      TWO CLASSES, ranked separately (concept_class): 'dish' (Som Tam, Pho — what
+      people talk about) and 'item' (matcha, durian, fish sauce — things that can
+      plausibly be a SKU). Each has its own 1..N per week, so a flood of viral
+      dishes can no longer mask the item-level signal that actually maps to
+      inventory. Show both.
+
+      TRAJECTORIES ARE COMPLETE, NOT TOP-N-FILTERED: every week of any concept that
+      reached the top N in ANY week is kept (is_top_n flags the weeks it was on the
+      board), so charted lines don't have holes where a concept dipped out. One
+      honest gap: a week where the concept fell below social_trend_min_mentions has
+      no upstream row at all.
+
+      Per trending thing it answers: what's trending and how hard (rank, mentions,
+      score, mention_share); whether it's moving (rank_change, mention_share_change);
+      where to see it (source_links); do we carry it (result_type + matched item +
+      CURRENT stock); if not, what similar to offer (recommended_items); and what to
+      DO (action_signal). Ranking is deterministic and author-diversity based (see
       int_social_concept_trends for trend_score's formula and trend_score_legacy for
       the prior mention-volume version kept alongside for comparison); the concept->SKU
       link comes from the OFFLINE LLM resolution — dbt never calls the LLM. A concept
       the LLM hasn't scored stays 'unresolved'. The confidence floor
       (social_resolve_min_confidence) suppresses ANY low-confidence match — carried,
       substitute, or basket (shown as 'none' / source_new). Inventory wins only when
-      confident: FZ BANH MI @0.95 shows, sushi -> corn oil @0.45 is dropped. Stock is the item's
-      CURRENT (latest snapshot week) shippability (CABOT warehouse only). Read by
-      Genie / BI.
+      confident: FZ BANH MI @0.95 shows, sushi -> corn oil @0.45 is dropped. Stock is
+      the item's CURRENT (latest snapshot week) shippability, CABOT warehouse only —
+      NOT as-of the row's week, hence the current_* naming. Read by Genie / BI.
     config:
       tags: ["social", "reporting"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, concept_class, concept_norm]
     columns:
-      - name: window_start
-        description: First day of the trailing window the board covers.
+      - name: concept_key
+        description: Surrogate key for the grain — week_start|concept_class|concept_norm.
+        tests: [unique, not_null]
+      - name: week_start
+        description: >
+          The as-of week (Monday-anchored) this row's board belongs to. "Now" is
+          max(week_start). Each row covers the trailing window ending in this week.
         tests: [not_null]
-      - name: window_end
-        description: Last day of the trailing window = latest mention date ("now").
+      - name: concept_class
+        description: >
+          Which board this row belongs to — 'dish' or 'item'. Ranked separately, so
+          "top 20" means top 20 PER CLASS per week. This is the hard fact to filter
+          on (concept_type is the LLM's opinion).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['dish', 'item']
+      - name: is_top_n
+        description: >
+          True for the weeks this concept was actually within social_trend_top_n of
+          its class. False rows exist so a trajectory has no holes — filter on this
+          for the board, ignore it for a chart.
         tests: [not_null]
+      - name: week_end
+        description: Last day of the calendar week (week_start + 6).
+        tests: [not_null]
+      - name: week_of_year
+        description: ISO week number (1-53) — "week 34". Use week_start to sort/join.
+      - name: year_week
+        description: >
+          Sortable ISO week label, "2026-W34" (ISO year, so Monday 2025-12-29 correctly
+          reads 2026-W01).
+      - name: days_observed
+        description: How many of the week's 7 days we hold data for — short for the week in progress and the first week ever collected.
+      - name: is_partial_week
+        description: >
+          days_observed < 7, so this week's volume is low for reasons unrelated to the
+          trend. Exclude these weeks from week-over-week reads, or use mention_share,
+          which stays comparable.
       - name: concept_label
         description: >
           Human-readable trending "item" — the LLM's canonical_label once resolved
@@ -368,17 +432,51 @@ models:
           until then.
         tests: [not_null]
       - name: concept_norm
-        description: Raw normalised concept text; unique grain/join key behind concept_label.
-        tests: [unique, not_null]
+        description: Raw normalised concept text; the join key behind concept_label. Unique only WITH week_start + concept_class.
+        tests: [not_null]
       - name: concept_type
         description: >
           Item type — the LLM's judgment (dish/category/ingredient/product/brand)
-          once resolved, else the ranking source (dish).
+          once resolved, else the ranking class (dish/item). An opinion; use
+          concept_class when you need the rank space.
       - name: trend_rank
-        description: 1..social_trend_top_n; 1 = most trending (by trend_score desc; see int_social_concept_trends).
-        tests: [not_null]
+        description: >
+          1..N within (week_start, concept_class); 1 = most trending that week in
+          that class (by trend_score desc; see int_social_concept_trends). NULL is
+          possible on a non-board (is_top_n = false) row: author_quality is judged
+          per window, so a concept excluded as a repeat_poster in one week has no
+          rank there while still having a trajectory.
+        tests:
+          - not_null:
+              config:
+                where: "is_top_n"
       - name: mention_count
-        description: Distinct food-relevant, non-spam mentions behind the trend, over the window.
+        description: Distinct food-relevant, non-spam mentions behind the trend THAT WEEK.
+      - name: mention_share
+        description: >
+          mention_count as a share of all (concept, mention) pairs that week in that
+          class. The measure to compare across weeks — unaffected by collection volume
+          moving or a week being partial, unlike raw counts. See
+          int_social_concept_trends.
+      - name: prev_week_start
+        description: >
+          The concept's previous week with a row — NOT always last week, since a week
+          below the noise floor produces no row and is skipped. Kept so a longer-range
+          comparison is still available when you want one.
+      - name: prev_trend_rank
+        description: trend_rank in prev_week_start.
+      - name: rank_change
+        description: >
+          prev_trend_rank - trend_rank — POSITIVE means it moved UP the board. Populated
+          ONLY when prev_week_start is exactly last week, so a number always means
+          "since last week". NULL = no like-for-like comparison (first appearance or a
+          skipped week), not "flat".
+      - name: prev_mention_count
+        description: mention_count in prev_week_start.
+      - name: mention_count_wow_pct
+        description: Fractional change in mention_count vs LAST WEEK (0.75 = +75%); same strict rule as rank_change. Not volume-neutral — prefer mention_share_change.
+      - name: mention_share_change
+        description: mention_share - prev_mention_share, same strict rule. The volume-neutral movement signal.
       - name: total_engagement
         description: Active engagement (likes + comments + shares) summed over those mentions.
       - name: total_views
@@ -391,23 +489,31 @@ models:
       - name: net_sentiment
         description: positives − negatives; a loud trend with negative buzz is not a promote.
       - name: is_rising
-        description: True when the concept accelerated in the recent half of the window (secondary flag, not the rank).
+        description: >
+          mention_share went up versus the previous week with a row — a true
+          week-over-week rise (redefined from the old half-window version, which was
+          volume-driven). Null on a concept's first week. Not the rank.
       - name: source_links
-        description: Array of the top mention URLs behind the trend (by reach then engagement).
+        description: Array of the top mention URLs behind the trend THAT WEEK (by reach then engagement).
       - name: distinct_authors_adj
         description: >
           Distinct authors behind the trend (channel-scoped; anonymised Instagram rows each
           count as their own unknown author). See int_social_concept_trends.
       - name: author_quality
         description: >
-          'verified' (broad enough real authorship to trust), 'repeat_poster' (would be here,
-          but one or few real accounts are driving it — excluded before trend_rank is assigned,
-          so it never reaches this board), or 'unverifiable' (too little non-anonymised signal
-          to judge — shown anyway, flag visible, rather than silently dropped). See
+          'verified' (broad enough real authorship to trust), 'repeat_poster' (one or few
+          real accounts are driving it — excluded before trend_rank is assigned, so it
+          never appears on the BOARD, but it can appear on a non-board trajectory row
+          with a null rank), or 'unverifiable' (too little non-anonymised signal to
+          judge — shown anyway, flag visible, rather than silently dropped). Judged per
+          window, so a concept's quality can change week to week. See
           int_social_concept_trends.
         tests:
-          # 'repeat_poster' is excluded upstream — never reaches this board, so never appears here
+          # 'repeat_poster' is excluded before ranking, so it can't be on the board —
+          # but it CAN be a trajectory row (is_top_n = false, trend_rank null)
           - accepted_values:
+              config:
+                where: "is_top_n"
               arguments:
                 values: ['verified', 'unverifiable']
       - name: is_single_channel
@@ -427,28 +533,48 @@ models:
       - name: matched_prtnum
         description: WMS part number we carry for this concept (result_type='carried').
       - name: matched_item_name
-        description: Name of the matched item, joined authoritatively from int_jdawms_items.
-      - name: in_stock
-        description: 1 if the matched item was shippable any day of the trend's week (CABOT only).
-      - name: shippable_qty
-        description: End-of-week shippable units for the matched item that week.
+        description: Name of the matched item, joined authoritatively from int_jdawms_items_active.
+      - name: current_in_stock
+        description: >
+          1 if the matched item is shippable in the LATEST stock snapshot week (CABOT
+          only) — TODAY's stock, not stock as of this row's week. Named current_* for
+          that reason: on a historical row it is still today's number, because
+          action_signal is a decision about now.
+      - name: current_shippable_qty
+        description: End-of-week shippable units for the matched item in the latest snapshot week (see current_in_stock).
       - name: recommended_prtnums
         description: >
           Array of WMS part numbers to recommend (substitutes or ingredient basket),
-          VERIFIED against int_jdawms_items — every entry is a real SKU; any prtnum
-          the LLM returned that isn't in the item master is dropped.
+          VERIFIED against int_jdawms_items_active — every entry is a real, currently
+          sellable SKU; any prtnum the LLM returned that isn't in the active item
+          master is dropped, as are duplicate part numbers and duplicate item NAMES
+          (the master carries several prtnums with the same name).
       - name: recommended_items
         description: >
           Display names parallel to recommended_prtnums, taken from the item master
-          (authoritative), not the LLM's self-reported names.
+          (authoritative), not the LLM's self-reported names. Length equality with
+          recommended_prtnums is asserted by assert_social_recommendations_aligned.
       - name: match_confidence
-        description: LLM confidence in the resolution, 0.0–1.0; null when unresolved.
+        description: >
+          The resolver's VERIFIED confidence in the match, 0.0–1.0 (a second,
+          independent model's calibrated certainty in the items that survived its
+          review — not the proposing model's self-rating); null when unresolved or no
+          match is shown.
+      - name: canonical_key
+        description: Shared by cross-script twins of one dish (som tam / ส้มตำ) — group on it to collapse them.
+      - name: alias_of
+        description: concept_norm of the twin this row's resolution was copied from; null when this row is the source.
+      - name: is_alias
+        description: >
+          True when this row's SKU answer was harmonised from a twin concept rather
+          than resolved on its own. Both rows still occupy a board slot; filter these
+          out to show one row per real dish.
       - name: action_signal
         description: >
           promote_now (carried + in stock), restock (carried + OOS),
           offer_substitute (not carried, similar exists), promote_ingredients
           (dish/category basket), source_new (nothing carried), monitor
-          (unresolved / no signal).
+          (unresolved / no signal). Always about TODAY's stock — see current_in_stock.
         tests:
           - accepted_values:
               arguments:

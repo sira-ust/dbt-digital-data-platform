@@ -216,8 +216,14 @@ models:
         description: Multi-label topics (array) — a key Genie query dimension.
       - name: mentioned_dishes
         description: Multi-label dishes (array) — semantic link to product categories at query time.
+      - name: mentioned_products
+        description: >
+          Multi-label sellable products (array) — the SKU-level social signal:
+          branded or packaged/processed goods, excluding raw commodities, dishes and
+          retailers. Ranked as the 'item' class in int_social_concept_trends and the
+          strongest link from social chatter to something we can actually sell.
       - name: ingredients
-        description: Multi-label ingredients (array).
+        description: Multi-label ingredients (array) — includes raw commodities; not ranked. See mentioned_products.
       - name: brands
         description: Multi-label brands / restaurants / products / retailers (array).
       - name: confidence

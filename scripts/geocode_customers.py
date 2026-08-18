@@ -52,10 +52,18 @@ runs, where an upstream address rewrite could silently spend ~$36. Watching the
 output, the cap only turns a twenty-minute backfill into a fortnight of partial
 runs. Use it when testing, omit it when draining the backlog.
 
-THE KEY IS NOT READ FROM THE UC SECRET ON A LOCAL RUN. The Databricks secret at
-ust_databricks.ust_external.google_geocoding_api_key is a Unity Catalog secret;
-the dbutils and SDK fallbacks below target LEGACY secret scopes and will not
-find it. Locally, set GOOGLE_GEOCODING_API_KEY in the environment.
+THE KEY LIVES IN UNITY CATALOG, at
+ust_databricks.ust_external.google_geocoding_api_key. UC secrets are addressed
+by catalog/schema/key -- NOT the scope/key of workspace secret scopes, which is
+a separate store. Calling the scope form against a UC secret returns
+ResourceDoesNotExist, which reads like a missing key but means a missing SCOPE.
+Reading a UC secret with dbutils needs DBR 17.3 LTS+ or serverless environment
+version 4+; the geocode job pins version 5.
+
+Off Databricks there is no dbutils, so a local run falls back to the UC REST
+endpoint using DATABRICKS_TOKEN / DBT_DATABRICKS_TOKEN -- meaning the one stored
+secret serves both the job and the terminal. Setting GOOGLE_GEOCODING_API_KEY
+still short-circuits all of it.
 
     # local dev against the mock parquet -- no credentials, no cost
     python scripts/geocode_customers.py --backend local --dry-run
@@ -228,7 +236,7 @@ def _profile_target():
     return None, None, None
 
 
-def _api_key(scope, name):
+def _api_key(scope, name, catalog=None, schema=None):
     """The Google key: env var first, then the Databricks secret store.
 
     Reading the secret HERE rather than injecting it as a task environment
@@ -241,20 +249,77 @@ def _api_key(scope, name):
         return key
     try:
         from databricks.sdk.runtime import dbutils
-        return dbutils.secrets.get(scope=scope, key=name)
     except Exception:
-        pass
-    try:                                             # off-runtime SDK fallback
-        from databricks.sdk import WorkspaceClient
-        import base64
-        raw = WorkspaceClient().secrets.get_secret(scope=scope, key=name).value
-        return base64.b64decode(raw).decode()
-    except Exception as e:
-        print(f"ERROR: no Google API key. Set {API_KEY_ENV}, or store it as a "
-              f"Databricks secret at scope='{scope}' key='{name}' "
-              f"(override with --secret-scope / --secret-key). "
-              f"Last error: {type(e).__name__}", file=sys.stderr)
-        return None
+        dbutils = None
+
+    errors = []
+
+    # 1. UNITY CATALOG secret -- where the key actually lives, as
+    #    ust_databricks.ust_external.google_geocoding_api_key. UC secrets take
+    #    catalog/schema/key, NOT scope/key: a UC secret is a securable in a
+    #    catalog namespace, and the scope-based call cannot address one (it
+    #    answers ResourceDoesNotExist, which reads like a missing key but means
+    #    a missing SCOPE). Requires DBR 17.3 LTS+ or serverless environment
+    #    version 4+; the geocode job pins version 5.
+    if dbutils is not None and catalog and schema:
+        try:
+            return dbutils.secrets.get(catalog=catalog, schema=schema, key=name)
+        except Exception as e:
+            errors.append(f"uc/dbutils: {type(e).__name__}")
+
+    # 2. Legacy secret SCOPE, for a workspace where the key was put in a scope
+    #    instead. Kept because it costs nothing and the two stores coexist.
+    if dbutils is not None and scope:
+        try:
+            return dbutils.secrets.get(scope=scope, key=name)
+        except Exception as e:
+            errors.append(f"scope/dbutils: {type(e).__name__}")
+
+    # 3. OFF-RUNTIME (a local terminal run): no dbutils exists, so go at the UC
+    #    secret through its REST endpoint with whatever token is around. This is
+    #    what lets one stored secret serve both the job and a local run.
+    #    NOTE: values fetched this way are NOT subject to secret redaction, so
+    #    this must never be echoed -- it is returned, never printed.
+    if catalog and schema:
+        try:
+            host, tok = _ambient_token()
+            host = os.environ.get("DATABRICKS_HOST") or host
+            tok = (os.environ.get("DATABRICKS_TOKEN")
+                   or os.environ.get("DBT_DATABRICKS_TOKEN") or tok)
+            if not host:
+                host, _, _ = _profile_target()
+            if host and tok:
+                if not host.startswith("http"):
+                    host = "https://" + host
+                r = requests.get(
+                    f"{host.rstrip('/')}/api/2.1/unity-catalog/secrets/"
+                    f"{catalog}.{schema}.{name}",
+                    headers={"Authorization": f"Bearer {tok}"},
+                    params={"include_value": "true"}, timeout=15)
+                if r.status_code == 200:
+                    val = r.json().get("effective_value")
+                    if val:
+                        return val
+                errors.append(f"uc/rest: HTTP {r.status_code}")
+        except Exception as e:
+            errors.append(f"uc/rest: {type(e).__name__}")
+
+    # 4. Legacy scope over the SDK, the off-runtime twin of 2.
+    if scope:
+        try:
+            from databricks.sdk import WorkspaceClient
+            import base64
+            raw = WorkspaceClient().secrets.get_secret(scope=scope, key=name).value
+            return base64.b64decode(raw).decode()
+        except Exception as e:
+            errors.append(f"scope/sdk: {type(e).__name__}")
+
+    print(f"ERROR: no Google API key. Set {API_KEY_ENV}, or store it as a "
+          f"Databricks secret -- Unity Catalog at "
+          f"'{catalog}.{schema}.{name}' (--secret-catalog / --secret-schema), "
+          f"or a legacy scope at '{scope}' key '{name}' (--secret-scope). "
+          f"Tried: {'; '.join(errors) or 'nothing'}", file=sys.stderr)
+    return None
 
 
 def _ambient_token():
@@ -406,8 +471,12 @@ def main():
                     help="cap the number of API calls, so a mistake cannot spend the whole budget")
     ap.add_argument("--retry-failed", action="store_true",
                     help="also re-send rows previously recorded as failures")
+    ap.add_argument("--secret-catalog", default="ust_databricks",
+                    help="Unity Catalog catalog holding the Google key secret")
+    ap.add_argument("--secret-schema", default="ust_external",
+                    help="Unity Catalog schema holding the Google key secret")
     ap.add_argument("--secret-scope", default="ust_external",
-                    help="Databricks secret scope holding the Google key")
+                    help="LEGACY secret scope, tried only if the UC secret misses")
     ap.add_argument("--secret-key", default="google_geocoding_api_key",
                     help="secret name within that scope")
     a = ap.parse_args()
@@ -450,7 +519,8 @@ def main():
             print(f"   ... and {len(todo) - 10} more")
         return 0
 
-    key = _api_key(a.secret_scope, a.secret_key)
+    key = _api_key(a.secret_scope, a.secret_key,
+                   catalog=a.secret_catalog, schema=a.secret_schema)
     if not key:
         return 1
 
