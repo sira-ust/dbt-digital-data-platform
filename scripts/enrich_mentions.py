@@ -33,7 +33,11 @@ Runs on Databricks as a **Python-script task** (spark_python_task) — no notebo
     databricks-sdk (no secret, no PAT, no env vars). The run-as user must have
     model-serving access. (Local runs still use DATABRICKS_HOST/DATABRICKS_TOKEN.)
 
-Incremental: only mention_ids not already enriched are classified. A deterministic
+Incremental AND VERSION-AWARE: only mention_ids already enriched AT THE CURRENT
+model+prompt version count as done, so bumping PROMPT_VERSION automatically
+re-enriches everything on the next run (no manual truncate) while a normal run
+still only touches new mentions. Staging keeps the latest enriched_at per mention,
+so the re-enriched row supersedes the old one. A deterministic
 pre-filter labels obvious gambling/betting spam first (is_spam, no LLM call), so
 only the rest reach the model — see PREFILTER_SPAM_TERMS. Multi-label by design —
 arrays, never a single category key.
@@ -58,7 +62,10 @@ from datetime import datetime, timezone
 # ─────────────────────────────────────────────────────────────────────────────
 
 MODEL = "databricks-claude-haiku-4-5"   # Databricks-hosted; billed via Databricks
-PROMPT_VERSION = "v1"                    # bump when INSTRUCTIONS change (stored in model_version)
+PROMPT_VERSION = "v2"                    # bump when INSTRUCTIONS change (stored in model_version).
+                                         # v2 = added mentioned_products (sellable-SKU signal).
+                                         # A bump RE-ENRICHES everything: the already-done set below
+                                         # is version-aware, so old rows stop counting as done.
 MAX_TOKENS = 512
 CONCURRENCY = 4                          # parallel serving calls — lower if you hit FMAPI rate limits
 MAX_RETRIES = 8                          # SDK-level retries: rides out 429s with backoff + retry-after
@@ -113,21 +120,52 @@ with exactly these keys:
   "is_spam": boolean,            // gambling/casino promos (e.g. 789BET), unrelated ads, bots
   "themes": [string],            // broad topics: "street food", "dessert", "coffee", "restaurant review"...
   "mentioned_dishes": [string],  // specific dishes: "banh khot", "pho", "mango sticky rice"...
+  "mentioned_products": [string],// SELLABLE PRODUCTS — see the rule below
   "ingredients": [string],       // notable ingredients: "fish sauce", "coconut milk"...
   "brands": [string],            // brand / restaurant / product names
   "sentiment_normalized": string,// one of "positive", "negative", "neutral"
   "confidence": number           // 0.0–1.0, your overall certainty
 }
 
+mentioned_products — THE RULE THAT MATTERS MOST HERE. This is the only array a \
+food DISTRIBUTOR can act on, so it is deliberately narrow: a product a grocery \
+store or a restaurant could ORDER AS A LINE ITEM. Something with a brand, or a \
+packaged / processed / prepared form. It is NOT the same as `ingredients`, which \
+stays a loose list of whatever the post mentions.
+
+  IN  — "Tiparos fish sauce", "Nongshim shin ramyun" (brand + product)
+      — "canned coconut milk", "frozen spring rolls", "dried rice noodles",
+        "instant noodles", "tom yum paste", "fish sauce", "condensed milk",
+        "matcha powder" (packaged / processed goods, brand or not)
+  OUT — "durian", "matcha", "pork", "lemon", "garlic", "shrimp" (RAW COMMODITY or
+        produce — an ingredient, not something ordered as a SKU. These go in
+        `ingredients`, not here.)
+      — "som tam", "pho", "matcha latte" (a DISH or a prepared menu item — these
+        go in `mentioned_dishes`)
+      — "dessert", "noodles", "seafood" (a CATEGORY, too broad to order)
+      — "7-Eleven", "Grab", "LINE MAN" (a retailer or delivery platform — `brands`)
+      — a restaurant, a cafe, a reviewer, an influencer (`brands`)
+
+If in doubt, LEAVE IT OUT. An empty mentioned_products is the normal, correct \
+answer for most posts — people usually talk about dishes, not SKUs — and a \
+commodity misfiled here pollutes the one signal a buyer reads. The word only \
+belongs here if you could picture it on a shelf or an invoice as a distinct \
+product. A product still goes here when its brand is unnamed; put the brand in \
+`brands` when it IS named, and the product in both places is correct \
+("Tiparos fish sauce" -> mentioned_products; "Tiparos" -> brands).
+
 Rules: extract MULTIPLE labels where they apply — a post can mention several \
-dishes, ingredients, and brands. Use empty arrays when none apply; never force a \
-single category. is_spam is true for gambling/ads/bots regardless of food \
-keywords present. Content may be Thai, Vietnamese, English, or other languages — \
-judge on meaning, not keywords."""
+dishes, products, ingredients, and brands, and the same post can populate all \
+four. Use empty arrays when none apply; never force a single category. is_spam is \
+true for gambling/ads/bots regardless of food keywords present. Content may be \
+Thai, Vietnamese, English, or other languages — judge on meaning, not keywords: \
+a Thai or Vietnamese product name belongs in mentioned_products in its own script, \
+exactly as written."""
 
 _REQUIRED_KEYS = {
     "is_food_relevant", "is_spam", "themes", "mentioned_dishes",
-    "ingredients", "brands", "sentiment_normalized", "confidence",
+    "mentioned_products", "ingredients", "brands", "sentiment_normalized",
+    "confidence",
 }
 
 
@@ -184,14 +222,25 @@ def read_mentions_and_enriched(backend, limit, duckdb_path):
 
     Reads the deduped, cleaned dbt staging model (stg_mentionlytics__mentions) — one
     typed row per mention_id — so the LLM never sees duplicates or raw junk, and the
-    dedup/clean logic lives in exactly one place (dbt), not re-implemented here."""
+    dedup/clean logic lives in exactly one place (dbt), not re-implemented here.
+
+    VERSION-AWARE: a mention counts as done only if it was enriched at the CURRENT
+    model+prompt version (or labelled by the current deterministic prefilter). This
+    is what makes the PROMPT_VERSION comment true — bumping it re-enriches
+    everything on the next run instead of silently leaving old rows missing whatever
+    the new prompt added, which is exactly what happened to be needed when
+    mentioned_products was introduced in v2. A normal run (no bump) still only
+    classifies genuinely new mentions."""
+    versions = _current_versions()
+    in_list = ", ".join(f"'{v}'" for v in sorted(versions))
     if backend == "databricks":
         spark = _get_spark()
         rows = [r.asDict() for r in
                 spark.sql(f"select {_MENTION_COLS} from {DBX_MENTIONS_REL}").collect()]
         try:
-            enriched_ids = {r.mention_id for r in
-                            spark.table(DBX_ENRICHMENT_TABLE).select("mention_id").collect()}
+            enriched_ids = {r.mention_id for r in spark.sql(
+                f"select mention_id from {DBX_ENRICHMENT_TABLE} "
+                f"where model_version in ({in_list})").collect()}
         except Exception:
             enriched_ids = set()
     else:
@@ -202,7 +251,8 @@ def read_mentions_and_enriched(backend, limit, duckdb_path):
         try:
             enriched_ids = set(
                 duckdb.connect().sql(
-                    f"select mention_id from read_parquet('{LOCAL_ENRICHMENT_PATH}')"
+                    f"select mention_id from read_parquet('{LOCAL_ENRICHMENT_PATH}') "
+                    f"where model_version in ({in_list})"
                 ).df()["mention_id"].tolist()
             )
         except Exception:
@@ -243,6 +293,7 @@ def _dbx_enrichment_schema():
         StructField("is_spam", BooleanType()),
         StructField("themes", arr),
         StructField("mentioned_dishes", arr),
+        StructField("mentioned_products", arr),
         StructField("ingredients", arr),
         StructField("brands", arr),
         StructField("sentiment_normalized", StringType()),
@@ -264,6 +315,16 @@ def _get_spark():
 # LLM core
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _current_versions():
+    """Version strings that mean "already done at today's logic". Both are
+    included: PREFILTER_VERSION rows were never sent to the model (deterministic
+    gambling spam), so an LLM-version bump must NOT drag them back through the
+    pipeline — they have empty arrays by definition and fct_social_mentions filters
+    them out anyway. Bump PREFILTER_VERSION when the term list changes and they
+    re-run instead."""
+    return {f"{MODEL}/{PROMPT_VERSION}", PREFILTER_VERSION}
+
+
 def is_prefilter_spam(m):
     """True when the caption contains an unambiguous gambling/betting term — safe
     to label spam without asking the LLM."""
@@ -278,7 +339,8 @@ def prefilter_record(m, enriched_at):
         "mention_id": int(m["mention_id"]),
         "is_food_relevant": False,
         "is_spam": True,
-        "themes": [], "mentioned_dishes": [], "ingredients": [], "brands": [],
+        "themes": [], "mentioned_dishes": [], "mentioned_products": [],
+        "ingredients": [], "brands": [],
         "sentiment_normalized": "neutral",
         "confidence": 1.0,
         "enriched_at": enriched_at,
@@ -352,6 +414,7 @@ def to_records(attrs_by_id, enriched_at):
             "is_spam": bool(a["is_spam"]),
             "themes": list(a["themes"]),
             "mentioned_dishes": list(a["mentioned_dishes"]),
+            "mentioned_products": list(a["mentioned_products"]),
             "ingredients": list(a["ingredients"]),
             "brands": list(a["brands"]),
             "sentiment_normalized": str(a["sentiment_normalized"]),

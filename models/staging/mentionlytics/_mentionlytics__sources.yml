@@ -120,8 +120,20 @@ sources:
             description: Multi-label broad topics (array of strings; empty if none).
           - name: mentioned_dishes
             description: Multi-label specific dishes named (array of strings).
+          - name: mentioned_products
+            description: >
+              Multi-label SELLABLE PRODUCTS (array of strings) — things a grocery or
+              restaurant could order as a line item: branded goods ("Tiparos fish
+              sauce") and packaged/processed goods whether branded or not ("canned
+              coconut milk", "tom yum paste", "dried rice noodles"). Deliberately
+              EXCLUDES raw commodities and produce (durian, matcha, pork — those stay
+              in ingredients), dishes, broad categories, retailers and restaurants.
+              This is the array int_social_concept_trends ranks as its 'item' class,
+              i.e. the only social signal a buyer can act on directly. Empty for most
+              posts by design — people talk about dishes far more than SKUs. Added in
+              enrichment prompt v2.
           - name: ingredients
-            description: Multi-label ingredients named (array of strings).
+            description: Multi-label ingredients named (array of strings). A loose list of what the post mentions — raw commodities included; NOT the sellable-product signal (see mentioned_products). Feeds the resolver's ingredient-basket side.
           - name: brands
             description: Multi-label brand / restaurant / product / retailer names (array of strings).
           - name: sentiment_normalized
@@ -145,6 +157,15 @@ sources:
           as result_type 'unresolved' in the mart). Append-only; staging dedupes on
           concept_norm, latest resolved_at wins. On DuckDB reads the local parquet;
           on Databricks the social.concept_resolution Delta table.
+
+          Prompt v5 onward every row is the product of TWO passes: one model
+          proposes, a second INDEPENDENT one reviews each candidate against its
+          authoritative catalog name with instructions to refute, and only what
+          survives is stored. match_confidence is the reviewer's number (the gate),
+          proposer_confidence the proposer's (comparison only), and the
+          recommended_reasons / rejected_* columns are the audit trail. A concept
+          whose review call fails is NOT written — it stays unresolved and is
+          retried, rather than shipping an unverified match.
         config:
           external_location: "read_parquet('data/mock/mentionlytics/concept_resolution.parquet')"
         columns:
@@ -164,10 +185,26 @@ sources:
           - name: recommended_prtnums
             description: Array of WMS part numbers — substitutes (result_type='substitute') or the ingredient basket (result_type='basket').
           - name: recommended_item_names
-            description: Array of display names parallel to recommended_prtnums (the LLM saw the catalog, so it carries names for the human-facing export).
+            description: Array of display names parallel to recommended_prtnums, taken from the item master by the resolver (never the LLM's own wording, which can drift from the part number it sits next to).
+          - name: recommended_reasons
+            description: Why the review pass kept each item, parallel to recommended_prtnums.
+          - name: rejected_prtnums
+            description: Real SKUs the proposing pass offered that the review pass threw out.
+          - name: rejected_reasons
+            description: Why each rejected item was thrown out, parallel to rejected_prtnums.
+          - name: name_mismatch_prtnums
+            description: Diagnostic — part numbers where the proposer's claimed item name disagreed with what that part number actually is.
+          - name: canonical_key
+            description: canonical_label deglossed + accent-folded; shared by cross-script twins of one dish (som tam / ส้มตำ).
+          - name: alias_of
+            description: concept_norm of the twin this row's answer was copied from (null if this row is the source), so one dish can't get two contradictory answers.
           - name: match_confidence
-            description: LLM's confidence in the resolution, 0.0–1.0.
+            description: The REVIEW pass's calibrated confidence in the items it kept, 0.0–1.0 — the number social_resolve_min_confidence gates on.
+          - name: proposer_confidence
+            description: The proposing pass's self-rating, kept for comparison only (it clustered just above the floor at v4).
+          - name: snippet_count
+            description: How many real mention snippets the models were shown; 0 = resolved from a bare token with no evidence.
           - name: resolved_at
             description: When this concept was resolved (dedup tiebreak — latest wins).
           - name: model_version
-            description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v1).
+            description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v5); a '-noverify' suffix marks a smoke-test row written without the review pass.

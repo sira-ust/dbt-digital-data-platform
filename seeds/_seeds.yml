@@ -409,3 +409,74 @@ seeds:
     columns:
       - name: comtyp
         tests: [unique, not_null]
+
+  - name: seed_social_generic_terms
+    description: >
+      BACKSTOP stoplist for the social 'item' ranking class in
+      int_social_concept_trends. The item class ranks `mentioned_products` — the
+      enrichment's sellable-product array (prompt v2), which is already instructed to
+      exclude raw commodities and produce — so the primary product/commodity judgment
+      is made at extraction time, where the model can read the post. This list only
+      catches what slips through: a bare commodity token ("pork", "rice", "น้ำตาล")
+      that appears in nearly every post, carries no trend signal, and is too broad to
+      be a SKU. Matches are anti-joined out BEFORE ranking (so ranks stay dense and
+      the mention_share denominator isn't diluted); dq_social_generic_term_hits counts
+      what was suppressed so the list stays auditable — and a FALLING hit count there
+      is the healthy direction, since it means the extraction is doing the work.
+
+      It carries history: these terms were the primary filter while the item class
+      was sourced from `ingredients`, which was commodity-level by construction. Kept
+      because the extraction is a model judgment, not a guarantee.
+
+      Grain — one row per (term, applies_to). `term` is stored VERBATIM in its own
+      script and UNFOLDED: the model folds it with fold_concept, the same macro it
+      folds concepts with, so there is one normalisation implementation rather than
+      two that can drift. Store the DEGLOSSED form only (never "sugar (granulated)")
+      because the model strips a trailing gloss before folding. Matching is exact
+      equality on the folded key, not substring — "nước" does not suppress
+      "nước mắm".
+
+      EXTEND THIS FROM OBSERVED STRINGS, not from a translated word list:
+      fold_concept folds Latin diacritics but leaves Thai bytes untouched, so a
+      Thai term only matches if it is spelled exactly as the enrichment extracted
+      it. Profile the item board (`select concept_norm, count(*) from
+      int_social_concept_trends where concept_class = 'item' group by 1 order by 2
+      desc`) and copy the generic tokens it surfaces.
+
+      A term is stoplisted only if it is generic in EVERY language that can produce
+      that folded string. Where it isn't, keep the row with is_active=false and
+      reason=ambiguous_across_languages rather than deleting it (so the decision
+      isn't re-litigated) and let the LLM resolver disambiguate from the post text —
+      it sees the mention, this list never will.
+    config:
+      tags: ["social", "reference"]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [term, applies_to]
+    columns:
+      - name: term
+        description: The generic term, verbatim in its own script, deglossed and unfolded (fold_concept is applied in SQL).
+        tests: [not_null]
+      - name: applies_to
+        description: >
+          Which ranking class to suppress it in — 'item', 'dish', or 'all'. Almost
+          every row is 'item'. This is the escape hatch for "generic as an
+          ingredient, specific as a dish": the two classes are separate rank
+          spaces, so suppressing one side costs the other nothing.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [dish, item, all]
+      - name: language
+        description: >
+          Which language the spelling belongs to — th / vi / en / any.
+          DOCUMENTATION ONLY, never a join key: the model has no per-concept
+          language (fct_social_mentions.language is per MENTION, and one mention
+          routinely names concepts in two languages), so keying on it would be a
+          lie that looks like precision.
+      - name: reason
+        description: Why it's suppressed — in practice commodity / too_broad / unit_or_measure / ambiguous_across_languages.
+      - name: is_active
+        description: False retires a term without losing the audit row (and records a deliberate "we considered this and left it in").

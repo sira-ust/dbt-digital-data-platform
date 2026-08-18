@@ -86,8 +86,14 @@ models:
         description: Multi-label broad topics (array).
       - name: mentioned_dishes
         description: Multi-label specific dishes (array).
+      - name: mentioned_products
+        description: >
+          Multi-label sellable products (array) — branded or packaged/processed goods
+          a grocery or restaurant could order. Excludes raw commodities/produce
+          (those are ingredients), dishes, categories and retailers. Ranked as the
+          'item' class in int_social_concept_trends. Enrichment prompt v2+.
       - name: ingredients
-        description: Multi-label ingredients (array).
+        description: Multi-label ingredients (array) — a loose list including raw commodities. Not ranked; feeds the resolver's basket side. See mentioned_products for the sellable-product signal.
       - name: brands
         description: Multi-label brand / restaurant / product / retailer names (array).
       - name: sentiment_normalized
@@ -106,17 +112,33 @@ models:
       is append-only, so a re-resolution is deduped here (latest resolved_at wins).
       Cast + dedupe only; the recommended_* arrays pass through unchanged. dbt
       never calls the LLM. Only the top-N ranked concepts are resolved (gated), so
-      this covers a small set by design.
+      this covers a small set by design. Since prompt v5 each row is the output of
+      TWO passes — one model proposes matches, a second independent one reviews
+      each candidate against its authoritative catalog name and drops what it
+      can't defend — so the audit columns (recommended_reasons, rejected_*,
+      proposer_confidence, snippet_count) describe how the surviving set was
+      arrived at.
     columns:
       - name: concept_norm
         description: Normalised concept text. Unique key; joins to int_social_concept_trends.concept_norm.
         tests: [unique, not_null]
       - name: canonical_label
         description: LLM canonical display name, merging cross-language/spelling variants.
+      - name: canonical_key
+        description: >
+          canonical_label deglossed + accent-folded (the same normalisation as
+          concept_norm). Two concepts sharing this key are the same dish under two
+          spellings/scripts — how the resolver detects cross-script twins that
+          fold_concept can't merge (som tam / ส้มตำ).
+      - name: alias_of
+        description: >
+          concept_norm of the twin whose answer was copied onto this row (same
+          canonical_key, better-grounded result); null when this row IS the
+          better-grounded one. Set so one dish can't get two contradictory answers.
       - name: concept_type
         description: LLM item-level type — dish / category / ingredient / product / brand.
       - name: result_type
-        description: carried / substitute / basket / none.
+        description: carried / substitute / basket / none — as CONFIRMED by the verify pass, not as proposed.
         tests:
           - accepted_values:
               arguments:
@@ -124,12 +146,41 @@ models:
       - name: matched_prtnum
         description: WMS part number we carry for this concept (result_type='carried'); null otherwise.
       - name: recommended_prtnums
-        description: Array of WMS part numbers — substitutes or the ingredient basket.
+        description: Array of WMS part numbers — substitutes or the ingredient basket — that SURVIVED the verify pass.
       - name: recommended_item_names
-        description: Array of display names parallel to recommended_prtnums.
+        description: Array of display names parallel to recommended_prtnums, taken from the item master (never the LLM's own wording).
+      - name: recommended_reasons
+        description: Why the reviewer kept each item, parallel to recommended_prtnums. The audit trail behind a basket.
+      - name: rejected_prtnums
+        description: Real SKUs the proposer offered and the reviewer threw out. Kept so a bad proposal pattern is visible, not silently swallowed.
+      - name: rejected_reasons
+        description: Why each rejected item was thrown out, parallel to rejected_prtnums.
+      - name: name_mismatch_prtnums
+        description: >
+          Diagnostic: part numbers where the proposer's own item name disagreed with
+          what that part number actually is — its prtnum and its intent came apart.
+          The pair still faced the reviewer (judged on the authoritative name); a
+          rising count here means the proposing prompt needs attention.
       - name: match_confidence
-        description: LLM confidence in the resolution, 0.0–1.0.
+        description: >
+          The REVIEWER's calibrated confidence in the items it kept, 0.0–1.0 — this
+          is what mart_social_trending_items gates on with social_resolve_min_confidence.
+      - name: proposer_confidence
+        description: >
+          The proposing model's self-rating, kept for comparison only. Clustered just
+          above the floor at prompt v4 (0.72 vs a 0.70 cutoff), which is why the
+          reviewer's number replaced it as the gate.
+      - name: snippet_count
+        description: >
+          How many real mention snippets the models were shown. 0 means the concept
+          was resolved from a bare token with no evidence (and is returned as 'none');
+          a nonzero count for every ranked concept is the invariant that
+          scripts/check_fold_consistency.py protects.
       - name: resolved_at
         description: When this concept was resolved (dedup tiebreak — latest wins).
       - name: model_version
-        description: Model + prompt version that produced it.
+        description: >
+          Model + prompt version that produced it (e.g.
+          databricks-claude-haiku-4-5/v5). A '-noverify' suffix marks a smoke-test
+          row written without the review pass; those never pass as verified and are
+          re-resolved on the next normal run.

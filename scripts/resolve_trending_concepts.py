@@ -36,6 +36,14 @@ and the model WILL guess. _concept_key() must stay byte-identical to how
 int_social_concept_trends builds concept_norm or the lookup silently misses and
 every affected concept is resolved blind — see the SQL PARITY note below.
 
+TWO CONCEPT CLASSES, ranked separately upstream, both reaching this script:
+'dish' (from mentioned_dishes) and 'item' (from mentioned_products — branded or
+packaged goods a grocery/restaurant could order). An 'item' is already meant to be
+SKU-shaped, so for those the model is pushed to settle 'carried' before falling
+back to an ingredient basket. The gate resolves the CURRENT week's top-N of each;
+historical weeks reuse the same resolution rows, since a concept->SKU mapping is
+timeless.
+
 Flow position (weekly social job):
     parse_mentions  ->  social.mentions
     enrich_mentions ->  social.mention_enrichment
@@ -64,7 +72,7 @@ import re
 import sys
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
@@ -132,6 +140,9 @@ MAX_RECOMMENDATIONS = 5                  # hard cap after verification (basket r
 TOP_N = _dbt_var("social_trend_top_n", 20)
 SNIPPETS_PER_CONCEPT = 8               # representative mentions shown to the model
 SNIPPET_CHARS = 400
+SNIPPET_WINDOW_DAYS = 28               # days of mention context behind the ranked week — see
+                                       # _snippet_window(); wider than the one-week ranking grain
+                                       # on purpose, so a mid-week run can't starve a concept
 
 LOCAL_DUCKDB_PATH = "dev.duckdb"
 LOCAL_RESOLUTION_PATH = "data/mock/mentionlytics/concept_resolution.parquet"
@@ -154,6 +165,14 @@ decide — a word alone is ambiguous ("pork" may be crispy pork jerky หมู�
 BBQ, never "pork skin"). If NO snippets are shown, you are looking at a bare token \
 with no context: do NOT guess a basket from the token's literal words — return \
 "none" with low confidence and let a human look at it.
+
+The "Seen as" line says which ranking board the concept came from: "dish" = a dish \
+people talked about; "item" = a SELLABLE PRODUCT — the extraction already judged \
+it to be a branded or packaged/processed good a grocery or restaurant could order, \
+not a raw commodity. For an "item", work hard to settle "carried" or "substitute" \
+before falling back to a basket: an ingredient basket under something that is \
+itself a product is almost always the wrong answer, and the whole reason that \
+board exists is to surface things a rep can sell as-is. A concept can be both.
 
 Then return ONE JSON object — no markdown, no prose — exactly:
 {
@@ -329,41 +348,94 @@ def _create_message(client, **kwargs):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _top_concepts_sql(trends_rel, top_n):
-    """Distinct concepts anywhere in the top-N of any period/grain."""
+    """Concepts on the CURRENT week's board, either class.
+
+    int_social_concept_trends is a weekly series of boards, so it holds every
+    concept that was ever top-N over social_trend_history_weeks. Scoping to the
+    latest week keeps the resolve set at ~top_n per class instead of half a year of
+    them — historical rows still get their labels and SKUs, because the resolution
+    joins on concept_norm alone and a concept->SKU mapping is timeless.
+
+    Grouped because one concept can be BOTH a dish and an item (the same folded
+    string in two rank spaces) and the resolution is keyed on concept_norm alone.
+    The classes come back as two flags rather than a string_agg because Spark SQL
+    has no string_agg — _class_hint() turns them into the prompt's "Seen as". And
+    mention_count is max(), not sum(): summing across overlapping trailing windows
+    is not a count of anything.
+    """
     return f"""
-        select concept_norm, any_value(concept_source) as concept_source,
-               sum(mention_count) as mention_count
+        select concept_norm,
+               max(case when concept_class = 'dish' then 1 else 0 end) as is_dish,
+               max(case when concept_class = 'item' then 1 else 0 end) as is_item,
+               max(mention_count) as mention_count
         from {trends_rel}
         where trend_rank <= {top_n}
+          and week_start = (select max(week_start) from {trends_rel})
         group by concept_norm
     """
 
 
-def _window_sql(trends_rel):
-    """The trend window the board covers — snippets are scoped to it (below)."""
+def _class_hint(concept):
+    """"Seen as" line for the prompt. 'item' means the concept came from the
+    ingredient/product board — a thing we might stock directly — which is a nudge
+    toward carried/substitute over a basket of ingredients."""
+    classes = [name for name, key in (("dish", "is_dish"), ("item", "is_item"))
+               if concept.get(key)]
+    return ", ".join(classes) or "unknown"
+
+
+def _latest_week_sql(trends_rel):
+    """End of the CURRENT board's calendar week — the anchor for the snippet
+    window below."""
     return f"""
-        select max(window_start) as window_start, max(window_end) as window_end
-        from {trends_rel}
+        select max(week_end) as week_end from {trends_rel}
     """
+
+
+def _snippet_window(week_end_str, days=SNIPPET_WINDOW_DAYS):
+    """Snippet evidence spans the last `days` ending at the board's week, NOT the
+    single ranked week.
+
+    The two windows answer different questions and must not be tied together. The
+    RANKING window is one calendar week because that's the reporting period. The
+    SNIPPET window only has to establish what a token MEANS, and a mid-week run
+    leaves the latest week with a day or two of posts — few enough to leave a
+    concept with no usable snippets, which is precisely how a bare token gets
+    guessed at (see the module docstring). A month of context fixes that while
+    still being recent enough that the token hasn't drifted.
+    """
+    if not week_end_str:
+        return None, None
+    end = datetime.strptime(week_end_str[:10], "%Y-%m-%d").date()
+    return (end - timedelta(days=days - 1)).isoformat(), end.isoformat()
 
 
 def _snippet_source_sql(fct_rel, window_start=None, window_end=None):
     """Mentions carrying the dish array + text, for snippet buckets.
 
-    SCOPED TO THE TREND WINDOW: the concept is trending NOW, so the evidence shown
-    to the model must be what people are saying now — an all-time query can fill
+    SCOPED TO THE SNIPPET WINDOW (see _snippet_window — the last few weeks ending
+    at the ranked week, NOT the ranked week itself): the concept is trending NOW, so
+    the evidence must be what people are saying now — an all-time query can fill
     every slot with a loud post from months ago that made the token mean something
-    else. `brands` is NOT selected as a match key any more: concepts are built from
-    mentioned_dishes only (int_social_concept_trends), so a brand whose name folds
-    to the same string can only ever pull in an off-topic post — and the prompt
-    already tells the model a shared brand token is not a match.
+    else — but one calendar week is too little to reliably explain a token, and a
+    mid-week run would leave almost nothing.
+
+    BOTH ranked streams are required. int_social_concept_trends ranks two classes —
+    dishes from mentioned_dishes and sellable products from mentioned_products — so a
+    dish-only filter would leave every ITEM concept with zero snippets, resolved from
+    a bare token. That is the exact failure the deglossing fix removed; it must not
+    come back through the new class. `ingredients` and `brands` are NOT match keys:
+    nothing is ranked from them, so a token that folds to a concept's key can only
+    pull in an off-topic post — and the prompt already tells the model a shared brand
+    token is not a match. Both stay in the snippet BODY as context, where ingredients
+    are genuinely useful for judging an ingredient basket.
     """
-    where = ["mentioned_dishes is not null"]
+    where = ["(mentioned_dishes is not null or mentioned_products is not null)"]
     if window_start and window_end:
         where.append(f"posted_date between date '{window_start}' and date '{window_end}'")
     return f"""
         select mention_id, title, content,
-               mentioned_dishes, ingredients, brands,
+               mentioned_dishes, mentioned_products, ingredients, brands,
                coalesce(total_engagement, 0) as engagement
         from {fct_rel}
         where {' and '.join(where)}
@@ -400,8 +472,8 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
         spark = _get_spark()
         concepts = [r.asDict() for r in
                     spark.sql(_top_concepts_sql(DBX_TRENDS_TABLE, top_n)).collect()]
-        wb = spark.sql(_window_sql(DBX_TRENDS_TABLE)).collect()
-        w_start, w_end = ((_as_date_str(wb[0][0]), _as_date_str(wb[0][1])) if wb else (None, None))
+        wb = spark.sql(_latest_week_sql(DBX_TRENDS_TABLE)).collect()
+        w_start, w_end = _snippet_window(_as_date_str(wb[0][0]) if wb else None)
         mentions = [r.asDict() for r in
                     spark.sql(_snippet_source_sql(DBX_FCT_TABLE, w_start, w_end)).collect()]
         catalog = [r.asDict() for r in spark.table(DBX_ITEMS_TABLE)
@@ -419,9 +491,8 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
         import duckdb
         con = duckdb.connect(duckdb_path, read_only=True)
         concepts = con.sql(_top_concepts_sql(DUCKDB_TRENDS_REL, top_n)).df().to_dict("records")
-        wb = con.sql(_window_sql(DUCKDB_TRENDS_REL)).df()
-        w_start = _as_date_str(wb["window_start"][0]) if len(wb) else None
-        w_end = _as_date_str(wb["window_end"][0]) if len(wb) else None
+        wb = con.sql(_latest_week_sql(DUCKDB_TRENDS_REL)).df()
+        w_start, w_end = _snippet_window(_as_date_str(wb["week_end"][0]) if len(wb) else None)
         mentions = con.sql(
             _snippet_source_sql(DUCKDB_FCT_REL, w_start, w_end)
         ).df().to_dict("records")
@@ -441,7 +512,8 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
     snippets = bucket_snippets(mentions, wanted)
     resolved = {r.get("concept_norm") for r in existing}
     new = [c for c in concepts if c["concept_norm"] not in resolved]
-    print(f"snippet window: {w_start} .. {w_end}  ({len(mentions)} dish-bearing mentions)")
+    print(f"snippet window: {w_start} .. {w_end}  "
+          f"({len(mentions)} mentions naming a dish or a product)")
     return new, snippets, catalog, existing
 
 
@@ -528,13 +600,18 @@ def bucket_snippets(mentions, wanted):
     buckets = defaultdict(list)
     for m in mentions:
         dishes = _raw_list(m.get("mentioned_dishes"))
-        hit = {_concept_key(d) for d in dishes} & wanted
+        products = _raw_list(m.get("mentioned_products"))
+        # keys from BOTH ranked streams — dishes feed the 'dish' class, products the
+        # 'item' class, and a concept can be in either (or both). NOT ingredients:
+        # nothing is ranked from that array, so it would only add false hits.
+        hit = {_concept_key(c) for c in dishes + products} & wanted
         if not hit:
             continue
         text = _snippet_text(m)
         snip = {
             "text": text,
             "dishes": dishes,
+            "products": products,
             "ingredients": _raw_list(m.get("ingredients")),
             "brands": _raw_list(m.get("brands")),
         }
@@ -668,6 +745,8 @@ def _render_snippets(snippets):
         extra = []
         if s["dishes"]:
             extra.append("dishes=" + ", ".join(s["dishes"][:6]))
+        if s.get("products"):
+            extra.append("products=" + ", ".join(s["products"][:6]))
         if s["ingredients"]:
             extra.append("ingredients=" + ", ".join(s["ingredients"][:8]))
         if s["brands"]:
@@ -680,7 +759,7 @@ def _render_snippets(snippets):
 def build_user_prompt(concept, snippets):
     lines = [
         f"Concept (raw): {concept['concept_norm']}",
-        f"Seen as: {concept.get('concept_source')}   Mentions: {concept.get('mention_count')}",
+        f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count')}",
         "",
     ]
     return "\n".join(lines + _render_snippets(snippets))

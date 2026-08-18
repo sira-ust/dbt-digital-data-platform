@@ -336,10 +336,10 @@
       <div class="stage__spine"><div class="stage__num">4</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">int_social_concept_trends <span class="pill gate">the gate</span></div>
-        <p class="stage__lead">Ranks which dishes are trending right now, over the last 4 weeks.</p>
-        <p class="stage__how"><b>How:</b> <code>unnest(mentioned_dishes)</code> → <code>fold_concept()</code> folds language/spelling variants (bánh khọt → banh khot) to one key → aggregate over a trailing <code>social_trend_window_weeks</code> (4wk) window → score &amp; <code>row_number()</code> rank. <code>is_rising</code> (recent half vs older half) is a secondary flag, not the sort. Materialized as a table because it's the gate the resolver reads.</p>
-        <code class="codeblock">trend_score <span class="op">=</span> mention_count <span class="op">×</span> (1 <span class="op">+</span> ln(1+engagement)/10 <span class="op">+</span> ln(1+views)/20)</code>
-        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">≥ 2 mentions</span><span class="pill">top-20 kept</span></div>
+        <p class="stage__lead">Ranks what's trending each calendar week — dishes and stockable items on two separate boards.</p>
+        <p class="stage__how"><b>How:</b> two streams, ranked separately so viral dishes can't crowd out items — <code>unnest(mentioned_dishes)</code> → class <code>dish</code>, and <code>unnest(mentioned_products)</code> → class <code>item</code> (sellable goods a grocery or restaurant could order — the product/commodity call is made by the enrichment prompt, not by a filter here; <code>seed_social_generic_terms</code> is only a backstop). <code>strip_parenthetical_gloss()</code> + <code>fold_concept()</code> fold language/spelling variants (bánh khọt → banh khot) to one key. Then aggregate <b>per calendar week</b> (Monday-anchored) → score → <code>row_number()</code> per (week, class). One week in, one week out: week-over-week movement compares equal, non-overlapping periods, which is what <code>rank_change</code> and <code>is_rising</code> read. <code>mention_share</code> (a concept's share of that week's mentions) is the measure that survives a partial week or a change in collection volume — raw counts do not. Materialized as a table because it's the gate the resolver reads.</p>
+        <code class="codeblock">trend_score <span class="op">=</span> distinct_authors <span class="op">×</span> (1 <span class="op">+</span> ln(1+engagement_norm)/5 <span class="op">+</span> ln(1+views_norm)/10) <span class="op">×</span> single_channel_dampener</code>
+        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">≥ 2 mentions</span><span class="pill">calendar week</span><span class="pill">top-20 per class per week</span><span class="pill">13wk history (~3mo)</span></div>
       </div>
     </div>
 
@@ -347,11 +347,11 @@
       <div class="stage__spine"><div class="stage__num">5</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">stg_mentionlytics__concept_resolution</div>
-        <p class="stage__lead">The AI's answer for each trending dish: do we sell it, or something close?</p>
+        <p class="stage__lead">The AI's answer for each trending concept: do we sell it, or something close?</p>
         <p class="stage__how"><b>How:</b> view exposing <code>concept_norm → matched_prtnum</code>, <code>recommended_prtnums</code>, <code>match_confidence</code>. Cast + dedupe (latest <code>resolved_at</code> wins per concept — the source is append-only).</p>
         <div class="script-panel" style="--sp-color:var(--l-llm)">
           <div class="sp-head"><span class="pill llm">offline LLM</span> resolve_trending_concepts.py <span class="pill cost">MODEL_SERVING</span></div>
-          <div class="sp-body">Takes the top 20 trending dishes from box <b>#4</b>, plus real example posts from box <b>#3</b> and our product catalog, and asks the AI: do we sell this, or something close? The AI checks stock first — if we carry the item directly, that wins, even for a whole dish. Its answer is checked against the real catalog before saving, so it can never point to a product that doesn't exist. This step runs outside dbt — it reads dbt tables and writes back a new one dbt picks up right here.</div>
+          <div class="sp-body">Takes this week's top 20 of each class (dishes and items) from box <b>#4</b>, plus real example posts from box <b>#3</b> and our product catalog, and asks the AI: do we sell this, or something close? The AI checks stock first — if we carry the item directly, that wins, even for a whole dish. Then a SECOND, independent pass reviews every candidate against its real catalog name and throws out what it can't defend, and only the survivors are saved — so the board can't show a confident-looking wrong match. Answers are checked against the real catalog too, so they can never point to a product that doesn't exist. This step runs outside dbt — it reads dbt tables and writes back a new one dbt picks up right here.</div>
         </div>
         <div class="stage__meta"><span class="pill">dbt · view</span></div>
       </div>
@@ -361,8 +361,8 @@
       <div class="stage__spine"><div class="stage__num">6</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">mart_social_trending_items <span class="pill board">the board</span></div>
-        <p class="stage__lead">The finished report: what's trending, do we stock it, what to do about it.</p>
-        <p class="stage__how"><b>How:</b> top-20 <code>trends ⋈ resolution ⋈ int_jdawms_items</code> (authoritative name) <code>⋈</code> current stock (latest snapshot week). A confidence floor <code>social_resolve_min_confidence</code> (0.7) suppresses <b>any</b> match below it (a 0.45 sushi→corn-oil guess is dropped, not shown). <code>recommended_prtnums</code> are re-verified against the item master (hallucinated SKUs dropped). Emits <code>action_signal</code>:</p>
+        <p class="stage__lead">The finished weekly report: what's trending this week, whether it climbed since last week, do we stock it, what to do about it.</p>
+        <p class="stage__how"><b>How:</b> <code>trends ⋈ resolution ⋈ int_jdawms_items_active</code> (authoritative name) <code>⋈</code> current stock (latest snapshot week). One row per (calendar week, class, concept): <code>where is_top_n and week_start = max(week_start)</code> is this week's board, the other weeks are the trajectory behind it (kept in full for any concept that ever reached the top 20, so charted lines have no holes). A confidence floor <code>social_resolve_min_confidence</code> (0.7) suppresses <b>any</b> match below it (a 0.45 sushi→corn-oil guess is dropped, not shown) — and since resolver v5 that floor gates a <i>verified</i> confidence, not the proposing model's self-rating. <code>recommended_prtnums</code> are re-verified against the active item master (hallucinated SKUs, discontinued items and duplicate names dropped). Emits <code>action_signal</code>:</p>
         <div class="sig">
           <span><code>promote_now</code> · carried &amp; in stock</span>
           <span><code>restock</code> · carried, no stock</span>
@@ -423,7 +423,7 @@
     <div class="cad weekly">
       <div class="when">weekly · after parse + enrich</div>
       <div class="cmd">dbt build <span class="flag">--select tag:social</span></div>
-      <div class="desc">Social branch only, once the offline scripts have populated <code>social.*</code>: dedupe mentions, join enrichment, rank trends, resolve SKUs, refresh the trending board.</div>
+      <div class="desc">Social branch only, once the offline scripts have populated <code>social.*</code>: dedupe mentions, join enrichment, rank the weekly dish and item boards, resolve SKUs, refresh the trending board.</div>
     </div>
   </div>
 
@@ -458,7 +458,7 @@ const NODES = [
   { id:'stg_admin', label:'stg_mysql__admin_users', desc:'Sales reps / users', col:1, layer:'staging', pipe:'event-log', mat:'view' },
   { id:'stg_jdawms', label:'stg_jdawms__*', desc:'16 WMS tables, cleaned 1:1', col:1, layer:'staging', pipe:'wms', mat:'view', sub:'16' },
   { id:'stg_mnt_m', label:'stg_mentionlytics__mentions', desc:'Posts, deduped — still 1 row = 1 post', col:1, layer:'staging', pipe:'social', mat:'view' },
-  { id:'stg_mnt_e', label:'stg_mentionlytics__mention_enrichment', desc:"AI's read on each post: spam? dishes? mood?", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/enrich_mentions.py' },
+  { id:'stg_mnt_e', label:'stg_mentionlytics__mention_enrichment', desc:"AI's read on each post: spam? dishes? products? mood?", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/enrich_mentions.py' },
   // col 1, same as the other staging views: in dbt's actual graph this model
   // ONLY reads source('mentionlytics','concept_resolution') — cast + dedupe,
   // zero ref()s. Its real-world tie to int_trend/fct_soc/int_items happens a
@@ -480,14 +480,14 @@ const NODES = [
   { id:'fct_events', label:'fct_events', desc:'One row per decoded event', col:4, layer:'fact', pipe:'event-log', mat:'table' },
   { id:'fct_orders', label:'fct_orders', desc:'One row per submitted order', col:4, layer:'fact', pipe:'event-log', mat:'table' },
   { id:'fct_cycles', label:'fct_order_cycles', desc:'One row per order cycle', col:4, layer:'fact', pipe:'event-log', mat:'table' },
-  { id:'int_trend', label:'int_social_concept_trends', desc:'Posts grouped into ranked dishes (per dish)', col:4, layer:'int', pipe:'social', mat:'table' },
+  { id:'int_trend', label:'int_social_concept_trends', desc:'Weekly ranked boards — dishes and stockable items, ranked separately', col:4, layer:'int', pipe:'social', mat:'table' },
   { id:'mart_feat', label:'mart_feature_pairing', desc:'Weekly feature co-occurrence', col:4, layer:'mart', pipe:'event-log', mat:'table' },
 
   { id:'mart_rep', label:'mart_rep_weekly', desc:'Weekly sales-rep scorecard', col:5, layer:'mart', pipe:'event-log', mat:'table' },
   { id:'mart_cust', label:'mart_customer_weekly', desc:'Customer activity + churn', col:5, layer:'mart', pipe:'event-log', mat:'table' },
   { id:'mart_journey', label:'mart_rep_order_journey', desc:'Rep order-journey detail', col:5, layer:'mart', pipe:'event-log', mat:'table' },
   { id:'mart_ds', label:'mart_item_demand_supply', desc:'Weekly demand × WMS supply', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
-  { id:'mart_soc', label:'mart_social_trending_items', desc:'Top dishes: do we stock it? how much?', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
+  { id:'mart_soc', label:'mart_social_trending_items', desc:'Weekly trending board: do we stock it? is it climbing?', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
 ];
 
 const EDGES = [
