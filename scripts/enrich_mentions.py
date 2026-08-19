@@ -110,7 +110,7 @@ PROMPT_VERSION = "v3"                    # bump when INSTRUCTIONS change (stored
                                          #      say how a label was made.
                                          # A bump re-labels the recent window (see BACKFILL_WEEKS).
 MAX_TOKENS_BASE = 400                    # envelope + slack
-MAX_TOKENS_PER_MENTION = 260             # 5 arrays + 3 scalars comfortably fits
+MAX_TOKENS_PER_MENTION = 260             # 4 arrays + 3 scalars comfortably fits
 CONCURRENCY = 8                          # parallel serving calls — lower if you hit FMAPI rate limits
 # Mentions per LLM call. The instruction block is ~900 tokens and used to be re-sent
 # once per mention: at 12.8k mentions that is the bulk of the spend, and pure
@@ -124,6 +124,17 @@ CONCURRENCY = 8                          # parallel serving calls — lower if y
 # silently dropped or mislabelled row). Lower this if bleed shows up in spot checks;
 # 1 restores exactly the old behaviour.
 MENTIONS_PER_CALL = 10
+
+# NOT ASKED FOR: sentiment. The workspace rate limit is on OUTPUT TOKENS per
+# minute (observed 2026-08-19: HTTP 429 REQUEST_LIMIT_EXCEEDED at ~157 mentions/min),
+# so every field costs throughput on every mention. Sentiment was out of scope for
+# the trending board — it never entered trend_score or trend_rank, only a
+# net_sentiment column that has now been dropped — and Mentionlytics already ships
+# its own sentiment label per mention for free, kept on fct_social_mentions.
+# PROMPT_VERSION deliberately NOT bumped for this: removing a field does not change
+# how the remaining fields are labelled, and bumping would discard a backfill in
+# flight to re-spend tokens for no quality gain. Force one with --backfill-weeks if
+# you disagree.
 MAX_RETRIES = 8                          # SDK-level retries: rides out 429s with backoff + retry-after
 MAX_ATTEMPTS = 2                         # our own retries on bad/empty JSON
 BATCH_SIZE = 300                         # write to the table every N classified (checkpoint / resumable)
@@ -211,7 +222,6 @@ missing, no extras, no invented ids. Each entry has exactly these keys:
   "mentioned_products": [string],// SELLABLE PRODUCTS — see the rule below
   "ingredients": [string],       // notable ingredients: "fish sauce", "coconut milk"...
   "brands": [string],            // brand / restaurant / product names
-  "sentiment_normalized": string,// one of "positive", "negative", "neutral"
   "confidence": number           // 0.0–1.0, your overall certainty for THIS mention
 }
 
@@ -252,8 +262,7 @@ exactly as written."""
 
 _REQUIRED_KEYS = {
     "is_food_relevant", "is_spam", "themes", "mentioned_dishes",
-    "mentioned_products", "ingredients", "brands", "sentiment_normalized",
-    "confidence",
+    "mentioned_products", "ingredients", "brands", "confidence",
 }
 
 
@@ -411,7 +420,6 @@ def _dbx_enrichment_schema():
         StructField("mentioned_products", arr),
         StructField("ingredients", arr),
         StructField("brands", arr),
-        StructField("sentiment_normalized", StringType()),
         StructField("confidence", DoubleType()),
         StructField("enriched_at", TimestampType()),
         StructField("model_version", StringType()),
@@ -456,7 +464,6 @@ def prefilter_record(m, enriched_at):
         "is_spam": True,
         "themes": [], "mentioned_dishes": [], "mentioned_products": [],
         "ingredients": [], "brands": [],
-        "sentiment_normalized": "neutral",
         "confidence": 1.0,
         "enriched_at": enriched_at,
         "model_version": PREFILTER_VERSION,
@@ -576,7 +583,6 @@ def to_records(attrs_by_id, enriched_at):
             "mentioned_products": list(a["mentioned_products"]),
             "ingredients": list(a["ingredients"]),
             "brands": list(a["brands"]),
-            "sentiment_normalized": str(a["sentiment_normalized"]),
             "confidence": float(a["confidence"]),
             "enriched_at": enriched_at,
             "model_version": model_version,

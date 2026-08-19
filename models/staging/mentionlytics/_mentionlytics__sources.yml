@@ -136,8 +136,6 @@ sources:
             description: Multi-label ingredients named (array of strings). A loose list of what the post mentions — raw commodities included; NOT the sellable-product signal (see mentioned_products). Feeds the resolver's ingredient-basket side.
           - name: brands
             description: Multi-label brand / restaurant / product / retailer names (array of strings).
-          - name: sentiment_normalized
-            description: Model-judged sentiment (positive/negative/neutral), independent of the raw Mentionlytics label.
           - name: confidence
             description: Model's overall self-rated certainty, 0.0–1.0.
           - name: enriched_at

@@ -173,7 +173,6 @@ with mentions as (
         coalesce(views, 0)                                              as views,
         follower_count,
         link,
-        sentiment_normalized,
         mentioned_dishes,
         mentioned_products
     from {{ ref('fct_social_mentions') }}
@@ -330,7 +329,7 @@ mentions_normalized as (
 
     select
         m.mention_id, m.profile, m.channel, m.posted_date, m.follower_count, m.link,
-        m.sentiment_normalized, m.mentioned_dishes, m.mentioned_products,
+        m.mentioned_dishes, m.mentioned_products,
         m.week_start, m.week_end,
         m.engagement, m.views,
         case when cb.channel_median_engagement > 0
@@ -354,7 +353,7 @@ dish_concepts_raw as (
 
     select
         mention_id, profile, channel, posted_date, engagement, views,
-        engagement_ratio, views_ratio, follower_count, link, sentiment_normalized,
+        engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
         'dish'                                                          as concept_class,
         {{ unnest('mentioned_dishes') }}                                as concept
@@ -366,7 +365,7 @@ item_concepts_raw as (
 
     select
         mention_id, profile, channel, posted_date, engagement, views,
-        engagement_ratio, views_ratio, follower_count, link, sentiment_normalized,
+        engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
         'item'                                                          as concept_class,
         {{ unnest('mentioned_products') }}                              as concept
@@ -390,7 +389,7 @@ concepts_degloss as (
 
     select
         mention_id, profile, channel, posted_date, engagement, views,
-        engagement_ratio, views_ratio, follower_count, link, sentiment_normalized,
+        engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
         concept_class,
         concept,
@@ -404,7 +403,7 @@ concepts as (
 
     select
         mention_id, profile, channel, posted_date, engagement, views,
-        engagement_ratio, views_ratio, follower_count, link, sentiment_normalized,
+        engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
         concept_class,
         -- fold Vietnamese diacritic/case/spacing variants to one key so the same
@@ -462,7 +461,7 @@ concept_mentions as (
         week_start, week_end, concept_class,
         concept_norm, mention_id, profile, channel, posted_date,
         engagement, views, engagement_ratio, views_ratio,
-        follower_count, link, sentiment_normalized,
+        follower_count, link,
         -- anonymised placeholder, confirmed with Mentionlytics as an Instagram
         -- API limitation (~97% of Instagram rows) — extend this list if another
         -- platform's anonymisation shows up the same way.
@@ -521,10 +520,7 @@ agg as (
         -- named-author companion: real, non-anonymised authors only
         count(distinct case when not is_anon then author_key end)      as named_authors,
         sum(case when not is_anon then 1 else 0 end)                   as named_mentions,
-        count(distinct channel)                                        as channel_count,
-        sum(case when sentiment_normalized = 'positive' then 1
-                 when sentiment_normalized = 'negative' then -1
-                 else 0 end)                                           as net_sentiment
+        count(distinct channel)                                        as channel_count
     from concept_mentions_shared
     group by 1, 2, 3
 
@@ -673,7 +669,6 @@ with_rank as (
         s.mention_share,
         s.total_engagement,
         s.total_views,
-        s.net_sentiment,
         s.distinct_authors_adj,
         s.named_authors,
         s.named_mentions,

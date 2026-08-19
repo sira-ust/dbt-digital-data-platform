@@ -458,7 +458,7 @@ const NODES = [
   { id:'stg_admin', label:'stg_mysql__admin_users', desc:'Sales reps / users', col:1, layer:'staging', pipe:'event-log', mat:'view' },
   { id:'stg_jdawms', label:'stg_jdawms__*', desc:'16 WMS tables, cleaned 1:1', col:1, layer:'staging', pipe:'wms', mat:'view', sub:'16' },
   { id:'stg_mnt_m', label:'stg_mentionlytics__mentions', desc:'Posts, deduped — still 1 row = 1 post', col:1, layer:'staging', pipe:'social', mat:'view' },
-  { id:'stg_mnt_e', label:'stg_mentionlytics__mention_enrichment', desc:"AI's read on each post: spam? dishes? products? mood?", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/enrich_mentions.py' },
+  { id:'stg_mnt_e', label:'stg_mentionlytics__mention_enrichment', desc:"AI's read on each post: spam? dishes? products?", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/enrich_mentions.py' },
   // col 1, same as the other staging views: in dbt's actual graph this model
   // ONLY reads source('mentionlytics','concept_resolution') — cast + dedupe,
   // zero ref()s. Its real-world tie to int_trend/fct_soc/int_items happens a

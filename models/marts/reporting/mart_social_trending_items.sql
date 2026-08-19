@@ -268,7 +268,6 @@ joined as (
         b.total_engagement,
         b.total_views,
         b.trend_score,
-        b.net_sentiment,
         b.is_rising,
         b.source_links,
         -- author-diversity trust signal, surfaced (not just computed internally) —
@@ -315,7 +314,6 @@ select
     j.total_engagement,
     j.total_views,
     j.trend_score,
-    j.net_sentiment,
     j.source_links,
     j.distinct_authors_adj,
     j.author_quality,

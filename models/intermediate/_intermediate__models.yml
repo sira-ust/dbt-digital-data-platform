@@ -439,8 +439,6 @@ models:
         description: Summed ACTIVE engagement (likes + comments + shares) across those mentions (deduped per mention). Feeds trend_score_legacy only.
       - name: total_views
         description: Summed views across those mentions (video/post view counts). Feeds trend_score_legacy only.
-      - name: net_sentiment
-        description: positives − negatives over those mentions (model-judged sentiment).
       - name: is_rising
         description: >
           mention_share went UP versus the previous week with a row. REDEFINED at this

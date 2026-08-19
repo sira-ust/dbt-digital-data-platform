@@ -205,9 +205,11 @@ models:
       - name: domain_rank
         description: Alexa domain rank (Web only). Never combined with follower_count.
       - name: sentiment
-        description: Raw Mentionlytics sentiment label.
-      - name: sentiment_normalized
-        description: Model-judged sentiment (positive/negative/neutral).
+        description: >
+          Raw Mentionlytics sentiment label — heavily skewed positive, so validate
+          before trusting. The only sentiment here: the LLM enrichment no longer
+          judges sentiment (out of scope for the trending board, and every field
+          costs output-token throughput on every mention).
       - name: is_food_relevant
         description: Always true here (filter guarantee).
       - name: is_spam

@@ -479,8 +479,6 @@ models:
           Rank key — author-diversity based: distinct authors x (1 + log-dampened,
           per-channel-normalised engagement boost + views boost). See
           int_social_concept_trends for the full formula.
-      - name: net_sentiment
-        description: positives − negatives; a loud trend with negative buzz is not a promote.
       - name: is_rising
         description: >
           mention_share went up versus the previous week with a row — a true
