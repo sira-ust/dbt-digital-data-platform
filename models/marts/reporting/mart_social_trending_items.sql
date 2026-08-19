@@ -81,7 +81,13 @@ board as (
 
     select
         t.*,
-        t.trend_rank <= {{ var('social_trend_top_n') }}                  as is_top_n
+        -- `trend_rank is not null and ...`, not a bare comparison: a concept excluded
+        -- that week as a repeat_poster has NO rank, and `NULL <= 20` is NULL, not
+        -- false — which left is_top_n null on a trajectory row and failed its not_null
+        -- test on real data (2026-08-19). No rank means not on the board, which is
+        -- false, not unknown.
+        t.trend_rank is not null
+            and t.trend_rank <= {{ var('social_trend_top_n') }}          as is_top_n
     from trends as t
     inner join qualifying as q
         on q.concept_class = t.concept_class
