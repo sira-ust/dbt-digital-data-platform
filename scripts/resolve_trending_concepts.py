@@ -5,19 +5,24 @@ via the workspace serving endpoint, ambient auth on the databricks backend). dbt
 stays deterministic and never calls the LLM; this writes a table dbt then reads.
 GATED: only the top-N ranked concepts are resolved, so the long tail costs nothing.
 
-TWO PASSES, because precision is what this table is judged on (v5). One model
-proposing matches is not accurate enough on its own — it will pad a basket with
-plausible-sounding but wrong items ("DF TOMYUM PASTE" under a rice-noodle-curry
-dish), and nothing downstream can tell a wrong-but-real SKU from a right one:
+THREE PASSES, because BOTH kinds of error cost something here. One model proposing
+matches will pad a basket with plausible-but-wrong items ("DF TOMYUM PASTE" under a
+rice-noodle-curry dish) — and it will also miss a product we plainly stock, which is
+worse, because "we don't carry this" sends someone to source it.
   ① PROPOSE — read the mention snippets + the catalog, classify, pick items.
-  ② VERIFY  — a SECOND, INDEPENDENT call that sees only the concept, the same
-              snippets, and the candidates rendered with their AUTHORITATIVE
-              catalog names, and is prompted to REFUTE each one. Items it can't
-              defend are dropped, and ITS confidence (not the proposer's) is what
-              the mart's social_resolve_min_confidence floor gates on. If the
-              verify call fails we write NOTHING for that concept — it stays
-              unresolved and is retried next run, rather than shipping an
-              unverified guess.
+  ② VERIFY  — a SECOND, INDEPENDENT call seeing only the concept, the same snippets,
+              and the candidates rendered with their AUTHORITATIVE catalog names,
+              prompted to REFUTE each one. What it can't defend is dropped, and ITS
+              confidence (not the proposer's) is what the mart's
+              social_resolve_min_confidence floor gates on. A failed verify call
+              writes NOTHING — the concept stays unresolved and is retried next run
+              rather than shipping an unverified guess.
+  ③ RECOVER — only when ② leaves "none". Verify can only SUBTRACT, so a proposer miss
+              is otherwise unrecoverable and surfaces as a false "nothing like this in
+              stock". This pass gets the whole catalog again plus what was already
+              ruled out, hunts for the plain/base form and warehouse-shorthand names,
+              and ITS candidates go back through ② — recall improves, precision does
+              not move, because nothing reaches the table unreviewed.
 The proposer's self-rated confidence is kept alongside as proposer_confidence, so
 the two can be compared (v4 clustered at 0.72 — just above a 0.70 floor, which
 made the floor inert).
@@ -123,7 +128,10 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v5"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
+PROMPT_VERSION = "v6"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
+                                         # v6 = SECOND LOOK on a "none": recall matters as much as
+                                         #      precision here, because a false "we don't carry this"
+                                         #      sends someone to source a product we already sell
 _CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
 VERIFY_MAX_TOKENS = 1200                 # per-candidate verdicts + reasons
@@ -211,6 +219,14 @@ result_type decides what we show marketing:
                   return FEWER or an empty list — an empty basket beats a wrong one.
   - "none"      : nothing in the catalog is a real fit -> empty arrays.
 
+BEFORE YOU CONCLUDE "none", CHECK THE PLAIN FORM. A flavoured or branded variant being \
+wrong does not mean the product is absent: "sriracha mayo" is not "mayonnaise", but a \
+plain Japanese mayonnaise in the catalog IS. Also look past warehouse shorthand — the \
+catalog is written in abbreviations and brand-led names, so the item you want may not \
+read like the words in the concept. Saying we carry nothing when we do carry it is the \
+most expensive mistake available here, because it tells the sales team to go and source \
+something we already sell.
+
 PREFER "none" OR AN EMPTY BASKET OVER A WEAK MATCH. If no catalog item is genuinely \
 the same kind of food, return "none" — do NOT stretch. Three hard rules: a substitute \
 must be something a shopper would actually accept in place of the trending item; a \
@@ -231,6 +247,45 @@ hint about WHERE people saw the item, not a match key — a shared brand/word be
 a snippet and a catalog item name is meaningless unless the underlying PRODUCT is \
 genuinely the same kind of food (a brand called "XYZ" on a banh mi post does not \
 make "XYZ Noodles" a match)."""
+
+RECOVERY_INSTRUCTIONS = """You are a SECOND-CHANCE CATALOG SEARCH, and you exist to \
+stop one specific mistake.
+
+A first pass looked at this trending concept and concluded we stock nothing suitable — \
+either it proposed nothing, or a reviewer threw out everything it proposed. That answer \
+reaches the sales team as "we do not carry this and have nothing like it", which sends \
+someone to source a product we may already sell. Observed for real: a "mayonnaise" \
+trend was reported as not-carried because the first pass offered only a SRIRACHA mayo \
+(correctly rejected as a flavoured variant) and never noticed the plain Japanese \
+mayonnaise sitting in the catalog.
+
+So search the WHOLE catalog again, properly, and specifically for:
+  - THE PLAIN OR BASE FORM. A wrong flavoured variant says nothing about whether the
+    plain product exists.
+  - THE SAME PRODUCT UNDER WAREHOUSE SHORTHAND — abbreviations, a brand-led name, a
+    different word order, a pack-size suffix. The catalog is not written the way people
+    post.
+  - A GENUINE SUBSTITUTE: the same kind of food a buyer would accept instead. We would
+    rather offer a real alternative than nothing.
+
+You are told which part numbers were ALREADY RULED OUT, and why. Respect those verdicts \
+— do NOT offer them again. Find something else, or nothing.
+
+Return ONE JSON object in exactly the same shape as the matcher:
+{
+  "canonical_label": string,
+  "concept_type": string,
+  "result_type": string,           // "carried" | "substitute" | "basket" | "none"
+  "matched_prtnum": string|null,
+  "recommended_prtnums": [string],
+  "recommended_item_names": [string],
+  "match_confidence": number
+}
+
+Every prtnum MUST exist in the catalog exactly. If after a real search nothing genuinely \
+fits, return "none" — an honest none is still the right answer, and whatever you do \
+return still has to survive review. This pass exists to make sure the none is honest, \
+not to manufacture a match."""
 
 VERIFY_INSTRUCTIONS = """You are a STRICT REVIEWER. Another model proposed a match \
 between a TRENDING FOOD CONCEPT from Thai/Vietnamese social listening and items in \
@@ -847,6 +902,40 @@ def propose_one(client, catalog_block, concept, snippets):
                       _proposal_ok, "propose", concept["concept_norm"])
 
 
+def build_recovery_prompt(concept, snippets, ruled_out):
+    """Same context as the proposer, plus what has already been ruled out and why, so
+    the second look spends its effort somewhere new."""
+    lines = [f"Concept (raw): {concept['concept_norm']}",
+             f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count')}",
+             ""]
+    if ruled_out:
+        lines.append("ALREADY RULED OUT by review — do not offer these again:")
+        for prtnum, reason in ruled_out:
+            lines.append(f"  - {prtnum}: {reason or '(no reason given)'}")
+    else:
+        lines.append("The first pass proposed nothing at all.")
+    lines.append("")
+    return "\n".join(lines + _render_snippets(snippets))
+
+
+def recover_one(client, catalog_block, concept, snippets, ruled_out):
+    """Second look at the catalog for a concept that came back 'none'.
+
+    Exists because the verify pass can only SUBTRACT. Withholding the catalog from the
+    reviewer is deliberate — it keeps it judging the candidates in front of it instead
+    of shopping for replacements — but the cost is that a proposer MISS is
+    unrecoverable, and for a 'none' result that miss becomes a false "nothing like this
+    in stock" on the board. That is the most expensive error this table can make: it
+    sends someone to source a product we already sell (observed with mayonnaise,
+    2026-08-19).
+
+    Whatever this returns is still put through verify_one, so recall improves without
+    loosening precision one bit."""
+    return _call_json(client, RECOVERY_INSTRUCTIONS, catalog_block,
+                      build_recovery_prompt(concept, snippets, ruled_out),
+                      MAX_TOKENS, _proposal_ok, "recover", concept["concept_norm"])
+
+
 def verify_one(client, concept, snippets, proposal, candidates):
     """Pass ②. Deliberately does NOT get the catalog block: the candidates are
     already rendered with their authoritative names, and withholding the other
@@ -987,23 +1076,57 @@ def resolve_one(client, catalog_block, catalog_by_prtnum, concept, snippets, ver
         })
         return base
 
-    if not candidates:
-        # nothing to check — the proposer already said "nothing fits"
-        base.update({
+    if candidates:
+        verdict = verify_one(client, concept, snippets, proposal, candidates)
+        if verdict is None:
+            print(f"  SKIP {label!r}: verification failed — left unresolved for the "
+                  f"next run (no unverified match written)", file=sys.stderr)
+            return None
+        applied = reconcile(proposal, verdict, candidates, matched)
+    else:
+        # the proposer offered nothing at all — nothing to review
+        applied = {
             "result_type": "none", "matched_prtnum": None,
             "recommended_prtnums": [], "recommended_item_names": [],
             "recommended_reasons": [], "rejected_prtnums": [], "rejected_reasons": [],
-            "match_confidence": 0.0,
-        })
-        return base
+            "confidence": 0.0, "canonical_label": base["canonical_label"],
+        }
 
-    verdict = verify_one(client, concept, snippets, proposal, candidates)
-    if verdict is None:
-        print(f"  SKIP {label!r}: verification failed — left unresolved for the "
-              f"next run (no unverified match written)", file=sys.stderr)
-        return None
+    # ── SECOND LOOK ──────────────────────────────────────────────────────────────
+    # A 'none' is the one answer worth paying to double-check: it reaches the board as
+    # "we don't carry this and have nothing like it" and sends someone to source a
+    # product we may already sell. The verify pass cannot rescue it — by design it only
+    # subtracts — so give the catalog to a fresh call, tell it what was already ruled
+    # out, and put anything it finds through the SAME verifier. Recall improves;
+    # precision is untouched, because nothing skips review.
+    if applied["result_type"] == "none":
+        ruled_out = list(zip(applied["rejected_prtnums"], applied["rejected_reasons"]))
+        second = recover_one(client, catalog_block, concept, snippets, ruled_out)
+        if second is not None:
+            already = {p for p, _ in ruled_out}
+            cands2, mismatch2, matched2 = build_candidates(second, catalog_by_prtnum)
+            # a verdict already stands on those part numbers; don't re-litigate it
+            cands2 = [c for c in cands2 if c["prtnum"] not in already]
+            if matched2 in already:
+                matched2 = None
+            if cands2:
+                verdict2 = verify_one(client, concept, snippets, second, cands2)
+                if verdict2 is not None:
+                    applied2 = reconcile(second, verdict2, cands2, matched2)
+                    if applied2["result_type"] != "none":
+                        n_found = (1 if applied2["matched_prtnum"] else 0) \
+                                  + len(applied2["recommended_prtnums"])
+                        print(f"  RECOVERED {label!r}: second look found "
+                              f"{applied2['result_type']} ({n_found} item(s)) where the "
+                              f"first pass said none")
+                        # keep the first pass's rejections in the audit trail alongside
+                        applied2["rejected_prtnums"] = (applied["rejected_prtnums"]
+                                                        + applied2["rejected_prtnums"])
+                        applied2["rejected_reasons"] = (applied["rejected_reasons"]
+                                                        + applied2["rejected_reasons"])
+                        applied = applied2
+                        base["name_mismatch_prtnums"] = mismatches + mismatch2
 
-    applied = reconcile(proposal, verdict, candidates, matched)
     base.update({
         "canonical_label": applied["canonical_label"] or base["canonical_label"],
         "result_type": applied["result_type"],
