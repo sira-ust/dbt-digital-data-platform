@@ -140,9 +140,7 @@ resolution_adj as (
     select
         concept_norm,
         canonical_label,
-        canonical_key,
         alias_of,
-        concept_type,
         result_type                                                     as raw_result_type,
         matched_prtnum                                                  as raw_matched_prtnum,
         recommended_prtnums,
@@ -235,34 +233,23 @@ joined as (
         b.concept_norm,
         b.is_top_n,
         b.week_end,
-        b.week_of_year,
         b.year_week,
 
         coalesce(r.canonical_label, b.concept_norm)                     as concept_label,
-        -- concept_type is the LLM's item-level opinion (dish/category/ingredient/
-        -- product/brand) falling back to the ranking class; concept_class is the
-        -- hard fact — which of the two boards this row belongs to. Keep both: only
-        -- the class can drive "top N per class".
-        coalesce(r.concept_type, b.concept_class)                       as concept_type,
-        -- same dish under two concept keys (som tam / ส้มตำ — fold_concept merges
-        -- Latin diacritics only, never cross-script) shares one canonical_key, and
-        -- the resolver harmonises them onto the better-grounded answer. Both rows
-        -- still occupy a slot on the board; alias_of says which one is the copy so
-        -- a viewer can collapse them.
-        r.canonical_key,
+        -- kept in this CTE, NOT published: is_alias below is the only usable form of
+        -- it. Same dish under two concept keys (som tam / ส้มตำ — fold_concept merges
+        -- Latin diacritics only, never cross-script) gets harmonised onto the
+        -- better-grounded answer by the resolver, and both rows still take a board
+        -- slot; a reader only needs to know which one to hide.
         r.alias_of,
         b.trend_rank,
-        b.prev_week_start,
-        b.prev_trend_rank,
         b.rank_change,
         b.mention_count,
-        b.prev_mention_count,
         b.mention_count_wow_pct,
         b.mention_share,
         b.mention_share_change,
         b.total_engagement,
         b.total_views,
-        b.trend_score,
         b.is_rising,
         b.source_links,
         -- author-diversity trust signal, surfaced (not just computed internally) —
@@ -291,16 +278,12 @@ select
     j.concept_class,
     j.concept_norm,
     j.concept_label,
-    j.concept_type,
     j.is_top_n,
 
-    -- the calendar week this row covers, and how much of it we hold data for.
-    -- year_week ("2026-W34") is the display label; week_of_year is the bare ISO
-    -- number for an axis; week_start is the real date to sort and join on.
+    -- the calendar week this row covers. year_week ("2026-W34") is the display label;
+    -- week_start is the date to sort and join on; week_end closes the range.
     j.week_end,
-    j.week_of_year,
     j.year_week,
-
 
     -- social trend signal
     j.trend_rank,
@@ -308,9 +291,8 @@ select
     j.mention_share,
     j.total_engagement,
     j.total_views,
-    j.trend_score,
     j.source_links,
-    j.distinct_authors_adj,
+    j.distinct_authors_adj                                             as distinct_authors,
     j.author_quality,
     j.is_single_channel,
 
@@ -318,10 +300,7 @@ select
     -- mention_share_change is the volume-neutral one (see int_social_concept_trends
     -- on why is_rising alone can't be trusted). Nulls mean "no comparison exists",
     -- not "flat".
-    j.prev_week_start,
-    j.prev_trend_rank,
     j.rank_change,
-    j.prev_mention_count,
     j.mention_count_wow_pct,
     j.mention_share_change,
     j.is_rising,
@@ -342,8 +321,6 @@ select
     -- (a confidence score on a "no match" is noise)
     case when j.result_type_adj in ('carried', 'substitute', 'basket')
          then j.match_confidence end                                    as match_confidence,
-    j.canonical_key,
-    j.alias_of,
     j.alias_of is not null                                             as is_alias,
 
     -- what marketing should do (about TODAY's stock — see the stock CTE)
