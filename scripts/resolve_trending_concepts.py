@@ -248,6 +248,42 @@ a snippet and a catalog item name is meaningless unless the underlying PRODUCT i
 genuinely the same kind of food (a brand called "XYZ" on a banh mi post does not \
 make "XYZ Noodles" a match)."""
 
+GROUP_INSTRUCTIONS = """You are given ALL of this week's trending food concepts from \
+Thai/Vietnamese social listening, in one list. Some of them are THE SAME THING under a \
+different name, and the board currently shows them as separate entries — splitting one \
+trend's mentions in two and wasting a slot. Group those together.
+
+Return ONE JSON object — no markdown, no prose:
+{"groups": [ {"primary": string, "members": [string], "label": string} ]}
+  primary  the raw concept text that best represents the group; MUST be one of members
+  members  every raw concept text in the group, copied EXACTLY as given, including
+           single-member groups
+  label    one clean display name for the group
+
+EVERY concept you were given must appear in EXACTLY ONE group — none missing, none \
+duplicated, nothing invented. Most groups will have one member; that is normal and \
+correct.
+
+MERGE only when it is the SAME thing named differently:
+  - another script or language: "som tam" / "ส้มตำ", "nam prik" / "น้ำพริก"
+  - a spelling, spacing, word-order or singular/plural variant
+  - a fuller name for the identical product: "matcha" / "matcha powder"
+
+DO NOT MERGE — these are different trends even though they look related:
+  - a BRANDED product and its generic category: "Mama Instant Noodles" is not
+    "Instant Noodles". The brand one is a narrower, separate signal.
+  - two varieties or preparations of one base: "Nam Prik" is not "Nam Prik Saeb";
+    "Fried Chicken" is not "Grilled Chicken".
+  - things that merely share a category: "Ice Cream" is not "Frozen Yogurt";
+    "Coffee" is not "Matcha".
+  - an ingredient and a dish made from it.
+  - concepts from DIFFERENT boards. Each concept is tagged [dish] or [item] and a
+    group must be entirely one or the other, even for identical text.
+
+WHEN IN DOUBT, LEAVE THEM SEPARATE. A wrong merge silently fuses two real trends into \
+one and cannot be spotted on the board afterwards; a missed merge only costs a \
+duplicate row, which is visible and harmless by comparison."""
+
 RECOVERY_INSTRUCTIONS = """You are a SECOND-CHANCE CATALOG SEARCH, and you exist to \
 stop one specific mistake.
 
@@ -723,8 +759,8 @@ def _dbx_resolution_schema():
     return StructType([
         StructField("concept_norm", StringType()),
         StructField("canonical_label", StringType()),
-        StructField("canonical_key", StringType()),
-        StructField("alias_of", StringType()),
+        StructField("group_primary", StringType()),
+        StructField("group_label", StringType()),
         StructField("concept_type", StringType()),
         StructField("result_type", StringType()),
         StructField("matched_prtnum", StringType()),
@@ -743,8 +779,8 @@ def _dbx_resolution_schema():
 
 
 _RECORD_DEFAULTS = {
-    "concept_norm": None, "canonical_label": None, "canonical_key": None,
-    "alias_of": None, "concept_type": None, "result_type": None,
+    "concept_norm": None, "canonical_label": None, "group_primary": None,
+    "group_label": None, "concept_type": None, "result_type": None,
     "matched_prtnum": None, "recommended_prtnums": [], "recommended_item_names": [],
     "recommended_reasons": [], "rejected_prtnums": [], "rejected_reasons": [],
     "name_mismatch_prtnums": [], "match_confidence": None,
@@ -916,6 +952,77 @@ def propose_one(client, catalog_block, concept, snippets):
     return _call_json(client, INSTRUCTIONS, catalog_block,
                       build_user_prompt(concept, snippets), MAX_TOKENS,
                       _proposal_ok, "propose", concept["concept_norm"])
+
+
+def group_concepts(client, concepts):
+    """ONE call over the whole board: which concepts are the same thing?
+
+    Why this exists: every concept is otherwise resolved in ISOLATION, so when the model
+    sees "matcha" it has no idea "matcha powder" is also on this week's board. Both
+    answers come back correct and separately labelled, and the board shows one trend
+    twice with its mentions split (observed 2026-08-19: ranks 1 and 4, both SKU 68250).
+    Nothing downstream can spot that, because there is nothing wrong with either row.
+
+    NOT grouped by matched_prtnum, though that would have caught this case: two genuinely
+    different trends can share a SKU — a generic category and a branded product often
+    resolve to the same item — so SKU equality over-merges. Sameness has to be judged
+    explicitly, which is what this call does.
+
+    Returns {concept_norm: (primary_concept_norm, group_label)}. Fails SAFE: on any
+    validation problem every concept becomes its own group, i.e. today's behaviour."""
+    ungrouped = {c["concept_norm"]: (c["concept_norm"], None) for c in concepts}
+    if len(concepts) < 2:
+        return ungrouped
+
+    lines = ["Concepts on this week's board:"]
+    for c in sorted(concepts, key=lambda c: -c.get("mention_count", 0)):
+        lines.append(f"  [{_class_hint(c)}] {c['concept_norm']}   "
+                     f"({c.get('mention_count')} mentions)")
+    data = _call_json(client, GROUP_INSTRUCTIONS, None, "\n".join(lines),
+                      MAX_TOKENS * 2, lambda d: isinstance(d.get("groups"), list),
+                      "group", f"{len(concepts)} concepts")
+    if data is None:
+        return ungrouped
+
+    # VALIDATE before trusting: a bad grouping fuses real trends, so anything that
+    # doesn't account for exactly the input set is discarded wholesale.
+    by_norm = {c["concept_norm"]: c for c in concepts}
+    seen, mapping = set(), {}
+    for g in data["groups"]:
+        members = [str(m) for m in (g.get("members") or [])]
+        primary = str(g.get("primary") or "")
+        label = str(g.get("label") or "").strip() or None
+        if not members or primary not in members:
+            print("  WARN grouping: primary not in its own members — ignoring the "
+                  "whole grouping", file=sys.stderr)
+            return ungrouped
+        classes = set()
+        for m in members:
+            if m not in by_norm or m in seen:
+                print(f"  WARN grouping: {m!r} unknown or repeated — ignoring the "
+                      f"whole grouping", file=sys.stderr)
+                return ungrouped
+            seen.add(m)
+            classes.add(_class_hint(by_norm[m]))
+        if len(classes) > 1:
+            print(f"  WARN grouping: group {primary!r} mixes boards {classes} — "
+                  f"ignoring the whole grouping", file=sys.stderr)
+            return ungrouped
+        for m in members:
+            mapping[m] = (primary, label)
+    if seen != set(by_norm):
+        print(f"  WARN grouping: covered {len(seen)} of {len(by_norm)} concepts — "
+              f"ignoring the whole grouping", file=sys.stderr)
+        return ungrouped
+
+    merged = {p for p, _ in mapping.values() if sum(1 for v in mapping.values()
+                                                    if v[0] == p) > 1}
+    for p in sorted(merged):
+        members = sorted(m for m, v in mapping.items() if v[0] == p and m != p)
+        print(f"  grouped: {p!r} absorbs {members}")
+    print(f"  grouping: {len(concepts)} concepts -> "
+          f"{len(set(p for p, _ in mapping.values()))} groups")
+    return mapping
 
 
 def build_recovery_prompt(concept, snippets, ruled_out):
@@ -1175,84 +1282,16 @@ def resolve_batch(client, catalog_block, catalog_by_prtnum, concepts,
 
 
 def finalize_records(by_concept, resolved_at, model_version):
-    """Stamp the run metadata and fill the canonical key used for alias
-    harmonisation. Deglossed+folded so "Som Tam (green papaya salad)" and
-    "Som Tam (Green Papaya Salad)" land on the same key."""
+    """Stamp run metadata on each row."""
     records = []
     for r in by_concept.values():
         r = dict(r)
-        r["canonical_key"] = _concept_key(r.get("canonical_label") or r["concept_norm"])
-        r.setdefault("alias_of", None)
         r["resolved_at"] = resolved_at
         r["model_version"] = model_version
         records.append(_coerce_record(r))
     return records
 
 
-_RESULT_RANK = {"carried": 3, "substitute": 2, "basket": 2, "none": 1}
-
-
-def _alias_sort_key(r):
-    n_items = len(r.get("recommended_prtnums") or []) + (1 if r.get("matched_prtnum") else 0)
-    return (_RESULT_RANK.get(r.get("result_type"), 0),
-            float(r.get("match_confidence") or 0.0),
-            n_items,
-            str(r.get("concept_norm") or ""))
-
-
-_PAYLOAD_KEYS = ("canonical_label", "concept_type", "result_type", "matched_prtnum",
-                 "recommended_prtnums", "recommended_item_names",
-                 "recommended_reasons", "match_confidence")
-
-
-def _payload(r):
-    return tuple(tuple(r.get(k) or []) if isinstance(_RECORD_DEFAULTS[k], list)
-                 else r.get(k) for k in _PAYLOAD_KEYS)
-
-
-def harmonize_aliases(new_records, existing_records, resolved_at):
-    """One dish must not get two different answers.
-
-    fold_concept only merges Latin diacritic variants — cross-SCRIPT twins stay
-    separate concepts (som tam / ส้มตำ, boat noodles / ก๋วยเตี๋ยวเรือ), so the same dish is
-    resolved twice, independently, and the two answers disagree (2026-08: rank 1
-    "som tam" -> none, rank 13 "ส้มตำ" -> a jackfruit basket). Where the LLM's own
-    canonical label says two concepts are the same thing, the better-grounded
-    answer (real match > none, then higher verified confidence) is copied onto the
-    other and the loser is stamped alias_of, so the board can't contradict itself.
-
-    Includes rows resolved in EARLIER runs, and returns the rows to write: the new
-    ones plus any older row whose answer changed (append-only + staging's
-    latest-resolved_at-wins makes the rewrite an update).
-    """
-    existing = [_coerce_record(r) for r in existing_records]
-    new_ids = {r["concept_norm"] for r in new_records}
-    existing = [r for r in existing if r["concept_norm"] not in new_ids]
-
-    by_key = defaultdict(list)
-    for r in existing + list(new_records):
-        by_key[r.get("canonical_key") or r["concept_norm"]].append(r)
-
-    rewritten = []
-    for group in by_key.values():
-        if len(group) < 2:
-            continue
-        winner = max(group, key=_alias_sort_key)
-        for r in group:
-            if r["concept_norm"] == winner["concept_norm"]:
-                r["alias_of"] = None
-                continue
-            if _payload(r) == _payload(winner) and r.get("alias_of") == winner["concept_norm"]:
-                continue
-            for k in _PAYLOAD_KEYS:
-                r[k] = winner[k]
-            r["alias_of"] = winner["concept_norm"]
-            print(f"  alias: {r['concept_norm']!r} <- {winner['concept_norm']!r} "
-                  f"({winner['result_type']}, conf {winner['match_confidence']})")
-            if r["concept_norm"] not in new_ids:
-                r["resolved_at"] = resolved_at
-                rewritten.append(r)
-    return list(new_records) + rewritten
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1297,22 +1336,50 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
         return
 
     client = get_client(backend)
-    total = len(concepts)
     resolved_at = datetime.now(timezone.utc)
+
+    # ── GROUP FIRST ──────────────────────────────────────────────────────────────
+    # One call over the whole board, so "matcha" and "matcha powder" are known to be
+    # one trend BEFORE anything is resolved. Then each group is resolved ONCE and the
+    # answer is written for every member, which also cuts calls.
+    groups = group_concepts(client, concepts) if verify else              {c["concept_norm"]: (c["concept_norm"], None) for c in concepts}
+    primaries = {}
+    for c in concepts:
+        primary, _ = groups[c["concept_norm"]]
+        primaries.setdefault(primary, dict(c))
+        if primary != c["concept_norm"]:
+            # the group's volume is the sum — it is one trend, and the prompt shows
+            # this number as context
+            primaries[primary]["mention_count"] = (
+                (primaries[primary].get("mention_count") or 0)
+                + (c.get("mention_count") or 0))
+    to_resolve = list(primaries.values())
+    total = len(to_resolve)
+
     all_records = {}
     for start in range(0, total, BATCH_SIZE):
-        chunk = concepts[start:start + BATCH_SIZE]
+        chunk = to_resolve[start:start + BATCH_SIZE]
         res = resolve_batch(client, catalog_block, catalog_by_prtnum, chunk,
                             snippets, concurrency, verify)
         recs = finalize_records(res, resolved_at, model_version)
-        # harmonisation needs every row for a canonical key at once, so batches
-        # accumulate and the write happens after the loop. Batches exist to bound
-        # concurrency, not to checkpoint — top-N is ~20 rows.
         all_records.update({r["concept_norm"]: r for r in recs})
         print(f"  batch {start // BATCH_SIZE + 1}: resolved {len(res)}/{len(chunk)} "
               f"(cumulative {len(all_records)}/{total})")
 
-    to_write = harmonize_aliases(list(all_records.values()), existing, resolved_at)
+    # every member of a resolved group gets the group's answer, tagged with the
+    # primary it came from so the SQL side can merge the mentions too
+    to_write = []
+    for c in concepts:
+        norm = c["concept_norm"]
+        primary, label = groups[norm]
+        answer = all_records.get(primary)
+        if answer is None:          # its group failed to resolve; retry next run
+            continue
+        row = dict(answer)
+        row["concept_norm"] = norm
+        row["group_primary"] = primary
+        row["group_label"] = label
+        to_write.append(_coerce_record(row))
     write_resolution(backend, to_write)
 
     written = len(all_records)
@@ -1320,9 +1387,8 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
     kinds = defaultdict(int)
     for r in all_records.values():
         kinds[r["result_type"]] += 1
-    print(f"DONE. wrote {len(to_write)} rows ({written} newly resolved"
-          + (f", {len(to_write) - written} re-harmonised" if len(to_write) > written else "")
-          + f"): {dict(kinds)}"
+    print(f"DONE. wrote {len(to_write)} rows for {written} resolved group(s)"
+          + f": {dict(kinds)}"
           + (f"; {failed} unresolved (propose or verify failed) — re-run to "
              f"backfill (incremental)" if failed else ""))
 

@@ -533,9 +533,11 @@ models:
           match is shown.
       - name: is_alias
         description: >
-          True when this row's SKU answer was harmonised from a twin concept rather
-          than resolved on its own. Both rows still occupy a board slot; filter these
-          out to show one row per real dish.
+          True when the resolver judged this concept to be the same thing as another on
+          the board (matcha / matcha powder) and this row is not the one representing the
+          group. Both still occupy a slot for now, so filter `not is_alias` for one row
+          per real thing — the report analysis does. Sameness is an explicit judgement
+          over the whole board, not SKU equality: two different trends can share a SKU.
       - name: action_signal
         description: >
           promote_now (carried + in stock), restock (carried + OOS),

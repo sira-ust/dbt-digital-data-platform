@@ -24,8 +24,8 @@ typed as (
     select
         nullif(trim(cast(concept_norm as {{ dbt.type_string() }})), '')     as concept_norm,
         nullif(trim(cast(canonical_label as {{ dbt.type_string() }})), '')  as canonical_label,
-        nullif(trim(cast(canonical_key as {{ dbt.type_string() }})), '')    as canonical_key,
-        nullif(trim(cast(alias_of as {{ dbt.type_string() }})), '')         as alias_of,
+        nullif(trim(cast(group_primary as {{ dbt.type_string() }})), '')    as group_primary,
+        nullif(trim(cast(group_label as {{ dbt.type_string() }})), '')      as group_label,
         nullif(trim(cast(concept_type as {{ dbt.type_string() }})), '')     as concept_type,
         nullif(trim(cast(result_type as {{ dbt.type_string() }})), '')      as result_type,
         nullif(trim(cast(matched_prtnum as {{ dbt.type_string() }})), '')   as matched_prtnum,
@@ -55,8 +55,8 @@ numbered as (
 select
     concept_norm,
     canonical_label,
-    canonical_key,
-    alias_of,
+    group_primary,
+    group_label,
     concept_type,
     result_type,
     matched_prtnum,
