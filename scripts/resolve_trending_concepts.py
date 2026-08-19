@@ -256,13 +256,14 @@ trend's mentions in two and wasting a slot. Group those together.
 Return ONE JSON object — no markdown, no prose:
 {"groups": [ {"primary": string, "members": [string], "label": string} ]}
   primary  the raw concept text that best represents the group; MUST be one of members
-  members  every raw concept text in the group, copied EXACTLY as given, including
-           single-member groups
+  members  the raw concept texts in the group, copied EXACTLY as given
   label    one clean display name for the group
 
-EVERY concept you were given must appear in EXACTLY ONE group — none missing, none \
-duplicated, nothing invented. Most groups will have one member; that is normal and \
-correct.
+LIST ONLY THE GROUPS THAT HAVE TWO OR MORE MEMBERS. Anything you do not mention is \
+assumed to stand alone, which is the normal case — most concepts are not duplicates of \
+anything, and `"groups": []` is a perfectly good answer. Do NOT echo back the concepts \
+you are leaving alone: there is no need, and a long reply risks being cut off before it \
+is valid JSON.
 
 MERGE only when it is the SAME thing named differently:
   - another script or language: "som tam" / "ส้มตำ", "nam prik" / "น้ำพริก"
@@ -418,6 +419,12 @@ def get_client(backend):
 # rest of the run instead of dying. Benign race under the thread pool — the worst
 # case is a couple of extra attempts before the flag settles.
 _TEMPERATURE_SUPPORTED = True
+
+# per-stage token/call counters, reported once at the end by report_usage().
+# Incremented from the thread pool; a lost update under contention would only skew
+# a diagnostic, never a result.
+_USAGE = defaultdict(lambda: {'calls': 0, 'input': 0, 'cache_read': 0,
+                             'output': 0, 'truncated': 0})
 
 
 def _create_message(client, **kwargs):
@@ -926,17 +933,26 @@ def _call_json(client, instructions, catalog_block, user_prompt, max_tokens,
                 client, model=MODEL, max_tokens=max_tokens, system=system,
                 messages=[{"role": "user", "content": user_prompt}],
             )
-            # TEMP DIAGNOSTIC (remove after confirming whether the Databricks
-            # serving proxy honors cache_control — see cache_creation vs
-            # cache_read below; if cache_read stays 0 across the whole run,
-            # caching isn't taking effect and the catalog is being sent at
-            # full price on every call).
+            # usage is accumulated per stage and reported ONCE at the end of the run.
+            # It used to print per call, and ~100 such lines per run is what let a
+            # truncated grouping reply hide in plain sight (2026-08-19).
             u = resp.usage
-            print(f"  [cache-check/{stage}] {label!r}: "
-                  f"input={u.input_tokens} "
-                  f"cache_create={getattr(u, 'cache_creation_input_tokens', None)} "
-                  f"cache_read={getattr(u, 'cache_read_input_tokens', None)} "
-                  f"output={u.output_tokens}")
+            t = _USAGE[stage]
+            t["calls"] += 1
+            t["input"] += u.input_tokens or 0
+            t["cache_read"] += getattr(u, "cache_read_input_tokens", 0) or 0
+            t["output"] += u.output_tokens or 0
+
+            # A reply cut off at max_tokens is not invalid JSON by accident — it is our
+            # ceiling being too low, and retrying reproduces it exactly. Say which it is,
+            # and stop wasting the retry.
+            if getattr(resp, "stop_reason", None) == "max_tokens":
+                t["truncated"] += 1
+                print(f"  WARN {stage} {label!r}: reply hit the {max_tokens}-token "
+                      f"ceiling and was cut off — raise it; retrying would truncate "
+                      f"identically", file=sys.stderr)
+                return None
+
             data = extract_json(next((b.text for b in resp.content if b.type == "text"), ""))
             if data and is_valid(data):
                 return data
@@ -944,6 +960,20 @@ def _call_json(client, instructions, catalog_block, user_prompt, max_tokens,
             if attempt == MAX_ATTEMPTS:
                 print(f"  WARN {stage} {label!r}: {e}", file=sys.stderr)
     return None
+
+
+def report_usage():
+    """One line per stage at the end of a run: calls, tokens, and whether prompt
+    caching actually took effect. Confirmed 2026-08-19 that the Databricks serving
+    proxy DOES honour cache_control — the 81.5k-token catalog block reads from cache
+    on every call after the first."""
+    if not _USAGE:
+        return
+    print("usage by stage (cache_read > 0 means the catalog block is being cached):")
+    for stage, t in _USAGE.items():
+        print(f"  {stage:<9} {t['calls']:>4} calls  in={t['input']:>8}  "
+              f"cached_in={t['cache_read']:>9}  out={t['output']:>7}"
+              + (f"  TRUNCATED={t['truncated']}" if t["truncated"] else ""))
 
 
 def _proposal_ok(d):
@@ -987,8 +1017,17 @@ def group_concepts(client, concepts):
     for c in sorted(concepts, key=lambda c: -c.get("mention_count", 0)):
         lines.append(f"  [{_class_hint(c)}] {c['concept_norm']}   "
                      f"({c.get('mention_count')} mentions)")
+    # Sized from the input, not a flat cap. The first version asked for every concept
+    # echoed back under MAX_TOKENS * 2 = 1400, and 40 concepts did not fit: the reply was
+    # truncated mid-JSON, BOTH attempts hit exactly the cap, and the whole grouping was
+    # discarded (observed 2026-08-19 — nothing merged, and the log looked like a model
+    # that had simply found no duplicates). The prompt now asks only for the groups that
+    # actually merge, so this ceiling is generous rather than tight; it still scales with
+    # the board, because a silent truncation is indistinguishable from an honest "no
+    # duplicates" in the output.
     data = _call_json(client, GROUP_INSTRUCTIONS, None, "\n".join(lines),
-                      MAX_TOKENS * 2, lambda d: isinstance(d.get("groups"), list),
+                      MAX_TOKENS + 100 * len(concepts),
+                      lambda d: isinstance(d.get("groups"), list),
                       "group", f"{len(concepts)} concepts")
     if data is None:
         return ungrouped
@@ -996,7 +1035,8 @@ def group_concepts(client, concepts):
     # VALIDATE before trusting: a bad grouping fuses real trends, so anything that
     # doesn't account for exactly the input set is discarded wholesale.
     by_norm = {c["concept_norm"]: c for c in concepts}
-    seen, mapping = set(), {}
+    # every concept starts alone; the reply only has to describe the merges
+    mapping, seen = dict(ungrouped), set()
     for g in data["groups"]:
         members = [str(m) for m in (g.get("members") or [])]
         primary = str(g.get("primary") or "")
@@ -1017,12 +1057,9 @@ def group_concepts(client, concepts):
             print(f"  WARN grouping: group {primary!r} mixes boards {classes} — "
                   f"ignoring the whole grouping", file=sys.stderr)
             return ungrouped
-        for m in members:
-            mapping[m] = (primary, label)
-    if seen != set(by_norm):
-        print(f"  WARN grouping: covered {len(seen)} of {len(by_norm)} concepts — "
-              f"ignoring the whole grouping", file=sys.stderr)
-        return ungrouped
+        if len(members) > 1:
+            for m in members:
+                mapping[m] = (primary, label)
 
     merged = {p for p, _ in mapping.values() if sum(1 for v in mapping.values()
                                                     if v[0] == p) > 1}
@@ -1392,6 +1429,7 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
     write_resolution(backend, to_write)
 
     written = len(all_records)
+    report_usage()
     failed = total - written
     kinds = defaultdict(int)
     for r in all_records.values():
