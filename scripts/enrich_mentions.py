@@ -100,12 +100,30 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # Databricks-hosted; billed via Databricks
-PROMPT_VERSION = "v2"                    # bump when INSTRUCTIONS change (stored in model_version).
+PROMPT_VERSION = "v3"                    # bump when INSTRUCTIONS change (stored in model_version).
                                          # v2 = added mentioned_products (sellable-SKU signal).
-                                         # A bump RE-ENRICHES everything: the already-done set below
-                                         # is version-aware, so old rows stop counting as done.
-MAX_TOKENS = 512
-CONCURRENCY = 4                          # parallel serving calls — lower if you hit FMAPI rate limits
+                                         # v3 = several mentions per call (see MENTIONS_PER_CALL).
+                                         #      Bumped even though the per-mention task is unchanged:
+                                         #      the model now sees neighbouring posts in the same
+                                         #      context, so a label is not guaranteed identical to what
+                                         #      the one-at-a-time prompt produced. model_version has to
+                                         #      say how a label was made.
+                                         # A bump re-labels the recent window (see BACKFILL_WEEKS).
+MAX_TOKENS_BASE = 400                    # envelope + slack
+MAX_TOKENS_PER_MENTION = 260             # 5 arrays + 3 scalars comfortably fits
+CONCURRENCY = 8                          # parallel serving calls — lower if you hit FMAPI rate limits
+# Mentions per LLM call. The instruction block is ~900 tokens and used to be re-sent
+# once per mention: at 12.8k mentions that is the bulk of the spend, and pure
+# repetition. Ten per call cuts both the call count and the instruction cost ~10x
+# (measured 2026-08-19: 900 mentions took 8 min one-at-a-time at concurrency 4, i.e.
+# ~114 min for the full window).
+# The risk this trades for that is LABEL BLEED — one post's dish attributed to its
+# neighbour. Three guards: the prompt says to judge each mention independently, every
+# result must carry back the id it was given, and any mention whose id does not come
+# back is retried ON ITS OWN (a batch that misbehaves costs one retry, never a
+# silently dropped or mislabelled row). Lower this if bleed shows up in spot checks;
+# 1 restores exactly the old behaviour.
+MENTIONS_PER_CALL = 10
 MAX_RETRIES = 8                          # SDK-level retries: rides out 429s with backoff + retry-after
 MAX_ATTEMPTS = 2                         # our own retries on bad/empty JSON
 BATCH_SIZE = 300                         # write to the table every N classified (checkpoint / resumable)
@@ -173,9 +191,19 @@ INSTRUCTIONS = """You classify social-listening mentions captured for Thai and \
 Vietnamese food & beverage market research. Read the mention's title and content \
 and extract structured attributes.
 
-Respond with ONLY a single JSON object — no markdown, no code fence, no prose — \
-with exactly these keys:
+You are given a NUMBERED LIST of mentions. Judge each one INDEPENDENTLY — a mention \
+is labelled from its own title and content ONLY. Never let one mention's dishes, \
+products, brands or sentiment leak into another's, even when they sit next to each \
+other and look related: they are unrelated posts that merely share one request.
+
+Respond with ONLY a single JSON object — no markdown, no code fence, no prose:
+
+{"results": [ ...one entry per mention, in the order given... ]}
+
+Every entry MUST carry back the "id" it was given, exactly one entry per id — none \
+missing, no extras, no invented ids. Each entry has exactly these keys:
 {
+  "id": number,                  // the mention's id, copied EXACTLY from the input
   "is_food_relevant": boolean,   // true only if genuinely about food or beverages
   "is_spam": boolean,            // gambling/casino promos (e.g. 789BET), unrelated ads, bots
   "themes": [string],            // broad topics: "street food", "dessert", "coffee", "restaurant review"...
@@ -184,7 +212,7 @@ with exactly these keys:
   "ingredients": [string],       // notable ingredients: "fish sauce", "coconut milk"...
   "brands": [string],            // brand / restaurant / product names
   "sentiment_normalized": string,// one of "positive", "negative", "neutral"
-  "confidence": number           // 0.0–1.0, your overall certainty
+  "confidence": number           // 0.0–1.0, your overall certainty for THIS mention
 }
 
 mentioned_products — THE RULE THAT MATTERS MOST HERE. This is the only array a \
@@ -435,14 +463,21 @@ def prefilter_record(m, enriched_at):
     }
 
 
-def build_user_prompt(m):
-    return (
-        f"Channel: {m.get('channel')}\n"
-        f"Tracker: {m.get('tracker')}\n"
-        f"Keyword: {m.get('keyword')}\n"
-        f"Title: {m.get('title')}\n"
-        f"Content: {m.get('content')}"
-    )
+def build_user_prompt(mentions):
+    """Render a batch. Each mention is fenced and id-labelled, so the model can carry
+    its id back and so two posts can't be read as one run of text."""
+    parts = [f"{len(mentions)} mentions follow. Return exactly {len(mentions)} "
+             f"results, one per id."]
+    for m in mentions:
+        parts.append(
+            f"--- mention id: {int(m['mention_id'])} ---\n"
+            f"Channel: {m.get('channel')}\n"
+            f"Tracker: {m.get('tracker')}\n"
+            f"Keyword: {m.get('keyword')}\n"
+            f"Title: {m.get('title')}\n"
+            f"Content: {m.get('content')}"
+        )
+    return "\n\n".join(parts)
 
 
 def extract_json(text):
@@ -458,36 +493,73 @@ def extract_json(text):
         return json.loads(m.group(0)) if m else None
 
 
-def classify_one(client, m):
-    """Return an attributes dict for one mention, or None on repeated failure."""
+def classify_call(client, mentions):
+    """ONE call covering `mentions`. Returns {mention_id: attributes} for entries that
+    came back valid AND matched an id we sent. Anything else is simply absent, and the
+    caller retries those on their own.
+
+    Ids are VALIDATED, not trusted. The whole premise of batching is that several
+    unrelated posts share one context, so a result that can't be tied back to the
+    exact mention it describes is worse than no result — it would attach one post's
+    dishes to another and there would be no trace of it."""
+    wanted = {int(m["mention_id"]) for m in mentions}
+    max_tokens = MAX_TOKENS_BASE + MAX_TOKENS_PER_MENTION * len(mentions)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             resp = client.messages.create(
                 model=MODEL,
-                max_tokens=MAX_TOKENS,
-                system=INSTRUCTIONS,
-                messages=[{"role": "user", "content": build_user_prompt(m)}],
+                max_tokens=max_tokens,
+                # cached: the instruction block is byte-identical on every call and is
+                # the largest part of the input (the resolver caches its catalog the
+                # same way; whether the serving proxy honours it is reported below)
+                system=[{"type": "text", "text": INSTRUCTIONS,
+                         "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": build_user_prompt(mentions)}],
             )
             text = next((b.text for b in resp.content if b.type == "text"), "")
             data = extract_json(text)
-            if data and _REQUIRED_KEYS.issubset(data):
-                return data
+            results = (data or {}).get("results")
+            if not isinstance(results, list):
+                continue
+            out = {}
+            for r in results:
+                if not isinstance(r, dict) or not _REQUIRED_KEYS.issubset(r):
+                    continue
+                try:
+                    mid = int(r["id"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if mid in wanted:          # never accept an id we didn't ask about
+                    out[mid] = r
+            if out:
+                return out
         except Exception as e:  # transient serving error, rate limit, etc.
             if attempt == MAX_ATTEMPTS:
-                print(f"  WARN mention {m['mention_id']}: {e}", file=sys.stderr)
-    return None
+                ids = ",".join(str(i) for i in sorted(wanted)[:5])
+                print(f"  WARN batch [{ids}...] x{len(wanted)}: {e}", file=sys.stderr)
+    return {}
 
 
-def classify_batch(client, mentions, concurrency):
-    """Concurrently classify one batch. Returns {mention_id: attributes}."""
+def classify_batch(client, mentions, concurrency, per_call=None):
+    """Classify `mentions`, several per call, concurrently.
+
+    TWO PASSES: batched, then one-at-a-time for whatever didn't come back. The second
+    pass is what makes batching safe — a call that returns short, drops an id or
+    invents one costs a few single retries instead of losing rows."""
+    per_call = MENTIONS_PER_CALL if per_call is None else max(1, int(per_call))
+    chunks = [mentions[i:i + per_call] for i in range(0, len(mentions), per_call)]
     out = {}
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futures = {pool.submit(classify_one, client, m): m for m in mentions}
-        for fut in futures:
-            m = futures[fut]
-            data = fut.result()
-            if data is not None:
-                out[m["mention_id"]] = data
+        for res in pool.map(lambda c: classify_call(client, c), chunks):
+            out.update(res)
+
+    missing = [m for m in mentions if int(m["mention_id"]) not in out]
+    if missing and per_call > 1:
+        print(f"  {len(missing)}/{len(mentions)} not returned by their batch — "
+              f"retrying individually")
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            for res in pool.map(lambda m: classify_call(client, [m]), missing):
+                out.update(res)
     return out
 
 
@@ -517,7 +589,8 @@ def to_records(attrs_by_id, enriched_at):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main(backend="local", limit=None, dry_run=False, concurrency=CONCURRENCY,
-         duckdb_path=LOCAL_DUCKDB_PATH, backfill_weeks=None):
+         duckdb_path=LOCAL_DUCKDB_PATH, backfill_weeks=None, per_call=None):
+    per_call = MENTIONS_PER_CALL if per_call is None else max(1, int(per_call))
     weeks = BACKFILL_WEEKS if backfill_weeks is None else backfill_weeks
     print(f"re-label window: "
           + (f"last {weeks} weeks (older mentions keep their existing labels)"
@@ -537,8 +610,9 @@ def main(backend="local", limit=None, dry_run=False, concurrency=CONCURRENCY,
         print(f"[dry-run] would pre-filter {len(spam)} spam and classify {len(todo)} "
               f"with {MODEL}.")
         if todo:
-            print("First LLM prompt:\n")
-            print(build_user_prompt(todo[0]))
+            print(f"First LLM prompt ({min(MENTIONS_PER_CALL, len(todo))} mentions "
+                  f"per call):\n")
+            print(build_user_prompt(todo[:MENTIONS_PER_CALL]))
         return
 
     # write the deterministic spam labels first (no LLM, checkpointed)
@@ -553,12 +627,14 @@ def main(backend="local", limit=None, dry_run=False, concurrency=CONCURRENCY,
     # lost if the run is interrupted, and a re-run resumes (incremental read skips
     # what's already written).
     client = get_client(backend) if todo else None
+    print(f"  {per_call} mentions per LLM call, {concurrency} calls in flight "
+          f"=> ~{-(-total // per_call)} calls for {total} mentions")
     for start in range(0, total, BATCH_SIZE):
         chunk = todo[start:start + BATCH_SIZE]
-        attrs = classify_batch(client, chunk, concurrency)
+        attrs = classify_batch(client, chunk, concurrency, per_call)
         write_enrichment(backend, to_records(attrs, datetime.now(timezone.utc)))
         written += len(attrs)
-        print(f"  batch {start // BATCH_SIZE + 1}: wrote {len(attrs)}/{len(chunk)} "
+        print(f"  checkpoint {start // BATCH_SIZE + 1}: wrote {len(attrs)}/{len(chunk)} "
               f"(cumulative {written}/{total})")
 
     failed = total - written
@@ -573,6 +649,11 @@ if __name__ == "__main__":
                    help="classify at most N mentions. SMOKE TEST ONLY: it slices an "
                         "arbitrary N and will cut a week in half, which breaks that "
                         "week's mention_share. Use --backfill-weeks to scope a real run.")
+    p.add_argument("--mentions-per-call", type=int, default=None,
+                   help=f"mentions sent in one LLM call (default {MENTIONS_PER_CALL}). "
+                        f"Higher = fewer calls and less repeated instruction text, but "
+                        f"more room for label bleed between posts; 1 restores "
+                        f"one-at-a-time.")
     p.add_argument("--backfill-weeks", type=int, default=None,
                    help=f"on a PROMPT_VERSION bump, re-label only the last N weeks "
                         f"(default {BACKFILL_WEEKS}, from dbt_project.yml's "
@@ -589,4 +670,4 @@ if __name__ == "__main__":
         pass
     main(backend=args.backend, limit=args.limit, dry_run=args.dry_run,
          concurrency=args.concurrency, duckdb_path=args.duckdb,
-         backfill_weeks=args.backfill_weeks)
+         backfill_weeks=args.backfill_weeks, per_call=args.mentions_per_call)
