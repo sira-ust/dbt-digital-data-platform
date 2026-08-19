@@ -397,16 +397,23 @@ concepts_kept as (
 -- The map is a LEFT join and coalesce, so it degrades to ungrouped behaviour whenever a
 -- concept has no group yet (never resolved, or resolved before grouping existed).
 --
--- NOTE ON RUN ORDER — this reference makes the RANKING depend on the RESOLUTION, which
--- the offline resolver writes. No dbt cycle (the resolution is a source), but it does
--- mean `dbt build --select +int_social_concept_trends` now builds
--- stg_mentionlytics__concept_resolution too, so the resolution table must already carry
--- group_primary. The resolver adds it on its first v6 append (mergeSchema), and it can
--- run standalone beforehand — it reads this table with `select *` and tolerates missing
--- columns. So on the v6 deploy only: run the resolve task ONCE before the usual
--- dbt_rank -> resolve -> dbt_social order. Steady state needs nothing special, and the
--- job already rebuilds this model after the resolver, so a new group takes effect the
--- same run it is discovered — no one-week lag.
+-- RUN ORDER — this reference makes the RANKING depend on the RESOLUTION, which the
+-- offline resolver writes. No dbt cycle (the resolution is a source), but it does mean
+-- `dbt build --select +int_social_concept_trends` now builds
+-- stg_mentionlytics__concept_resolution, so group_primary must EXIST on the resolution
+-- table before the ranking step can run at all.
+--
+-- That bit on the v6 deploy (2026-08-20): the job's task order is fixed at
+-- dbt_rank -> resolve -> dbt_social, so the step that needs the column runs before the
+-- step that creates it, and dbt_rank failed with UNRESOLVED_COLUMN. It cannot be fixed
+-- by re-running. The unblock is one additive DDL on the resolution table:
+--     alter table ust_databricks.social.concept_resolution
+--       add columns (group_primary string, group_label string);
+-- After that the normal order works: all-null groups mean the coalesce below simply
+-- doesn't merge anything, the resolver populates them in the same run, and dbt_social
+-- rebuilds this model afterwards — so grouping takes effect the same run, with no
+-- one-week lag. Any future column added to the resolution AND read here needs the same
+-- one-line ALTER first, because the reader runs before the writer.
 concept_groups as (
 
     select concept_norm, group_primary

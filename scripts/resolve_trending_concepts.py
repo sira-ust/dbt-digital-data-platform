@@ -761,6 +761,14 @@ def _dbx_resolution_schema():
         StructField("canonical_label", StringType()),
         StructField("group_primary", StringType()),
         StructField("group_label", StringType()),
+        # LEGACY, always null: canonical_key/alias_of were the label-matching
+        # harmonisation that grouping replaced (v6). They are still columns on the
+        # existing Delta table, and writing a DataFrame that simply omits them relies
+        # on schema evolution filling them — so they are declared here instead and the
+        # append matches the table exactly. Drop them from this list once the table
+        # has been rebuilt without them.
+        StructField("canonical_key", StringType()),
+        StructField("alias_of", StringType()),
         StructField("concept_type", StringType()),
         StructField("result_type", StringType()),
         StructField("matched_prtnum", StringType()),
@@ -780,7 +788,8 @@ def _dbx_resolution_schema():
 
 _RECORD_DEFAULTS = {
     "concept_norm": None, "canonical_label": None, "group_primary": None,
-    "group_label": None, "concept_type": None, "result_type": None,
+    "group_label": None, "canonical_key": None, "alias_of": None,
+    "concept_type": None, "result_type": None,
     "matched_prtnum": None, "recommended_prtnums": [], "recommended_item_names": [],
     "recommended_reasons": [], "rejected_prtnums": [], "rejected_reasons": [],
     "name_mismatch_prtnums": [], "match_confidence": None,
