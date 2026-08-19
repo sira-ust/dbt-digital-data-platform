@@ -513,13 +513,25 @@ def _current_rows_sql(table, version):
 
 
 def _as_date_str(v):
+    """Date -> 'YYYY-MM-DD', or None when there is no date.
+
+    The None case is NOT hypothetical: `select max(week_end)` over an EMPTY trends
+    table returns one row holding NULL, which pandas hands back as NaT — so a
+    `len(rows)` guard passes and NaT.strftime() then raises ValueError. That crashed
+    the script with a stack trace instead of reporting "nothing to resolve" whenever
+    it ran before int_social_concept_trends had been built."""
     if v is None:
         return None
     try:
+        if v != v:            # NaN / NaT are never equal to themselves
+            return None
+    except Exception:
+        pass
+    try:
         return v.strftime("%Y-%m-%d")
-    except AttributeError:
+    except (AttributeError, ValueError):
         s = str(v).strip()
-        return s[:10] or None
+        return None if s in ("", "NaT", "None", "nan", "NaN") else s[:10]
 
 
 def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
@@ -563,6 +575,10 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
             ).df().to_dict("records")
         except Exception:
             existing = []
+
+    if not concepts and not w_end:
+        print("int_social_concept_trends is EMPTY — nothing to resolve. Build it first: "
+              "dbt build --select +int_social_concept_trends", file=sys.stderr)
 
     wanted = {c["concept_norm"] for c in concepts}
     snippets = bucket_snippets(mentions, wanted)
@@ -1273,7 +1289,8 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
 
     if dry_run:
         print(f"[dry-run] would resolve {len(concepts)} concepts with {MODEL} "
-              f"({'propose + verify' if verify else 'propose only'}).")
+              f"({'propose + verify, then a second look at any none'
+                 if verify else 'propose only'}).")
         print(f"catalog block: {len(catalog_block)} chars. First prompt:\n")
         c0 = concepts[0]
         print(build_user_prompt(c0, snippets.get(c0["concept_norm"], [])))
