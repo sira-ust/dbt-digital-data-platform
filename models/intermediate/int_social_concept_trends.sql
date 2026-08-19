@@ -19,13 +19,14 @@
 -- deliberately takes the other side of. Read rank_change/mention_share_change with
 -- that in mind for anything that straddles a Sunday.
 --
--- THE NEWEST WEEK IS USUALLY INCOMPLETE. If the run happens mid-week, the latest
--- row covers only the days collected so far, so its volume is low for a reason
--- that has nothing to do with the trend. days_observed says how many days are
--- actually in it and is_partial_week flags it (also true for the first week ever
--- collected). Charts and week-over-week reads should either exclude partial weeks
--- or lean on mention_share, which is a share of that same short week and so stays
--- comparable.
+-- ONLY COMPLETE WEEKS ARE RANKED. The weekly export lands mid-week, so the newest
+-- calendar week is usually a fragment — 3 of 7 days when measured 2026-08-19 — and a
+-- fragment cannot be ranked against a whole week: its counts are down by half for a
+-- reason that has nothing to do with any trend. Such a week is therefore NOT
+-- COMPUTED AT ALL until it finishes (see complete_weeks below), rather than being
+-- published with a warning flag that some consumer will inevitably ignore. So
+-- max(week_start) is always a finished week and needs no qualification, and the
+-- in-progress week simply appears on the next run.
 --
 -- TWO RANKING CLASSES (concept_class), ranked SEPARATELY — this is the point:
 --   'dish' <- mentioned_dishes  (Som Tam, Pho, banh khot — what people talk about)
@@ -183,29 +184,87 @@ bounds as (
 
     select
         max(posted_date) as data_max_date,
-        min(posted_date) as data_min_date,
-        max(posted_week) as latest_week
+        min(posted_date) as data_min_date
     from mentions
 
 ),
 
--- Retained history only. No windowing beyond this: one mention belongs to exactly
--- ONE week, which is what makes the week-to-week comparison downstream exact.
+week_bounds as (
+
+    select distinct
+        posted_week                                                     as week_start,
+        cast({{ dbt.dateadd('day', 6, 'posted_week') }} as date)        as week_end
+    from mentions
+
+),
+
+-- how much of each week we actually hold data for. Only the FIRST and LAST weeks
+-- can come out short: any week strictly inside the collected range scores 7.
+week_spans as (
+
+    select
+        wb.week_start,
+        wb.week_end,
+        {{ dbt.datediff(
+             'greatest(wb.week_start, b.data_min_date)',
+             'least(wb.week_end, b.data_max_date)',
+             'day') }} + 1                                              as days_observed
+    from week_bounds as wb
+    cross join bounds as b
+
+),
+
+-- COMPLETE WEEKS ONLY. A week we hold 3 of 7 days for cannot be ranked against a
+-- week we hold all 7 of: its counts are roughly half for a reason that has nothing
+-- to do with any trend, and every rank, share and week-over-week delta computed on
+-- it would be wrong in the same direction. The weekly export lands mid-week, so the
+-- newest week is nearly always incomplete — rather than publish it with a warning
+-- flag and hope every consumer honours it, it simply isn't computed until the week
+-- finishes. Consequences, all intended:
+--   * the top of the board is ALWAYS a finished week, so `max(week_start)` needs no
+--     qualification and "this week's trending items" is never half-counted;
+--   * the in-progress week appears next run, once it's whole;
+--   * the first week ever collected is dropped for good — it can never become
+--     complete. Cheap: the earliest weeks are collection ramp-up and hold almost
+--     nothing (12 mentions across the oldest three, measured 2026-08-19).
+-- LIMIT OF THE CHECK: days_observed measures overlap with the collected DATE RANGE,
+-- not that every day actually delivered posts. A week inside the range where the
+-- feed silently missed two days still scores 7. Detecting that needs a per-day
+-- expectation the source doesn't give us.
+complete_weeks as (
+
+    select week_start, week_end
+    from week_spans
+    where days_observed = 7
+
+),
+
+-- ...then the retention window, measured from the latest COMPLETE week, so
+-- social_trend_history_weeks means N whole weeks rather than N-1 plus a fragment.
+retained_weeks as (
+
+    select c.week_start, c.week_end
+    from complete_weeks as c
+    cross join (select max(week_start) as latest_complete_week from complete_weeks) as l
+    where c.week_start >= cast(
+        {{ dbt.dateadd('day', -7 * (history_weeks - 1), 'l.latest_complete_week') }} as date)
+
+),
+
+-- Retained, complete history only. No windowing beyond this: one mention belongs to
+-- exactly ONE week, which is what makes the week-to-week comparison downstream
+-- exact. The join is an INNER join, so mentions in an incomplete week are dropped
+-- here and nothing downstream — baselines, week totals, ranks, lag() — ever sees
+-- them.
 scoped as (
 
     select
         m.*,
-        m.posted_week                                                   as week_start,
-        cast({{ dbt.dateadd('day', 6, 'm.posted_week') }} as date)      as week_end,
-        -- how much of the week we actually hold data for. Short at both ends of the
-        -- series: the first week collected and the week currently in progress.
-        {{ dbt.datediff(
-             'greatest(m.posted_week, b.data_min_date)',
-             'least(cast(' ~ dbt.dateadd('day', 6, 'm.posted_week') ~ ' as date), b.data_max_date)',
-             'day') }} + 1                                              as days_observed
+        w.week_start,
+        w.week_end
     from mentions as m
-    cross join bounds as b
-    where m.posted_week >= cast({{ dbt.dateadd('day', -7 * (history_weeks - 1), 'b.latest_week') }} as date)
+    inner join retained_weeks as w
+        on w.week_start = m.posted_week
 
 ),
 
@@ -272,7 +331,7 @@ mentions_normalized as (
     select
         m.mention_id, m.profile, m.channel, m.posted_date, m.follower_count, m.link,
         m.sentiment_normalized, m.mentioned_dishes, m.mentioned_products,
-        m.week_start, m.week_end, m.days_observed,
+        m.week_start, m.week_end,
         m.engagement, m.views,
         case when cb.channel_median_engagement > 0
              then m.engagement * 1.0 / cb.channel_median_engagement else 0 end as engagement_ratio,
@@ -296,7 +355,7 @@ dish_concepts_raw as (
     select
         mention_id, profile, channel, posted_date, engagement, views,
         engagement_ratio, views_ratio, follower_count, link, sentiment_normalized,
-        week_start, week_end, days_observed,
+        week_start, week_end,
         'dish'                                                          as concept_class,
         {{ unnest('mentioned_dishes') }}                                as concept
     from mentions_normalized
@@ -308,7 +367,7 @@ item_concepts_raw as (
     select
         mention_id, profile, channel, posted_date, engagement, views,
         engagement_ratio, views_ratio, follower_count, link, sentiment_normalized,
-        week_start, week_end, days_observed,
+        week_start, week_end,
         'item'                                                          as concept_class,
         {{ unnest('mentioned_products') }}                              as concept
     from mentions_normalized
@@ -332,7 +391,7 @@ concepts_degloss as (
     select
         mention_id, profile, channel, posted_date, engagement, views,
         engagement_ratio, views_ratio, follower_count, link, sentiment_normalized,
-        week_start, week_end, days_observed,
+        week_start, week_end,
         concept_class,
         concept,
         {{ strip_parenthetical_gloss('concept') }}                      as concept_deglossed
@@ -346,7 +405,7 @@ concepts as (
     select
         mention_id, profile, channel, posted_date, engagement, views,
         engagement_ratio, views_ratio, follower_count, link, sentiment_normalized,
-        week_start, week_end, days_observed,
+        week_start, week_end,
         concept_class,
         -- fold Vietnamese diacritic/case/spacing variants to one key so the same
         -- thing (bánh khọt / banh khot) ranks once, not several times
@@ -400,7 +459,7 @@ concepts_kept as (
 concept_mentions as (
 
     select distinct
-        week_start, week_end, days_observed, concept_class,
+        week_start, week_end, concept_class,
         concept_norm, mention_id, profile, channel, posted_date,
         engagement, views, engagement_ratio, views_ratio,
         follower_count, link, sentiment_normalized,
@@ -451,7 +510,6 @@ agg as (
         -- functionally dependent on week_start, not independent facts — max()
         -- carries them through the group by rather than widening the grain
         max(week_end)                                                  as week_end,
-        max(days_observed)                                             as days_observed,
         count(*)                                                       as mention_count,
         sum(engagement)                                                as total_engagement,
         sum(views)                                                     as total_views,
@@ -611,8 +669,6 @@ with_rank as (
                                                                         as year_week,
         s.concept_class,
         s.concept_norm,
-        s.days_observed,
-        s.days_observed < 7                                            as is_partial_week,
         s.mention_count,
         s.mention_share,
         s.total_engagement,

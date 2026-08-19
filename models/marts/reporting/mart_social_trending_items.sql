@@ -11,10 +11,11 @@
 --   "what's RISING"             -> a concept's rows across week_start; rank_change,
 --                                  mention_share_change and is_rising are the signals
 --
--- MIND THE NEWEST WEEK. If the run lands mid-week that row holds only the days
--- collected so far, so its volume is low for reasons unrelated to the trend:
--- is_partial_week flags it and days_observed says how short. mention_share stays
--- comparable (it's a share of the same short week); raw counts do not.
+-- EVERY WEEK HERE IS A COMPLETE WEEK. The weekly export lands mid-week, so the
+-- calendar week in progress is usually a fragment — and a fragment can't be ranked
+-- against a whole week. int_social_concept_trends therefore doesn't compute it until
+-- it finishes, so max(week_start) is always a finished week and "this week's
+-- trending items" is never half-counted. The in-progress week shows up next run.
 --
 -- TWO CLASSES, ranked separately (concept_class):
 --   'dish' — Som Tam, Pho, banh khot: what people talk about
@@ -241,8 +242,7 @@ joined as (
         b.week_end,
         b.week_of_year,
         b.year_week,
-        b.is_partial_week,
-        b.days_observed,
+
         coalesce(r.canonical_label, b.concept_norm)                     as concept_label,
         -- concept_type is the LLM's item-level opinion (dish/category/ingredient/
         -- product/brand) falling back to the ranking class; concept_class is the
@@ -306,8 +306,7 @@ select
     j.week_end,
     j.week_of_year,
     j.year_week,
-    j.days_observed,
-    j.is_partial_week,
+
 
     -- social trend signal
     j.trend_rank,

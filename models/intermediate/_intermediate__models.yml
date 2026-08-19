@@ -363,8 +363,10 @@ models:
       that. Known cost: a spike straddling a Sunday splits across two weeks and
       ranks lower in both (an earlier design used a trailing multi-week window to
       avoid that, at the price of overlapping periods that can't be compared week to
-      week). History is bounded by social_trend_history_weeks. A mid-week run leaves
-      the newest week partial — see is_partial_week / days_observed.
+      week). Bounded to the latest social_trend_history_weeks COMPLETE weeks: a week
+      still in progress is not computed at all until it finishes, so max(week_start) is
+      always a finished week and never half-counted. The first week ever collected is
+      dropped permanently, since it can never become complete.
 
       TWO RANKING CLASSES, ranked separately: 'dish' (from mentioned_dishes) and
       'item' (from ingredients, minus seed_social_generic_terms). trend_rank is
@@ -425,17 +427,6 @@ models:
           Sortable ISO week label, "2026-W34". The YEAR is the ISO year (taken from the
           week's Thursday), not the calendar year of week_start: Monday 2025-12-29
           belongs to 2026-W01, and labelling it "2025-W01" would be wrong.
-      - name: days_observed
-        description: >
-          How many of the week's 7 days we actually hold data for. Short at both ends
-          of the series — the first week ever collected and the week currently in
-          progress.
-      - name: is_partial_week
-        description: >
-          days_observed < 7, so this week's volume is low for a reason unrelated to
-          the trend (a mid-week run, or the first week collected). Exclude these weeks
-          from week-over-week reads, or use mention_share, which is a share of the same
-          short week and stays comparable.
       - name: mention_count
         description: Distinct food-relevant, non-spam mentions naming this concept THAT WEEK.
       - name: mention_share

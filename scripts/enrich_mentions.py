@@ -33,11 +33,14 @@ Runs on Databricks as a **Python-script task** (spark_python_task) — no notebo
     databricks-sdk (no secret, no PAT, no env vars). The run-as user must have
     model-serving access. (Local runs still use DATABRICKS_HOST/DATABRICKS_TOKEN.)
 
-Incremental AND VERSION-AWARE: only mention_ids already enriched AT THE CURRENT
-model+prompt version count as done, so bumping PROMPT_VERSION automatically
-re-enriches everything on the next run (no manual truncate) while a normal run
-still only touches new mentions. Staging keeps the latest enriched_at per mention,
-so the re-enriched row supersedes the old one. A deterministic
+Incremental, VERSION-AWARE, and BOUNDED. A mention counts as done if it is enriched
+at the current model+prompt version, OR is enriched at all and sits outside the last
+social_enrich_backfill_weeks weeks. So a normal run touches only new mentions; a
+PROMPT_VERSION bump re-labels the recent window automatically (no manual truncate)
+rather than the whole corpus — which matters, because the board ranks per calendar
+week, so a stale label on a week nobody ranks any more changes no published number.
+--backfill-weeks 0 re-labels all history. Staging keeps the latest enriched_at per
+mention, so a re-labelled row supersedes the old one. A deterministic
 pre-filter labels obvious gambling/betting spam first (is_spam, no LLM call), so
 only the rest reach the model — see PREFILTER_SPAM_TERMS. Multi-label by design —
 arrays, never a single category key.
@@ -45,6 +48,7 @@ arrays, never a single category key.
 Local smoke test (needs a Databricks PAT in env):
     python scripts/enrich_mentions.py --backend local --limit 10
     python scripts/enrich_mentions.py --backend local --dry-run   # build prompts only, no calls
+    python scripts/enrich_mentions.py --backend databricks --backfill-weeks 8
 """
 
 from __future__ import annotations
@@ -56,10 +60,44 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _find_dbt_project_path():
+    """Locate dbt_project.yml. __file__ is NOT always defined — Databricks
+    Python-script tasks exec() this in a notebook-style wrapper — so fall back to
+    searching upward from the working directory. Same helper as the resolver."""
+    candidates = []
+    try:
+        candidates.append(Path(__file__).resolve().parents[1] / "dbt_project.yml")
+    except NameError:
+        pass
+    cur = Path.cwd()
+    for _ in range(6):
+        candidates.append(cur / "dbt_project.yml")
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0] if candidates else Path("dbt_project.yml")
+
+
+def _dbt_var(name, default):
+    """Read a var from dbt_project.yml's vars: block, so this script and the models
+    share one number instead of two that drift."""
+    try:
+        data = yaml.safe_load(_find_dbt_project_path().read_text(encoding="utf-8"))
+        return data["vars"][name]
+    except Exception:
+        return default
+
 
 MODEL = "databricks-claude-haiku-4-5"   # Databricks-hosted; billed via Databricks
 PROMPT_VERSION = "v2"                    # bump when INSTRUCTIONS change (stored in model_version).
@@ -71,6 +109,28 @@ CONCURRENCY = 4                          # parallel serving calls — lower if y
 MAX_RETRIES = 8                          # SDK-level retries: rides out 429s with backoff + retry-after
 MAX_ATTEMPTS = 2                         # our own retries on bad/empty JSON
 BATCH_SIZE = 300                         # write to the table every N classified (checkpoint / resumable)
+
+# RE-LABEL WINDOW — the answer to "must a prompt bump re-label all 15k mentions?".
+# No. Every number the trending board publishes for a given week is computed from
+# THAT WEEK's mentions alone (int_social_concept_trends ranks per calendar week), so
+# labels only need to be current for the weeks still being ranked and compared.
+# Older mentions keep whatever labels they already have: they stay in
+# fct_social_mentions, keep feeding the dish class and the all-history channel
+# medians, and simply lack any field a newer prompt added.
+#
+# So a version bump re-labels only the last social_enrich_backfill_weeks weeks
+# instead of the entire corpus. Outside that window a mention counts as done if it
+# has ANY enrichment at all.
+#
+# WEEK-ALIGNED, AND THAT MATTERS: the cutoff is a Monday, never a mid-week date. A
+# PARTIALLY re-labelled week is the one genuinely broken state — mention_share's
+# denominator is that week's labelled pairs, so if only a handful of a week's
+# mentions carry a new array, those few become the entire universe for that week and
+# their share reads ~1.0 with meaningless ranks. A wholly un-relabelled week is
+# harmless by comparison: it just has no rows for the new field. This is also why
+# --limit is a smoke-test tool only; it slices an arbitrary N mentions and will cut a
+# week in half.
+BACKFILL_WEEKS = _dbt_var("social_enrich_backfill_weeks", 4)
 
 # Deterministic pre-filter (runs BEFORE the LLM). Obvious gambling/betting spam
 # never appears in real food posts, so we label it here (is_spam=true) and SKIP
@@ -214,23 +274,37 @@ def get_client(backend):
 # Backend I/O
 # ─────────────────────────────────────────────────────────────────────────────
 
-_MENTION_COLS = "mention_id, channel, tracker, keyword, title, content"
+_MENTION_COLS = "mention_id, channel, tracker, keyword, title, content, posted_at"
 
 
-def read_mentions_and_enriched(backend, limit, duckdb_path):
-    """Return (list of new mention dicts to classify, count already enriched).
+def _backfill_cutoff_sql(weeks):
+    """Monday of the week `weeks-1` weeks before the newest mention's week, as a SQL
+    scalar. WEEK-ALIGNED by construction (date_trunc), so the window can never cut a
+    week in half — see BACKFILL_WEEKS for why that is the one thing that matters."""
+    return (f"(select date_add(cast(date_trunc('week', max(posted_at)) as date), "
+            f"-7 * {int(weeks) - 1}) from {{rel}})")
+
+
+def read_mentions_and_enriched(backend, limit, duckdb_path, backfill_weeks=None):
+    """Return (list of mention dicts to classify, count already done).
 
     Reads the deduped, cleaned dbt staging model (stg_mentionlytics__mentions) — one
     typed row per mention_id — so the LLM never sees duplicates or raw junk, and the
     dedup/clean logic lives in exactly one place (dbt), not re-implemented here.
 
-    VERSION-AWARE: a mention counts as done only if it was enriched at the CURRENT
-    model+prompt version (or labelled by the current deterministic prefilter). This
-    is what makes the PROMPT_VERSION comment true — bumping it re-enriches
-    everything on the next run instead of silently leaving old rows missing whatever
-    the new prompt added, which is exactly what happened to be needed when
-    mentioned_products was introduced in v2. A normal run (no bump) still only
-    classifies genuinely new mentions."""
+    A mention counts as DONE when either:
+      * it is enriched at the CURRENT model+prompt version (or by the current
+        deterministic prefilter) — the normal incremental case; or
+      * it is enriched at ANY version AND sits OUTSIDE the last `backfill_weeks`
+        weeks — the cost control. Ranking is per calendar week, so a stale label on a
+        week nobody ranks any more changes no published number.
+    Together: a PROMPT_VERSION bump re-labels the recent window automatically (no
+    manual truncate, no flag to remember) without dragging the whole corpus back
+    through the model. Pass backfill_weeks=0 to re-label all history.
+
+    Staging keeps the latest enriched_at per mention, so a re-labelled row supersedes
+    the old one."""
+    weeks = BACKFILL_WEEKS if backfill_weeks is None else backfill_weeks
     versions = _current_versions()
     in_list = ", ".join(f"'{v}'" for v in sorted(versions))
     if backend == "databricks":
@@ -241,6 +315,12 @@ def read_mentions_and_enriched(backend, limit, duckdb_path):
             enriched_ids = {r.mention_id for r in spark.sql(
                 f"select mention_id from {DBX_ENRICHMENT_TABLE} "
                 f"where model_version in ({in_list})").collect()}
+            if weeks and int(weeks) > 0:
+                cutoff = _backfill_cutoff_sql(weeks).format(rel=DBX_MENTIONS_REL)
+                enriched_ids |= {r.mention_id for r in spark.sql(
+                    f"select e.mention_id from {DBX_ENRICHMENT_TABLE} e "
+                    f"join {DBX_MENTIONS_REL} m on m.mention_id = e.mention_id "
+                    f"where cast(m.posted_at as date) < {cutoff}").collect()}
         except Exception:
             enriched_ids = set()
     else:
@@ -249,12 +329,19 @@ def read_mentions_and_enriched(backend, limit, duckdb_path):
         rows = con.sql(f"select {_MENTION_COLS} from {DUCKDB_MENTIONS_REL}").df().to_dict("records")
         con.close()
         try:
-            enriched_ids = set(
-                duckdb.connect().sql(
-                    f"select mention_id from read_parquet('{LOCAL_ENRICHMENT_PATH}') "
-                    f"where model_version in ({in_list})"
-                ).df()["mention_id"].tolist()
-            )
+            con2 = duckdb.connect(duckdb_path, read_only=True)
+            enriched_ids = set(con2.sql(
+                f"select mention_id from read_parquet('{LOCAL_ENRICHMENT_PATH}') "
+                f"where model_version in ({in_list})"
+            ).df()["mention_id"].tolist())
+            if weeks and int(weeks) > 0:
+                cutoff = _backfill_cutoff_sql(weeks).format(rel=DUCKDB_MENTIONS_REL)
+                enriched_ids |= set(con2.sql(
+                    f"select e.mention_id from read_parquet('{LOCAL_ENRICHMENT_PATH}') e "
+                    f"join {DUCKDB_MENTIONS_REL} m on m.mention_id = e.mention_id "
+                    f"where cast(m.posted_at as date) < {cutoff}"
+                ).df()["mention_id"].tolist())
+            con2.close()
         except Exception:
             enriched_ids = set()
 
@@ -430,8 +517,12 @@ def to_records(attrs_by_id, enriched_at):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main(backend="local", limit=None, dry_run=False, concurrency=CONCURRENCY,
-         duckdb_path=LOCAL_DUCKDB_PATH):
-    mentions, n_enriched = read_mentions_and_enriched(backend, limit, duckdb_path)
+         duckdb_path=LOCAL_DUCKDB_PATH, backfill_weeks=None):
+    weeks = BACKFILL_WEEKS if backfill_weeks is None else backfill_weeks
+    print(f"re-label window: "
+          + (f"last {weeks} weeks (older mentions keep their existing labels)"
+             if weeks and int(weeks) > 0 else "ALL history"))
+    mentions, n_enriched = read_mentions_and_enriched(backend, limit, duckdb_path, weeks)
 
     # deterministic pre-filter: label obvious gambling spam without the LLM
     spam = [m for m in mentions if is_prefilter_spam(m)]
@@ -478,7 +569,14 @@ def main(backend="local", limit=None, dry_run=False, concurrency=CONCURRENCY,
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--backend", choices=["local", "databricks"], default="local")
-    p.add_argument("--limit", type=int, help="classify at most N new mentions (smoke test)")
+    p.add_argument("--limit", type=int,
+                   help="classify at most N mentions. SMOKE TEST ONLY: it slices an "
+                        "arbitrary N and will cut a week in half, which breaks that "
+                        "week's mention_share. Use --backfill-weeks to scope a real run.")
+    p.add_argument("--backfill-weeks", type=int, default=None,
+                   help=f"on a PROMPT_VERSION bump, re-label only the last N weeks "
+                        f"(default {BACKFILL_WEEKS}, from dbt_project.yml's "
+                        f"social_enrich_backfill_weeks). Week-aligned. 0 = all history.")
     p.add_argument("--concurrency", type=int, default=CONCURRENCY,
                    help=f"parallel serving calls (default {CONCURRENCY}); lower if rate-limited")
     p.add_argument("--dry-run", action="store_true", help="build prompts only; no API call")
@@ -490,4 +588,5 @@ if __name__ == "__main__":
     except Exception:
         pass
     main(backend=args.backend, limit=args.limit, dry_run=args.dry_run,
-         concurrency=args.concurrency, duckdb_path=args.duckdb)
+         concurrency=args.concurrency, duckdb_path=args.duckdb,
+         backfill_weeks=args.backfill_weeks)

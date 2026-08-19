@@ -347,10 +347,10 @@ models:
       `where is_top_n and week_start = (select max(week_start) ...)`
       (~social_trend_top_n rows per class). "What's RISING" is a concept's rows
       across week_start, read through rank_change, mention_share_change and
-      is_rising. Mind the newest week: a mid-week run leaves it partial
-      (is_partial_week / days_observed), so read mention_share rather than raw
-      counts across it. See int_social_concept_trends for the boundary-splitting
-      trade-off this grain accepts.
+      is_rising. EVERY week here is a COMPLETE week — a calendar week still in
+      progress is not computed until it finishes, so max(week_start) needs no
+      qualification and is never half-counted. See int_social_concept_trends for the
+      boundary-splitting trade-off this grain accepts.
 
       TWO CLASSES, ranked separately (concept_class): 'dish' (Som Tam, Pho — what
       people talk about) and 'item' (matcha, durian, fish sauce — things that can
@@ -418,13 +418,6 @@ models:
         description: >
           Sortable ISO week label, "2026-W34" (ISO year, so Monday 2025-12-29 correctly
           reads 2026-W01).
-      - name: days_observed
-        description: How many of the week's 7 days we hold data for — short for the week in progress and the first week ever collected.
-      - name: is_partial_week
-        description: >
-          days_observed < 7, so this week's volume is low for reasons unrelated to the
-          trend. Exclude these weeks from week-over-week reads, or use mention_share,
-          which stays comparable.
       - name: concept_label
         description: >
           Human-readable trending "item" — the LLM's canonical_label once resolved

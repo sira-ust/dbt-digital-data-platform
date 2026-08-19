@@ -77,6 +77,16 @@ vars:
   # least this confident, so a shaky spam call doesn't silently hide a real mention
   social_spam_confidence_min: 0.7
 
+  # scripts/enrich_mentions.py — how many recent weeks a PROMPT_VERSION bump
+  # re-labels. NOT a ranking input: the board ranks each calendar week from that
+  # week's mentions alone, so a stale label on a week nobody ranks any more changes
+  # no published number. Deliberately much smaller than the retention window below —
+  # re-labelling 3 months of mentions to change a prompt is waste. Cost of a bump =
+  # mentions in these weeks. Week-aligned; a partially re-labelled week is the one
+  # broken state (it would make that week's mention_share meaningless), which is why
+  # this is in weeks and --limit is a smoke-test flag only. Set 0 for all history.
+  social_enrich_backfill_weeks: 4
+
   # int_social_concept_trends / mart_social_trending_items — the weekly trending
   # board. The UNIT IS THE CALENDAR WEEK (Monday-anchored): the report runs weekly,
   # and each row aggregates and ranks exactly one week's mentions, so week-over-week
@@ -84,9 +94,9 @@ vars:
   # straddles a Sunday splits across two weeks and ranks lower in both (an earlier
   # design used a trailing multi-week window to avoid that, at the price of
   # overlapping periods that can't be compared week to week — this grain takes the
-  # other side of that trade). NOTE: a mid-week run leaves the newest week partial
-  # (is_partial_week / days_observed) — read mention_share, not raw counts, across
-  # such a week. Ranking is deterministic (pure social signal) and author-diversity
+  # other side of that trade). A week still in progress is NOT ranked at all until it
+  # finishes, so the newest week on the board is always a whole week and is never
+  # half-counted. Ranking is deterministic (pure social signal) and author-diversity
   # based (see the v2 block below); the LLM only resolves the top-N concepts to WMS
   # SKUs, offline (scripts/resolve_trending_concepts.py).
   social_trend_history_weeks: 13     # calendar weeks of board history kept = ~3 months, ROLLING.
