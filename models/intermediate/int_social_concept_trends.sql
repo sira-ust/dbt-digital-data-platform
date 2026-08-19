@@ -1,160 +1,90 @@
 {{ config(tags=['social']) }}
 {% set history_weeks = var('social_trend_history_weeks') %}
 -- int_social_concept_trends — WEEKLY trending boards, one row per (week_start,
--- concept_class, concept_norm). DETERMINISTIC and LLM-free. Recomputed and
--- replaced every run.
+-- concept_class, concept_norm). DETERMINISTIC and LLM-free; recomputed and replaced
+-- every run. Also the GATE scripts/resolve_trending_concepts.py reads to pick which
+-- concepts to resolve to SKUs (repeat_poster rows have trend_rank = null, so a plain
+-- `trend_rank <= N` excludes them with no extra clause).
 --
--- GRAIN: the CALENDAR WEEK (Monday-anchored posted_week, straight off
--- fct_social_mentions). Each row aggregates only that week's mentions and is
--- ranked against only that week's other concepts, because the report runs weekly
--- and the whole point is to compare week against week: same-length periods, no
--- overlap, so "up 3 places" and "share up 2 points" mean exactly what they say.
--- History is bounded by social_trend_history_weeks; "now" is max(week_start).
+-- >>> FIVE DIFFERENT TIME WINDOWS govern this feature — ranking, comparison,
+-- >>> retention, re-labelling and snippet evidence. They are independent, and
+-- >>> confusing two of them is the easiest way to misread the board. All five are
+-- >>> defined once, with their trade-offs, in models/docs/_social_windows.md.
+-- >>> READ THAT FIRST. This header covers only what the SQL below needs.
 --
--- The known cost, stated so nobody rediscovers it as a bug: a calendar boundary
--- splits a trend. A spike that runs Saturday to Tuesday lands half in each of two
--- weeks and ranks lower in both than it would in either. An earlier version used a
--- trailing 4-week window specifically to avoid that, at the price of overlapping
--- periods that can't be compared week to week — which is the trade this grain
--- deliberately takes the other side of. Read rank_change/mention_share_change with
--- that in mind for anything that straddles a Sunday.
+-- GRAIN: the Monday-anchored calendar week (posted_week, straight off
+-- fct_social_mentions), and only COMPLETE weeks — see complete_weeks below. Each row
+-- is built from that week's mentions alone and ranked against only that week's other
+-- concepts, so "up 3 places" means exactly that. "Now" is max(week_start).
 --
--- ONLY COMPLETE WEEKS ARE RANKED. The weekly export lands mid-week, so the newest
--- calendar week is usually a fragment — 3 of 7 days when measured 2026-08-19 — and a
--- fragment cannot be ranked against a whole week: its counts are down by half for a
--- reason that has nothing to do with any trend. Such a week is therefore NOT
--- COMPUTED AT ALL until it finishes (see complete_weeks below), rather than being
--- published with a warning flag that some consumer will inevitably ignore. So
--- max(week_start) is always a finished week and needs no qualification, and the
--- in-progress week simply appears on the next run.
+-- TWO RANKING CLASSES (concept_class), ranked SEPARATELY — the point of the model:
+--   'dish' <- mentioned_dishes    Som Tam, Pho, banh khot: what people talk about
+--   'item' <- mentioned_products  Tiparos fish sauce, canned coconut milk: goods a
+--                                 grocery or restaurant could order as a line item
+-- trend_rank is row_number() partitioned by (week_start, concept_class), so a flood
+-- of viral dishes cannot crowd stockable items off the board. Both lists always show.
 --
--- TWO RANKING CLASSES (concept_class), ranked SEPARATELY — this is the point:
---   'dish' <- mentioned_dishes  (Som Tam, Pho, banh khot — what people talk about)
---   'item' <- mentioned_products — SELLABLE PRODUCTS: branded or packaged/processed
---             goods a grocery or restaurant could order as a line item ("Tiparos
---             fish sauce", "canned coconut milk", "tom yum paste"). NOT raw
---             commodities or produce (durian, matcha, pork stay in `ingredients`
---             and are never ranked), not dishes, not categories, not retailers.
--- trend_rank is row_number() partitioned by (week_start, concept_class), so a
--- flood of viral dishes can no longer crowd stockable items off the board. Both
--- lists are always visible.
---
--- WHY `mentioned_products` AND NOT `ingredients`: the item board only earns its
--- slot if what's on it could be a purchase order line. `ingredients` is defined at
--- extraction as "notable ingredients", so it is structurally commodity-level —
--- ranking it yields durian / matcha / pork, which name a food but not a thing to
--- buy, and no stoplist can fix that (a stoplist removes the MOST generic tokens
--- and leaves the slightly-less-generic ones). The product/commodity judgment needs
--- the post's text, so it is made at extraction time instead —
--- scripts/enrich_mentions.py prompt v2. `ingredients` is still carried through the
--- fact and still feeds the resolver's ingredient-BASKET side; it is simply not a
--- ranking stream. Brands are not ranked either: that array is dominated by channels
+-- `ingredients` is NOT a ranking stream, deliberately: it is defined at extraction as
+-- "notable ingredients", so it is commodity-level by construction (durian, matcha,
+-- pork name a food but not a thing to buy) and no stoplist fixes that. The
+-- product/commodity judgment needs the post's text, so it is made at extraction time
+-- instead — enrich_mentions.py prompt v2+. `ingredients` still feeds the resolver's
+-- basket side. Brands are not ranked either: that array is dominated by channels
 -- people buy through (7-Eleven, Grab, LINE MAN), influencers and restaurants —
--- unbounded, none stockable. The resolver still reads brand context from snippets.
+-- unbounded, none stockable. seed_social_generic_terms anti-joins below as a BACKSTOP
+-- for commodity/category tokens that slip through extraction. Expect the item board to
+-- be much thinner than the dish board: people post "I ate som tam", not "I bought
+-- Tiparos fish sauce 700ml".
 --
--- EXPECT THE ITEM BOARD TO BE THINNER than the dish board, by a lot. People post
--- "I ate som tam", not "I bought Tiparos fish sauce 700ml", so product mentions are
--- genuinely rarer — and with social_trend_min_mentions applied per week, some weeks
--- will have only a handful of item rows. That is sparse signal, not a broken model.
--- seed_social_generic_terms still anti-joins here as a BACKSTOP for commodity tokens
--- that slip through the extraction; it should be doing much less work than it did
--- when this class was sourced from `ingredients`.
---
--- SCORING (author-diversity based; replaced pure mention-volume ranking, which
--- correlated ~0.86 with raw mention_count — one loud account could outrank a
--- genuine trend):
+-- SCORE (author-diversity based; replaced a mention-volume score that correlated
+-- ~0.86 with raw mention_count, so one loud account could outrank a real trend):
 --   trend_score = distinct_authors_adj
 --               * (1 + ln(1+engagement_norm)/eng_weight + ln(1+views_norm)/views_weight)
 --               * (single_channel_dampener if channel_count < 2 else 1)
--- distinct_authors_adj: see the anonymised-profile note below.
--- engagement_norm / views_norm: each mention's engagement/views, divided by (a)
---   its OWN channel's median for that metric THAT WEEK — so a Twitter post and a
---   TikTok post are judged against their own platform's normal scale, not each
---   other's (TikTok's median non-zero engagement is 70-280x every other channel's;
---   a raw sum is effectively a TikTok-only ranking otherwise) — and (b) the number
---   of OTHER concepts OF THE SAME CLASS that same mention also names, so a post
---   listing 26 dishes doesn't give every single one full credit for that post's
---   popularity. Summed across a concept's mentions, then log-dampened ONCE at the
---   end (same shape as the legacy formula) so no single post can dominate.
--- trend_score_legacy: the original mention-count-led formula, kept (not deleted)
---   so rankings can be compared over the next few weeks.
+-- engagement_norm / views_norm: each mention's engagement/views divided by (a) its OWN
+--   channel's median for that metric THAT WEEK — TikTok's median non-zero engagement is
+--   70-280x every other channel's, so a raw sum is a TikTok-only ranking — and (b) how
+--   many OTHER same-class concepts that mention also names, so a post listing 26 dishes
+--   doesn't give each one full credit. Summed, then log-dampened ONCE at the end.
+-- trend_score_legacy: the superseded volume-led formula, kept for comparison.
+-- mention_share: this concept's (concept, mention) pairs / all pairs that week in that
+--   class. Shares sum to ~1, which is what makes it comparable across weeks of
+--   different size — the measure to trust for movement.
 --
--- WHAT ONE CALENDAR WEEK IS TOO THIN FOR, and what is done about it:
---   * channel medians are per (week, channel), because channel scale is not
---     stationary — TikTok's median engagement in collection week 5 is not its
---     week-26 median, and one global median would make early weeks' ratios small
---     and late weeks' large, manufacturing a rise inside the score itself. But a
---     single week can leave a channel with a handful of rows, and a median over 2
---     rows is not a baseline, it's one of the two rows: below
---     social_trend_v2_min_channel_baseline_mentions the channel's ALL-HISTORY
---     median is used instead. That fallback matters more at this grain than it
---     would over a multi-week window — if a channel is thin most weeks, raise the
---     threshold rather than trusting a 3-row median.
---   * author_quality is judged on ONE week of mentions, so most concepts land on
---     'unverifiable' (fewer than social_trend_v2_min_named_mentions named mentions
---     in seven days) and the 'repeat_poster' exclusion fires less often than it did
---     over a longer window. Unverifiable concepts stay IN the ranking with the flag
---     visible, so nothing is silently dropped — but the anti-spam guard is weaker
---     per week by construction. Lower social_trend_v2_min_named_mentions if it
---     needs to bite weekly; named_mentions/named_authors are exposed so the call
---     can be made on real numbers.
+-- WHAT ONE WEEK IS TOO THIN FOR — this is why two things below are not per-week:
+--   * channel medians ARE per (week, channel), because channel scale is not stationary
+--     and one global median would make early weeks' ratios small and late weeks' large,
+--     manufacturing a rise inside the score. But a median over 2 rows is not a
+--     baseline, it is one of the two rows: below
+--     social_trend_v2_min_channel_baseline_mentions the channel's ALL-HISTORY median
+--     stands in. Raise that threshold rather than trust a 3-row median.
+--   * author_quality is judged on ONE week, so most concepts land 'unverifiable' and
+--     the repeat_poster exclusion fires less often than over a longer window. They stay
+--     IN the ranking with the flag visible. Lower social_trend_v2_min_named_mentions if
+--     the anti-spam guard needs to bite weekly; named_mentions/named_authors are
+--     exposed so that call can be made on real numbers.
 --
--- WEEK-OVER-WEEK MEASURES (mention_share is the one to trust):
---   mention_share = this concept's (concept, mention) pairs / ALL pairs that week
---     in that class. Shares sum to ~1, so if the whole corpus doubles every share
---     is unchanged — which is what makes it robust to collection volume moving
---     (the artifact that made the old half-window is_rising read "rising" for ~85%
---     of concepts) and to a short partial week.
---   rank_change = prev_trend_rank - trend_rank, so POSITIVE = moved UP the board.
---   is_rising = mention_share went UP versus LAST WEEK.
---     REDEFINED at this grain: it used to compare the recent half of a 4-week
---     window against the older half, which was both noisy and volume-driven. A
---     half-of-one-calendar-week split (Thu-Sun vs Mon-Wed) would be worse, and a
---     real previous week is now available, so it is a true week-over-week rise.
---   ALL FOUR COMPARISONS ARE STRICT: populated only when the concept's previous row
---     is exactly the previous calendar week. lag() walks a concept's OBSERVED weeks,
---     and a week under the noise floor produces no row — so ungated, a concept that
---     charted in W29, went quiet in W30 and returned in W31 would report "+6 places"
---     against W29, a number indistinguishable from a real one-week move. NULL
---     therefore means "no like-for-like comparison exists", never "flat"; do not
---     coalesce it to 0. prev_week_start still carries the older week, so a
---     longer-range comparison is available on request — it just isn't served up as
---     if it were weekly.
---
--- ANONYMISED PROFILES: Instagram returns "Instagram User" for ~97% of Instagram
--- rows — confirmed with Mentionlytics as an Instagram API limitation (their
--- anonymisation, not ours), not evidence those rows share one real author.
--- distinct_authors_adj treats each such mention as its own unknown author
--- (assume good faith — we don't know who posted it, in either direction) —
--- but that alone would make ANY Instagram-heavy concept look automatically
--- author-diverse and pass a naive repeat-ratio check even if one real account
--- is spamming it, which is exactly the failure mode this metric exists to
--- catch. So the repeat-ratio exclusion runs on named_mentions/named_authors —
--- real, non-anonymised authors only — never on distinct_authors_adj:
+-- ANONYMISED PROFILES — why distinct_authors_adj looks odd: Instagram returns
+-- "Instagram User" for ~97% of its rows, confirmed with Mentionlytics as their API
+-- limitation, NOT evidence those rows share one author. So each such mention counts as
+-- its own unknown author. That alone would make any Instagram-heavy concept look
+-- author-diverse and pass a naive repeat check even if one real account were spamming
+-- it — the exact failure this metric exists to catch — so the repeat-ratio exclusion
+-- runs on named_mentions/named_authors (real, non-anonymised authors only), NEVER on
+-- distinct_authors_adj:
 --   author_quality = 'verified'       named_mentions >= min AND ratio <= max
---                   | 'repeat_poster' named_mentions >= min AND ratio >  max  (EXCLUDED from ranking)
---                   | 'unverifiable'  named_mentions <  min (too little named signal to judge either way —
---                                     stays IN the ranking with the flag visible; silently dropping every
---                                     Instagram-only concept would be worse than reporting we can't verify it)
+--                  | 'repeat_poster'  named_mentions >= min AND ratio >  max  (EXCLUDED from ranking)
+--                  | 'unverifiable'   named_mentions <  min (too little named signal to judge;
+--                                     stays ranked with the flag visible, because silently
+--                                     dropping every Instagram-only concept would be worse)
 --
--- is_single_channel is a DAMPENER, not an exclusion — measured at ~5% of the
--- actual top-20 (vs ~38% of the full long tail), so a single-platform trend
--- (very common — TikTok-only food virality is a real, legitimate pattern) isn't
--- silently removed, just ranked a little more conservatively.
+-- is_single_channel is a DAMPENER, not an exclusion — ~5% of the actual top-20 vs ~38%
+-- of the long tail, and TikTok-only virality is a real pattern, so it is ranked a
+-- little more conservatively rather than removed.
 --
--- source_links carries the top mention URLs behind the concept THAT WEEK (by
--- reach then engagement).
---
--- Materialized as a table (the intermediate-layer default) and deliberately NOT
--- incremental, even though calendar weeks look append-only: the newest week is
--- still partial and its rows change on the next run, late-arriving mentions
+-- Materialized as a table and deliberately NOT incremental: late-arriving mentions
 -- restate a past week, the all-history channel medians move every week, and the
--- history bound slides. Full recompute is cheap at this size and always correct.
---
--- It is also the GATE scripts/resolve_trending_concepts.py reads to pick which
--- concepts to resolve to SKUs (only rows with a non-null trend_rank —
--- repeat_poster rows have trend_rank = null, so a plain `where trend_rank <= N`
--- already excludes them with no script change needed).
+-- retention bound slides. Full recompute is cheap here and always correct.
 
 with mentions as (
 

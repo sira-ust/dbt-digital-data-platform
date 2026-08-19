@@ -1,63 +1,52 @@
 {{ config(tags=['social']) }}
--- mart_social_trending_items — the marketing-facing weekly trending board. Grain:
--- one row per (CALENDAR WEEK, concept_class, concept_norm). The report runs weekly
--- and each row covers exactly one Monday-anchored week's mentions, ranked against
--- only that week's other concepts, so week-to-week movement is a comparison of
--- equal, non-overlapping periods. Recomputed and REPLACED each run.
+-- mart_social_trending_items — the marketing-facing weekly trending board. One row
+-- per (CALENDAR WEEK, concept_class, concept_norm); recomputed and REPLACED each run.
 --
--- READING IT — two different questions, one table:
---   "what's trending THIS WEEK" -> where is_top_n and week_start = (select max(week_start) ...)
---                                  ~social_trend_top_n rows per class
---   "what's RISING"             -> a concept's rows across week_start; rank_change,
---                                  mention_share_change and is_rising are the signals
+-- Time windows (ranking, comparison, retention) are defined once in
+-- models/docs/_social_windows.md. Two consequences to know here: every week on this
+-- board is a COMPLETE week — the in-progress one isn't computed until it finishes, so
+-- max(week_start) is never half-counted — and the movement columns are STRICT, filled
+-- in only when the previous row is exactly last week (null = no comparison, not flat).
 --
--- EVERY WEEK HERE IS A COMPLETE WEEK. The weekly export lands mid-week, so the
--- calendar week in progress is usually a fragment — and a fragment can't be ranked
--- against a whole week. int_social_concept_trends therefore doesn't compute it until
--- it finishes, so max(week_start) is always a finished week and "this week's
--- trending items" is never half-counted. The in-progress week shows up next run.
+-- READING IT — two questions, one table:
+--   what's trending THIS WEEK -> where is_top_n and week_start = (select max(week_start) ...)
+--                                ~social_trend_top_n rows per class
+--   what's RISING             -> a concept's rows across week_start, via rank_change /
+--                                mention_share_change / is_rising
 --
--- TWO CLASSES, ranked separately (concept_class):
+-- TWO CLASSES, ranked separately (concept_class), each with its own 1..N per week so
+-- viral dishes cannot mask the inventory-facing signal. Show both:
 --   'dish' — Som Tam, Pho, banh khot: what people talk about
---   'item' — Tiparos fish sauce, canned coconut milk, tom yum paste: SELLABLE
---            products a grocery or restaurant could order as a line item. Raw
---            commodities (durian, matcha, pork) are deliberately NOT here — they
---            name a food, not a thing to buy.
--- Each class has its own 1..N per week, so a flood of viral dishes can no longer
--- mask the item-level signal that actually maps to inventory. Show both. Expect the
--- item board to be much thinner — people post about dishes far more than SKUs.
+--   'item' — Tiparos fish sauce, canned coconut milk: goods a grocery or restaurant
+--            could order. Raw commodities (durian, pork) are deliberately not here.
+-- The item board is much thinner by nature — people post about dishes, not SKUs.
 --
 -- Per trending thing it answers:
---   1. what's trending, how hard, and is it moving  (rank, mentions, score, mention_share, rank_change)
---   2. where to see it                              (source_links)
---   3. do we carry it                               (result_type + matched item + current stock)
---   4. if not, what similar to offer                (recommended_items)
---   5. what to DO                                   (action_signal)
+--   1. what's trending, how hard, is it moving  (rank, mentions, score, mention_share, rank_change)
+--   2. where to see it                          (source_links)
+--   3. do we carry it                           (result_type + matched item + current stock)
+--   4. if not, what similar to offer            (recommended_items)
+--   5. what to DO                               (action_signal)
 --
--- TRAJECTORIES ARE COMPLETE, NOT TOP-N-FILTERED. Rows are kept for every week of
--- any concept that reached the top N in ANY week (is_top_n flags the weeks it was
--- actually on the board), because a chart filtered to top-N only would draw a line
--- with holes wherever the concept dipped out. One honest gap remains: a week where
--- the concept fell below social_trend_min_mentions has no upstream row at all, so
--- that week is genuinely missing rather than zero — more common at a 7-day grain
--- than over a multi-week window. If charts look ragged, the fix is dropping the
--- noise floor upstream and keeping it as a board-only filter.
+-- TRAJECTORIES ARE COMPLETE, NOT TOP-N-FILTERED: rows are kept for every week of any
+-- concept that reached the top N in ANY week, and is_top_n flags the weeks it was
+-- actually on the board — a chart filtered to top-N alone would have holes wherever a
+-- concept dipped out. One honest gap: a week below social_trend_min_mentions has no
+-- upstream row at all, so it is missing rather than zero.
 --
--- Lineage: int_social_concept_trends (deterministic per-week ranking +
--- source_links) LEFT JOIN stg_mentionlytics__concept_resolution (offline LLM
--- concept->SKU) LEFT JOIN int_jdawms_items_active (name) LEFT JOIN
--- int_jdawms_stock_weekly (CURRENT stock — the latest snapshot week per item).
--- dbt never calls the LLM.
+-- Lineage: int_social_concept_trends (per-week ranking + source_links) LEFT JOIN
+-- stg_mentionlytics__concept_resolution (offline LLM concept->SKU) LEFT JOIN
+-- int_jdawms_items_active (authoritative name) LEFT JOIN int_jdawms_stock_weekly
+-- (CURRENT stock, latest snapshot week). dbt never calls the LLM.
 --
 -- CONFIDENCE FLOOR (social_resolve_min_confidence) applies to ANY match — carried,
--- substitute, or basket. Inventory match wins, but only when the match is actually
--- confident: a low-confidence carried match (sushi -> corn oil @0.45) is a bad
--- guess, not a real inventory hit, so it's suppressed just like a shaky basket
--- (row shows 'none' / source_new). Confident carried matches (FZ BANH MI @0.95)
--- still show and outrank baskets. Since the resolver's v5 two-pass design the
--- floor gates a VERIFIED confidence (a second, independent model's calibrated
--- certainty in the items that survived its review), not the proposing model's
--- self-rating — which used to cluster just above the floor and made it inert.
+-- substitute or basket. An inventory match wins, but only when it is actually
+-- confident: a 0.45 carried guess (sushi -> corn oil) is a bad guess, not a hit, and
+-- is suppressed like a shaky basket (shown as 'none' / source_new). Since the
+-- resolver's v5 two-pass design the floor gates a VERIFIED confidence — a second,
+-- independent model's calibrated certainty in the items that survived its review —
+-- not the proposer's self-rating, which clustered just above the floor and made it
+-- inert.
 
 with trends as (
 

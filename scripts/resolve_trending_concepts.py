@@ -394,7 +394,8 @@ def _latest_week_sql(trends_rel):
 
 def _snippet_window(week_end_str, days=SNIPPET_WINDOW_DAYS):
     """Snippet evidence spans the last `days` ending at the board's week, NOT the
-    single ranked week.
+    single ranked week. This is window #5 of five — the set, and why they differ, is
+    in models/docs/_social_windows.md.
 
     The two windows answer different questions and must not be tied together. The
     RANKING window is one calendar week because that's the reporting period. The

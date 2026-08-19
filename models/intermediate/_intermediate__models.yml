@@ -388,6 +388,8 @@ models:
       canonicalises them downstream. The GATE scripts/resolve_trending_concepts.py
       reads to pick the CURRENT week's top-N concepts per class (only rows with a
       non-null trend_rank — see trend_rank below).
+
+      {{ doc('social_time_windows') }}
     config:
       tags: ["social"]
     tests:

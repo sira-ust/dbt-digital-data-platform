@@ -283,6 +283,38 @@
   <div class="sec-head"><h2>Social listening → mart_social_trending_items</h2><span class="rule"></span></div>
   <p class="sec-sub">Six boxes, six real dbt views/tables — the <b>table flow only</b>. Three of them are built from a source an offline Python script writes; that script (and any LLM call it makes) is shown as an inset panel <b>inside</b> that table's box, not as a step of its own — the script is how the table got its data, not a separate stop the data visits.</p>
 
+  <div style="background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+              box-shadow:var(--shadow); padding:15px 18px 13px; margin:0 0 20px;">
+    <div style="font-family:var(--mono); font-size:11.5px; letter-spacing:.07em; text-transform:uppercase;
+                color:var(--muted); margin-bottom:11px;">
+      Five time windows — independent of each other. Only the first two change a published number.
+    </div>
+    <div style="display:grid; grid-template-columns:auto auto 1fr; gap:7px 16px; font-size:13px; align-items:baseline;">
+      <div><b>1 · ranking</b></div>
+      <div style="font-family:var(--mono); font-size:12px; color:var(--l-fact);">1 calendar week</div>
+      <div style="color:var(--muted);">every published number — <code>trend_rank</code>, <code>trend_score</code>, <code>mention_count</code>, <code>mention_share</code>. Complete weeks only; the week in progress isn't computed until it finishes</div>
+
+      <div><b>2 · comparison</b></div>
+      <div style="font-family:var(--mono); font-size:12px; color:var(--l-fact);">the previous week</div>
+      <div style="color:var(--muted);">movement only — <code>rank_change</code>, <code>is_rising</code>, <code>mention_share_change</code>. Strict: null when the previous row isn't exactly last week, which means "no comparison", never "flat"</div>
+
+      <div><b>3 · retention</b></div>
+      <div style="font-family:var(--mono); font-size:12px;">social_trend_history_weeks · 13</div>
+      <div style="color:var(--muted);">chart length, nothing else. Proven not to move a single rank. Rolling and unarchived — week 14 arriving means week 1 is gone</div>
+
+      <div><b>4 · re-label</b></div>
+      <div style="font-family:var(--mono); font-size:12px;">social_enrich_backfill_weeks · 4</div>
+      <div style="color:var(--muted);">how far back a prompt-version bump re-labels mentions. A cost control on the offline LLM, not a ranking input. Week-aligned — a <i>partly</i> re-labelled week is the one broken state</div>
+
+      <div><b>5 · snippets</b></div>
+      <div style="font-family:var(--mono); font-size:12px;">SNIPPET_WINDOW_DAYS · 28</div>
+      <div style="color:var(--muted);">how much mention text the SKU resolver reads to decide what a token <i>means</i>. Wider than one week on purpose, so a mid-week run can't leave a concept with no evidence</div>
+    </div>
+    <p style="margin:12px 0 0; font-size:12.5px; color:var(--faint);">
+      Defined once, with the trade-off each one accepts, in <code>models/docs/_social_windows.md</code> — the authority if these ever disagree.
+    </p>
+  </div>
+
   <div class="legend" style="margin-bottom:18px">
     <div class="item"><span class="sw" style="--c:var(--l-staging)"></span><b>dbt view</b></div>
     <div class="item"><span class="sw" style="--c:var(--l-fact)"></span><b>dbt fact table</b></div>
@@ -337,7 +369,10 @@
       <div class="stage__card">
         <div class="stage__title">int_social_concept_trends <span class="pill gate">the gate</span></div>
         <p class="stage__lead">Ranks what's trending each calendar week — dishes and stockable items on two separate boards.</p>
-        <p class="stage__how"><b>How:</b> two streams, ranked separately so viral dishes can't crowd out items — <code>unnest(mentioned_dishes)</code> → class <code>dish</code>, and <code>unnest(mentioned_products)</code> → class <code>item</code> (sellable goods a grocery or restaurant could order — the product/commodity call is made by the enrichment prompt, not by a filter here; <code>seed_social_generic_terms</code> is only a backstop). <code>strip_parenthetical_gloss()</code> + <code>fold_concept()</code> fold language/spelling variants (bánh khọt → banh khot) to one key. Then aggregate <b>per calendar week</b> (Monday-anchored) → score → <code>row_number()</code> per (week, class). One week in, one week out: week-over-week movement compares equal, non-overlapping periods, which is what <code>rank_change</code> and <code>is_rising</code> read. <code>mention_share</code> (a concept's share of that week's mentions) is the measure that survives a partial week or a change in collection volume — raw counts do not. Materialized as a table because it's the gate the resolver reads.</p>
+        <p class="stage__how"><b>Two streams, ranked separately</b> so viral dishes can't crowd out items: <code>unnest(mentioned_dishes)</code> → class <code>dish</code>, <code>unnest(mentioned_products)</code> → class <code>item</code>. Which of the two a word belongs to is decided by the enrichment prompt, not filtered here — <code>seed_social_generic_terms</code> is only a backstop for commodity/category tokens that slip through.</p>
+        <p class="stage__how"><b>One identity per thing:</b> <code>strip_parenthetical_gloss()</code> then <code>fold_concept()</code> collapse language and spelling variants (bánh khọt → banh khot) to one key.</p>
+        <p class="stage__how"><b>Then per calendar week:</b> aggregate → score → <code>row_number()</code> partitioned by (week, class), so each week and each class gets its own 1..N. Week 1 of the series and the week still in progress are dropped as incomplete — a fragment can't be ranked against a whole week.</p>
+        <p class="stage__how"><b>Read movement, not volume:</b> <code>mention_share</code> is a concept's share of that week's mentions, so it survives a change in collection volume; raw counts don't. Materialized as a table because it's the gate the resolver reads.</p>
         <code class="codeblock">trend_score <span class="op">=</span> distinct_authors <span class="op">×</span> (1 <span class="op">+</span> ln(1+engagement_norm)/5 <span class="op">+</span> ln(1+views_norm)/10) <span class="op">×</span> single_channel_dampener</code>
         <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">≥ 2 mentions</span><span class="pill">calendar week</span><span class="pill">top-20 per class per week</span><span class="pill">13wk history (~3mo)</span></div>
       </div>

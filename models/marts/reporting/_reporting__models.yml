@@ -378,6 +378,8 @@ models:
       confident: FZ BANH MI @0.95 shows, sushi -> corn oil @0.45 is dropped. Stock is
       the item's CURRENT (latest snapshot week) shippability, CABOT warehouse only —
       NOT as-of the row's week, hence the current_* naming. Read by Genie / BI.
+
+      {{ doc('social_time_windows') }}
     config:
       tags: ["social", "reporting"]
     tests:

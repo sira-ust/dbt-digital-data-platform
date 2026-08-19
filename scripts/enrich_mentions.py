@@ -139,7 +139,9 @@ MAX_RETRIES = 8                          # SDK-level retries: rides out 429s wit
 MAX_ATTEMPTS = 2                         # our own retries on bad/empty JSON
 BATCH_SIZE = 300                         # write to the table every N classified (checkpoint / resumable)
 
-# RE-LABEL WINDOW — the answer to "must a prompt bump re-label all 15k mentions?".
+# RE-LABEL WINDOW (#4 of the five social time windows — the set is defined in
+# models/docs/_social_windows.md; read that before changing this).
+# The answer to "must a prompt bump re-label all 15k mentions?".
 # No. Every number the trending board publishes for a given week is computed from
 # THAT WEEK's mentions alone (int_social_concept_trends ranks per calendar week), so
 # labels only need to be current for the weeks still being ranked and compared.
