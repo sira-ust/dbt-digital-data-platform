@@ -239,11 +239,6 @@ joined as (
         -- the group's display name when the resolver judged several concepts to be
         -- one thing, else this concept's own label
         coalesce(r.group_label, r.canonical_label, b.concept_norm)       as concept_label,
-        -- kept in this CTE, NOT published: is_alias below is the usable form. The
-        -- resolver looks at the whole board in one pass and says which concepts are
-        -- the same thing (matcha / matcha powder), so a row that is not its group's
-        -- primary is a duplicate of one that is.
-        r.group_primary,
         b.trend_rank,
         b.rank_change,
         b.mention_count,
@@ -323,7 +318,6 @@ select
     -- (a confidence score on a "no match" is noise)
     case when j.result_type_adj in ('carried', 'substitute', 'basket')
          then j.match_confidence end                                    as match_confidence,
-    coalesce(j.group_primary <> j.concept_norm, false)                 as is_alias,
 
     -- what marketing should do (about TODAY's stock — see the stock CTE)
     case

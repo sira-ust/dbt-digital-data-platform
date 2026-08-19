@@ -379,6 +379,55 @@ concepts_kept as (
 
 ),
 
+-- ONE TREND, ONE IDENTITY. The resolver looks at the whole board in one pass and
+-- judges which concepts are the same thing under different names — "matcha" and
+-- "matcha powder", "som tam" and "ส้มตำ" — and names one of them the group's primary.
+-- Applying that here, BEFORE aggregation, is what makes the merge correct rather than
+-- cosmetic:
+--   * a post naming BOTH members counts ONCE, because the select distinct in
+--     concept_mentions now sees one concept_norm instead of two. Summing the two rows
+--     downstream would have double-counted that post.
+--   * trend_score is not additive (distinct authors x log-dampened engagement), so it
+--     can only be computed on the merged mention set — never from two finished scores.
+--   * mention_share's denominator and the shared-post divisor both come out right for
+--     free, because everything after this point sees one concept.
+-- After the stoplist, deliberately: the stoplist matches the raw token a person wrote,
+-- not the group's chosen name.
+--
+-- The map is a LEFT join and coalesce, so it degrades to ungrouped behaviour whenever a
+-- concept has no group yet (never resolved, or resolved before grouping existed).
+--
+-- NOTE ON RUN ORDER — this reference makes the RANKING depend on the RESOLUTION, which
+-- the offline resolver writes. No dbt cycle (the resolution is a source), but it does
+-- mean `dbt build --select +int_social_concept_trends` now builds
+-- stg_mentionlytics__concept_resolution too, so the resolution table must already carry
+-- group_primary. The resolver adds it on its first v6 append (mergeSchema), and it can
+-- run standalone beforehand — it reads this table with `select *` and tolerates missing
+-- columns. So on the v6 deploy only: run the resolve task ONCE before the usual
+-- dbt_rank -> resolve -> dbt_social order. Steady state needs nothing special, and the
+-- job already rebuilds this model after the resolver, so a new group takes effect the
+-- same run it is discovered — no one-week lag.
+concept_groups as (
+
+    select concept_norm, group_primary
+    from {{ ref('stg_mentionlytics__concept_resolution') }}
+    where group_primary is not null
+
+),
+
+grouped as (
+
+    select
+        c.mention_id, c.profile, c.channel, c.posted_date, c.engagement, c.views,
+        c.engagement_ratio, c.views_ratio, c.follower_count, c.link,
+        c.week_start, c.week_end, c.concept_class,
+        coalesce(g.group_primary, c.concept_norm)                       as concept_norm
+    from concepts_kept as c
+    left join concept_groups as g
+        on g.concept_norm = c.concept_norm
+
+),
+
 -- one row per (week, class, concept, mention) — a mention naming a thing twice
 -- counts once. concept_class must be in the distinct list: a string that is both a
 -- dish and an ingredient in one post would otherwise collapse and one of the two
@@ -397,7 +446,7 @@ concept_mentions as (
         -- platform's anonymisation shows up the same way.
         (profile = 'Instagram User')                                    as is_anon,
         concat(channel, ':', lower(trim(profile)))                      as author_key
-    from concepts_kept
+    from grouped
 
 ),
 
@@ -412,7 +461,7 @@ mention_concept_counts as (
         mention_id,
         concept_class,
         count(distinct concept_norm)                                    as n_concepts
-    from concepts_kept
+    from grouped
     group by 1, 2
 
 ),

@@ -83,8 +83,8 @@ left join staying_power as s
       and s.concept_norm  = b.concept_norm
 where b.week_start = l.wk
   and b.is_top_n
-  -- one row per real thing: an alias is the same product under a second spelling,
-  -- already harmonised onto the same answer, so it would just repeat a row
-  and not b.is_alias
+  -- no de-duplication needed here any more: concepts the resolver judged to be one
+  -- thing are merged upstream in int_social_concept_trends, before aggregation, so
+  -- the board already carries one row per real thing with the mentions combined
 order by case when b.concept_class = 'item' then 0 else 1 end,
          b.trend_rank
