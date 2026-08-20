@@ -128,12 +128,19 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v7"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
+PROMPT_VERSION = "v8"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
                                          # v6 = SECOND LOOK on a "none": recall matters as much as
                                          #      precision here, because a false "we don't carry this"
                                          #      sends someone to source a product we already sell
                                          # v7 = board-level grouping is REVIEWED before it is applied
                                          #      (v6's first run merged 3 wrong out of 4)
+                                         # v8 = the brand guard, which shipped mid-v7 WITHOUT a bump.
+                                         #      BUMP FOR EVERY BEHAVIOUR CHANGE, no exceptions: the
+                                         #      done-set is version-aware, so concepts already at the
+                                         #      current version are skipped and the fix silently never
+                                         #      reaches them. That is exactly what happened — the three
+                                         #      bad merges survived into a run whose whole purpose was
+                                         #      to block them, because they were already stamped v7.
 _CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
 VERIFY_MAX_TOKENS = 1200                 # per-candidate verdicts + reasons
