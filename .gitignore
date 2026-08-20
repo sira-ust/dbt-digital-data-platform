@@ -44,3 +44,10 @@ Thumbs.db
 *.xlsx
 *.xls
 
+
+# Hand-made scratch extracts. Same reasoning as the xlsx rule above: they carry
+# real rep/customer data, nothing in dbt reads them, and they are exactly what an
+# unguarded `git add -A` sweeps up — scratch_rep026_august.json reached this branch
+# that way on 2026-08-20.
+scratch_*.json
+scratch_*.csv
