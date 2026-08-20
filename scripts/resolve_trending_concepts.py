@@ -1602,6 +1602,33 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
           + (f"; {failed} unresolved (propose or verify failed) — re-run to "
              f"backfill (incremental)" if failed else ""))
 
+    # NAME the ones that got no row, loudest first. A count alone is not enough: the
+    # v9 run printed "44 rows / 2 unresolved" and looked healthy, but the two were
+    # 'matcha' (rank 1 on the item board, 22 mentions) and 'matcha powder' — so the
+    # #1 trending item kept its stale v5 answer and stayed on the board twice, which
+    # is the very duplicate this version was written to remove. Worse, the failure is
+    # deterministic, so it repeated silently through v6, v7, v8 and v9.
+    #
+    # Members are listed with their primary because ONE failed primary takes its whole
+    # group down (`if answer is None: continue` above) — two missing rows can be one
+    # failed call, and that is not obvious from a tally.
+    if failed:
+        dragged = defaultdict(list)
+        for c in concepts:
+            primary, _ = groups[c["concept_norm"]]
+            if primary not in all_records and c["concept_norm"] != primary:
+                dragged[primary].append(c["concept_norm"])
+        missing = sorted((p for p in primaries if p not in all_records),
+                         key=lambda p: -(primaries[p].get("mention_count") or 0))
+        print(f"UNRESOLVED ({len(missing)}) — each keeps whatever it was last "
+              f"resolved at, which can be an OLD prompt version:", file=sys.stderr)
+        for p in missing:
+            n = primaries[p].get("mention_count")
+            with_members = (f"  + members {dragged[p]} lost with it"
+                            if dragged[p] else "")
+            print(f"  {p!r} ({n if n else 'n/a'} mentions){with_members}",
+                  file=sys.stderr)
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
