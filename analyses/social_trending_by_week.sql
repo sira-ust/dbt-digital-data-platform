@@ -85,8 +85,14 @@ select
     b.current_in_stock                                      as in_stock,
     concat_ws(', ', b.recommended_items)                    as suggested_items,
     b.action_signal,
-    -- array indexing differs: Databricks is 0-based, DuckDB 1-based
-    b.source_links[{{ 0 if target.type == 'databricks' else 1 }}] as example_post
+    -- EVERY link, as the array itself. The mart holds up to 5 posts per concept and one
+    -- is not enough to judge a trend by — this used to take element [0], which is why the
+    -- report looked like it had lost the array. Kept as an array rather than flattened to
+    -- a string so it stays usable in SQL and in Genie; a CSV/Excel download serialises it
+    -- to ["url", "url", …]. Wrap it as concat_ws(', ', b.source_links) if a spreadsheet
+    -- needs plain text. No more engine-specific indexing either, which is a bonus:
+    -- Databricks arrays are 0-based and DuckDB's are 1-based.
+    b.source_links                                          as example_post
 
 from board as b
 left join prev_week as p
