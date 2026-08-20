@@ -50,9 +50,6 @@ presence as (
 ),
 
 -- ── classify every SESSION against the visits for that customer-day ────────
--- order_channel (PDA = rep keyed it, WEB/APP = customer placed it) lives on
--- fct_orders, not the intermediate. fct_orders is unique on increment_id so
--- this cannot fan out.
 session_bounds as (
 
     select
@@ -63,13 +60,40 @@ session_bounds as (
         e.session_seq,
         min(e.event_at_local)                                            as session_start,
         max(e.event_at_local)                                            as session_end,
-        count(*)                                                         as event_count,
-        max(case when e.is_submit then e.increment_id end)               as increment_id,
-        max(case when e.is_submit then o.order_channel end)              as order_channel
+        count(*)                                                         as event_count
     from activity_events as e
-    left join {{ ref('fct_orders') }} as o
-        on o.increment_id = e.increment_id
     group by e.customer_day_key, e.sales_code, e.customer_key, e.activity_date, e.session_seq
+
+),
+
+-- every order a session actually submitted, not just one. A session can
+-- submit more than one order (e.g. two back-to-back sends) — collapsing to a
+-- single MAX(increment_id) silently dropped every order but the
+-- lexicographically largest one (confirmed on real data 2026-08-20: 4 of 42
+-- order-bearing sessions for one rep alone had 2 distinct orders, and the
+-- mart was missing all 4 of the lower-sorting ones). `distinct` here is the
+-- resubmit case (same increment_id logged twice), a different thing from
+-- multiple genuinely different orders — both are handled by carrying every
+-- DISTINCT increment_id through as an array instead of picking one.
+-- order_channel (PDA = rep keyed it, WEB/APP = customer placed it) lives on
+-- fct_orders, not the intermediate; verified consistent across every
+-- multi-order session found, so one value per session is still safe.
+session_orders as (
+
+    select
+        customer_day_key,
+        session_seq,
+        array_agg(increment_id)                                          as increment_ids,
+        max(order_channel)                                               as order_channel
+    from (
+        select distinct
+            e.customer_day_key, e.session_seq, e.increment_id, o.order_channel
+        from activity_events as e
+        left join {{ ref('fct_orders') }} as o
+            on o.increment_id = e.increment_id
+        where e.is_submit
+    ) as submits
+    group by customer_day_key, session_seq
 
 ),
 
@@ -77,6 +101,8 @@ session_scenario as (
 
     select
         b.*,
+        so.increment_ids,
+        so.order_channel,
         -- did THIS session happen inside a visit to THIS customer?
         max(case when v.arrived_at <= b.session_end
                   and b.session_start <= v.departed_at then 1 else 0 end) as during_visit,
@@ -86,12 +112,15 @@ session_scenario as (
                   and b.session_start <= v.departed_at
                  then v.on_site_minutes else 0 end)                       as overlap_on_site_minutes
     from session_bounds as b
+    left join session_orders as so
+        on so.customer_day_key = b.customer_day_key
+       and so.session_seq      = b.session_seq
     left join presence as v
         on v.customer_day_key = b.customer_day_key
     group by
         b.customer_day_key, b.sales_code, b.customer_key, b.activity_date,
         b.session_seq, b.session_start, b.session_end, b.event_count,
-        b.increment_id, b.order_channel
+        so.increment_ids, so.order_channel
 
 ),
 
@@ -182,7 +211,10 @@ by_scenario as (
 
 ),
 
--- orders per scenario, deduped (a resubmit logs the same increment_id twice)
+-- orders per scenario, deduped (a resubmit logs the same increment_id twice).
+-- increment_ids is one array per SESSION, so explode it to one row per order
+-- before deduping — a session that submitted 2 distinct orders must produce 2
+-- rows here, not collapse to 1.
 scenario_orders as (
 
     select
@@ -193,7 +225,13 @@ scenario_orders as (
         array_agg(increment_id)                                          as order_ids
     from (
         select distinct customer_day_key, scenario, increment_id, order_channel
-        from labelled
+        from (
+            select
+                customer_day_key, scenario, order_channel,
+                {{ unnest('increment_ids') }}                            as increment_id
+            from labelled
+            where increment_ids is not null
+        ) as exploded
         where increment_id is not null
     ) as deduped
     group by customer_day_key, scenario
