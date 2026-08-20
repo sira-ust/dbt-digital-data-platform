@@ -128,7 +128,7 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v8"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
+PROMPT_VERSION = "v9"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
                                          # v6 = SECOND LOOK on a "none": recall matters as much as
                                          #      precision here, because a false "we don't carry this"
                                          #      sends someone to source a product we already sell
@@ -141,6 +141,11 @@ PROMPT_VERSION = "v8"                    # v5 = propose + independent VERIFY pas
                                          #      reaches them. That is exactly what happened — the three
                                          #      bad merges survived into a run whose whole purpose was
                                          #      to block them, because they were already stamped v7.
+                                         # v9 = merged-away members are re-offered to the gate, so a
+                                         #      wrong merge can be revisited at all. Before this, folding
+                                         #      a concept away removed it from the ranking and therefore
+                                         #      from the gate forever — v7 and v8 both reported success
+                                         #      while never once looking at the merge they existed to fix.
 _CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
 VERIFY_MAX_TOKENS = 1200                 # per-candidate verdicts + reasons
@@ -485,8 +490,19 @@ def _create_message(client, **kwargs):
 # Backend I/O
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _top_concepts_sql(trends_rel, top_n):
-    """Concepts on the CURRENT week's board, either class.
+def _top_concepts_sql(trends_rel, top_n, resolution_rel=None):
+    """Concepts on the CURRENT week's board, either class — PLUS anything currently
+    merged into one of them.
+
+    That second half is not an optimisation, it closes a trap. Grouping is applied in
+    the ranking BEFORE this gate reads it, so a merged-away member no longer exists as
+    a concept in the trends table. Without it here, the member can never enter the
+    gate, is never re-resolved, and its merge becomes PERMANENT — immune to a prompt
+    fix, a guard, or a version bump, because nothing ever looks at it again. That is
+    exactly what happened to มาม่า -> "instant noodles": a v6 mistake that survived v7
+    and v8 untouched (2026-08-20), while every run reported success. Re-offering the
+    members means every merge is re-decided every run, so a wrong one self-corrects
+    on the next pass instead of outliving the code that made it.
 
     int_social_concept_trends is a weekly series of boards, so it holds every
     concept that was ever top-N over social_trend_history_weeks. Scoping to the
@@ -501,7 +517,7 @@ def _top_concepts_sql(trends_rel, top_n):
     mention_count is max(), not sum(): summing across overlapping trailing windows
     is not a count of anything.
     """
-    return f"""
+    board = f"""
         select concept_norm,
                max(case when concept_class = 'dish' then 1 else 0 end) as is_dish,
                max(case when concept_class = 'item' then 1 else 0 end) as is_item,
@@ -509,6 +525,37 @@ def _top_concepts_sql(trends_rel, top_n):
         from {trends_rel}
         where trend_rank <= {top_n}
           and week_start = (select max(week_start) from {trends_rel})
+        group by concept_norm
+    """
+    if not resolution_rel:
+        return board
+    # members inherit their primary's class flags (they have no trends row of their own
+    # any more) and a null mention_count, which max() lets the primary's value win
+    return f"""
+        with board as ({board}),
+        latest as (
+            select concept_norm, group_primary,
+                   row_number() over (partition by concept_norm
+                                      order by resolved_at desc) as _rn
+            from {resolution_rel}
+        ),
+        members as (
+            select l.concept_norm, b.is_dish, b.is_item,
+                   cast(null as int) as mention_count
+            from latest as l
+            join board as b on b.concept_norm = l.group_primary
+            where l._rn = 1
+              and l.group_primary is not null
+              and l.concept_norm <> l.group_primary
+        ),
+        combined as (
+            select * from board
+            union all
+            select * from members
+        )
+        select concept_norm, max(is_dish) as is_dish, max(is_item) as is_item,
+               max(mention_count) as mention_count
+        from combined
         group by concept_norm
     """
 
@@ -622,7 +669,8 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
     if backend == "databricks":
         spark = _get_spark()
         concepts = [r.asDict() for r in
-                    spark.sql(_top_concepts_sql(DBX_TRENDS_TABLE, top_n)).collect()]
+                    spark.sql(_top_concepts_sql(DBX_TRENDS_TABLE, top_n,
+                                                DBX_RESOLUTION_TABLE)).collect()]
         wb = spark.sql(_latest_week_sql(DBX_TRENDS_TABLE)).collect()
         w_start, w_end = _snippet_window(_as_date_str(wb[0][0]) if wb else None)
         mentions = [r.asDict() for r in
@@ -641,7 +689,9 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
     else:
         import duckdb
         con = duckdb.connect(duckdb_path, read_only=True)
-        concepts = con.sql(_top_concepts_sql(DUCKDB_TRENDS_REL, top_n)).df().to_dict("records")
+        concepts = con.sql(_top_concepts_sql(
+            DUCKDB_TRENDS_REL, top_n,
+            f"read_parquet('{LOCAL_RESOLUTION_PATH}')")).df().to_dict("records")
         wb = con.sql(_latest_week_sql(DUCKDB_TRENDS_REL)).df()
         w_start, w_end = _snippet_window(_as_date_str(wb["week_end"][0]) if len(wb) else None)
         mentions = con.sql(
