@@ -128,10 +128,12 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v6"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
+PROMPT_VERSION = "v7"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
                                          # v6 = SECOND LOOK on a "none": recall matters as much as
                                          #      precision here, because a false "we don't carry this"
                                          #      sends someone to source a product we already sell
+                                         # v7 = board-level grouping is REVIEWED before it is applied
+                                         #      (v6's first run merged 3 wrong out of 4)
 _CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
 VERIFY_MAX_TOKENS = 1200                 # per-candidate verdicts + reasons
@@ -265,25 +267,56 @@ anything, and `"groups": []` is a perfectly good answer. Do NOT echo back the co
 you are leaving alone: there is no need, and a long reply risks being cut off before it \
 is valid JSON.
 
-MERGE only when it is the SAME thing named differently:
-  - another script or language: "som tam" / "ส้มตำ", "nam prik" / "น้ำพริก"
-  - a spelling, spacing, word-order or singular/plural variant
-  - a fuller name for the identical product: "matcha" / "matcha powder"
+APPLY THIS ONE TEST, and nothing else. Ask: does either text carry a word that NARROWS \
+what is being referred to — a brand, a variety, a flavour, a preparation, a cut, a \
+region? If yes, THEY ARE DIFFERENT. Only merge when the two texts denote the identical \
+thing, one being a translation, transliteration, or spelling variant of the other.
 
-DO NOT MERGE — these are different trends even though they look related:
-  - a BRANDED product and its generic category: "Mama Instant Noodles" is not
-    "Instant Noodles". The brand one is a narrower, separate signal.
-  - two varieties or preparations of one base: "Nam Prik" is not "Nam Prik Saeb";
-    "Fried Chicken" is not "Grilled Chicken".
-  - things that merely share a category: "Ice Cream" is not "Frozen Yogurt";
-    "Coffee" is not "Matcha".
-  - an ingredient and a dish made from it.
-  - concepts from DIFFERENT boards. Each concept is tagged [dish] or [item] and a
-    group must be entirely one or the other, even for identical text.
+Worked through, so the test is unambiguous:
+  "som tam" / "ส้มตำ"                 SAME — transliteration, nothing narrowed
+  "banh khot" / "bánh khọt"           SAME — diacritics only
+  "matcha" / "matcha powder"          SAME — "powder" is the form matcha comes in, it
+                                      does not narrow which thing is meant
+  "มาม่า" / "instant noodles"          DIFFERENT — มาม่า (Mama) is a BRAND. A brand always
+                                      narrows. Never merge a brand into a category.
+  "น้ำพริก" / "น้ำพริกแซ่บ"              DIFFERENT — "แซ่บ" narrows it to one variety
+  "ก๋วยเตี๋ยว" / "ก๋วยเตี๋ยวเรือ"          DIFFERENT — "เรือ" (boat) narrows it to one dish
+  "fried chicken" / "grilled chicken" DIFFERENT — the preparation narrows it
+  "ice cream" / "frozen yogurt"       DIFFERENT — merely the same category
+  "pork" / "crispy pork"              DIFFERENT — "crispy" narrows it
 
-WHEN IN DOUBT, LEAVE THEM SEPARATE. A wrong merge silently fuses two real trends into \
-one and cannot be spotted on the board afterwards; a missed merge only costs a \
-duplicate row, which is visible and harmless by comparison."""
+A shared head word is NOT evidence of sameness. Most of the pairs above share one, and \
+almost all of them are different things. If one text is a longer version of the other, \
+assume the extra words matter and DO NOT MERGE unless those words only restate the same \
+thing.
+
+Also never merge across boards: each concept is tagged [dish] or [item], and a group \
+must be entirely one or the other even for identical text.
+
+WHEN IN DOUBT, LEAVE THEM SEPARATE. A wrong merge fuses two real trends into one and \
+buries the more specific signal — a brand disappearing inside a category is the exact \
+failure this must avoid. A missed merge only costs a duplicate row, which is visible and \
+harmless by comparison. Merging nothing is a good answer."""
+
+
+MERGE_REVIEW_INSTRUCTIONS = """You are reviewing proposed merges of trending food \
+concepts. Another model claimed each pair below refers to the SAME thing. Your job is to \
+REFUTE that wherever it does not hold. Default to REFUSING the merge.
+
+Refuse whenever either text carries a word that NARROWS what is meant — a brand, a \
+variety, a flavour, a preparation, a cut, a region. A brand ALWAYS narrows ("มาม่า" is \
+Mama, a brand, and is not "instant noodles"). A qualifier ALWAYS narrows ("น้ำพริกแซ่บ" is \
+one variety of "น้ำพริก"; "ก๋วยเตี๋ยวเรือ" is one dish within "ก๋วยเตี๋ยว"). Sharing a head word \
+is not sameness.
+
+Accept ONLY when the two texts denote the identical thing — a translation, \
+transliteration, diacritic or spelling variant, or a form of the same substance \
+("matcha" / "matcha powder").
+
+Return ONE JSON object, no prose:
+{"verdicts": [ {"primary": string, "member": string, "same": boolean, "reason": string} ]}
+one entry per proposed pair, copying primary and member EXACTLY as given, reason <= 100 \
+chars. A merge you do not explicitly accept is discarded, so silence rejects."""
 
 RECOVERY_INSTRUCTIONS = """You are a SECOND-CHANCE CATALOG SEARCH, and you exist to \
 stop one specific mistake.
@@ -1061,6 +1094,20 @@ def group_concepts(client, concepts):
             for m in members:
                 mapping[m] = (primary, label)
 
+    # ── REFUTE THE MERGES ────────────────────────────────────────────────────────
+    # First real run merged 3 wrong out of 4 — a brand into its category (มาม่า into
+    # "instant noodles"), and two varieties into their base — while missing the one pair
+    # the prompt used as its worked example. Prompt rules alone did not hold, and the
+    # error is asymmetric: a wrong merge buries the more specific signal, which is the
+    # opposite of what the item board is for. So proposed merges now face the same
+    # propose-then-refute treatment that fixed the SKU matching, defaulting to refusal.
+    proposed = [(m, p) for m, (p, _) in mapping.items() if p != m]
+    if proposed:
+        keep = review_merges(client, proposed)
+        for member, primary in proposed:
+            if (primary, member) not in keep:
+                mapping[member] = (member, None)     # refused -> stands alone
+
     merged = {p for p, _ in mapping.values() if sum(1 for v in mapping.values()
                                                     if v[0] == p) > 1}
     for p in sorted(merged):
@@ -1069,6 +1116,38 @@ def group_concepts(client, concepts):
     print(f"  grouping: {len(concepts)} concepts -> "
           f"{len(set(p for p, _ in mapping.values()))} groups")
     return mapping
+
+
+def review_merges(client, proposed):
+    """Second opinion on each proposed merge. Returns the set of (primary, member) pairs
+    that survive; anything not explicitly accepted is discarded, so a failed or
+    unparseable call refuses every merge and the board simply stays unmerged."""
+    lines = ["Proposed merges — for each, are these the SAME thing?", ""]
+    for member, primary in sorted(proposed):
+        lines.append(f'  primary: "{primary}"   member: "{member}"')
+    data = _call_json(client, MERGE_REVIEW_INSTRUCTIONS, None, "\n".join(lines),
+                      MAX_TOKENS + 120 * len(proposed),
+                      lambda d: isinstance(d.get("verdicts"), list),
+                      "merge-review", f"{len(proposed)} merges")
+    if data is None:
+        print(f"  merge review failed — refusing all {len(proposed)} proposed merges",
+              file=sys.stderr)
+        return set()
+
+    asked = {(p, m) for m, p in proposed}
+    keep = set()
+    for v in data["verdicts"]:
+        if not isinstance(v, dict):
+            continue
+        pair = (str(v.get("primary")), str(v.get("member")))
+        if pair not in asked:
+            continue
+        if v.get("same"):
+            keep.add(pair)
+        else:
+            print(f"  merge REFUSED: {pair[1]!r} is not {pair[0]!r} — "
+                  f"{str(v.get('reason') or '')[:100]}")
+    return keep
 
 
 def build_recovery_prompt(concept, snippets, ruled_out):
