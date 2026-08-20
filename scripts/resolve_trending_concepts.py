@@ -656,13 +656,21 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
         print("int_social_concept_trends is EMPTY — nothing to resolve. Build it first: "
               "dbt build --select +int_social_concept_trends", file=sys.stderr)
 
+    # Every string the enrichment ever called a BRAND, folded to concept keys. Used as a
+    # hard guard on grouping below: a brand must never be folded into a category. This is
+    # the one part of that judgment that needs no model — the brands were already
+    # extracted.
+    brand_keys = {_concept_key(b) for m in mentions
+                  for b in _raw_list(m.get("brands"))}
+
     wanted = {c["concept_norm"] for c in concepts}
     snippets = bucket_snippets(mentions, wanted)
     resolved = {r.get("concept_norm") for r in existing}
     new = [c for c in concepts if c["concept_norm"] not in resolved]
     print(f"snippet window: {w_start} .. {w_end}  "
-          f"({len(mentions)} mentions naming a dish or a product)")
-    return new, snippets, catalog, existing
+          f"({len(mentions)} mentions naming a dish or a product, "
+          f"{len(brand_keys)} distinct brands seen)")
+    return new, snippets, catalog, existing, brand_keys
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1026,7 +1034,7 @@ def propose_one(client, catalog_block, concept, snippets):
                       _proposal_ok, "propose", concept["concept_norm"])
 
 
-def group_concepts(client, concepts):
+def group_concepts(client, concepts, brand_keys=frozenset()):
     """ONE call over the whole board: which concepts are the same thing?
 
     Why this exists: every concept is otherwise resolved in ISOLATION, so when the model
@@ -1105,6 +1113,20 @@ def group_concepts(client, concepts):
     if proposed:
         keep = review_merges(client, proposed)
         for member, primary in proposed:
+            # DETERMINISTIC GUARD, applied after the review and overriding it. If exactly
+            # one side is a string the enrichment called a brand, this is a brand being
+            # folded into a category — the worst of the v6 mistakes (มาม่า into "instant
+            # noodles"), and the part of the judgment that needs no model at all. Note no
+            # string rule can replace the review generally: a superstring test blocks
+            # ก๋วยเตี๋ยวเรือ and น้ำพริกแซ่บ correctly but ALSO blocks matcha powder, which must
+            # merge, and misses มาม่า entirely. Blocking costs at most a visible duplicate.
+            if (member in brand_keys) != (primary in brand_keys):
+                brand, other = ((member, primary) if member in brand_keys
+                                else (primary, member))
+                print(f"  merge BLOCKED: {brand!r} is a known brand and {other!r} is "
+                      f"not — a brand is never the same thing as a category")
+                mapping[member] = (member, None)
+                continue
             if (primary, member) not in keep:
                 mapping[member] = (member, None)     # refused -> stands alone
 
@@ -1426,8 +1448,8 @@ def finalize_records(by_concept, resolved_at, model_version):
 def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
          concurrency=CONCURRENCY, duckdb_path=LOCAL_DUCKDB_PATH, verify=True):
     model_version = _CURRENT_VERSION if verify else f"{_CURRENT_VERSION}-noverify"
-    concepts, snippets, catalog, existing = read_all(backend, top_n, duckdb_path,
-                                                     model_version)
+    concepts, snippets, catalog, existing, brand_keys = read_all(
+        backend, top_n, duckdb_path, model_version)
     if limit:
         concepts = concepts[:limit]
     print(f"{len(existing)} already resolved; {len(concepts)} new top-{top_n} "
@@ -1467,7 +1489,7 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
     # One call over the whole board, so "matcha" and "matcha powder" are known to be
     # one trend BEFORE anything is resolved. Then each group is resolved ONCE and the
     # answer is written for every member, which also cuts calls.
-    groups = group_concepts(client, concepts) if verify else              {c["concept_norm"]: (c["concept_norm"], None) for c in concepts}
+    groups = group_concepts(client, concepts, brand_keys) if verify else              {c["concept_norm"]: (c["concept_norm"], None) for c in concepts}
     primaries = {}
     for c in concepts:
         primary, _ = groups[c["concept_norm"]]
