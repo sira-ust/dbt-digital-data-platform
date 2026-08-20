@@ -1552,16 +1552,32 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
     # one trend BEFORE anything is resolved. Then each group is resolved ONCE and the
     # answer is written for every member, which also cuts calls.
     groups = group_concepts(client, concepts, brand_keys) if verify else              {c["concept_norm"]: (c["concept_norm"], None) for c in concepts}
+    # Seed each group's record from THE PRIMARY's own dict, never from whichever member
+    # happens to be iterated first. `setdefault(primary, dict(c))` did the latter, and
+    # when a member preceded its primary the group was resolved and stored under the
+    # MEMBER's concept_norm — so the write loop's all_records.get(primary) missed and
+    # `answer is None` silently dropped every row in that group. Observed on v9
+    # (2026-08-20): 'matcha' absorbs 'matcha powder', 42/42 resolved, 44 of 46 rows
+    # written, and the two lost were the whole matcha group — leaving rank 1 on the item
+    # board with its stale v5 answer, listed twice. It also mis-summed: the member's
+    # count was added to itself and the primary's own count never was.
+    by_norm = {c["concept_norm"]: c for c in concepts}
     primaries = {}
     for c in concepts:
         primary, _ = groups[c["concept_norm"]]
-        primaries.setdefault(primary, dict(c))
-        if primary != c["concept_norm"]:
-            # the group's volume is the sum — it is one trend, and the prompt shows
-            # this number as context
-            primaries[primary]["mention_count"] = (
-                (primaries[primary].get("mention_count") or 0)
-                + (c.get("mention_count") or 0))
+        if primary not in primaries:
+            # group_concepts guarantees the primary is itself one of the offered
+            # concepts, so by_norm[primary] always exists.
+            primaries[primary] = dict(by_norm[primary])
+            primaries[primary]["mention_count"] = 0
+            primaries[primary]["is_dish"] = 0
+            primaries[primary]["is_item"] = 0
+        # the group's volume is the sum over EVERY member including the primary — it is
+        # one trend, and the prompt shows this number as context. Class flags are OR'd
+        # for the same reason: a member seen as an item makes the group an item.
+        primaries[primary]["mention_count"] += (c.get("mention_count") or 0)
+        primaries[primary]["is_dish"] |= 1 if c.get("is_dish") else 0
+        primaries[primary]["is_item"] |= 1 if c.get("is_item") else 0
     to_resolve = list(primaries.values())
     total = len(to_resolve)
 
