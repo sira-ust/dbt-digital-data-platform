@@ -981,7 +981,7 @@ def _render_snippets(snippets):
 def build_user_prompt(concept, snippets):
     lines = [
         f"Concept (raw): {concept['concept_norm']}",
-        f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count')}",
+        f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count') or 'n/a'}",
         "",
     ]
     return "\n".join(lines + _render_snippets(snippets))
@@ -1111,10 +1111,15 @@ def group_concepts(client, concepts, brand_keys=frozenset()):
     if len(concepts) < 2:
         return ungrouped
 
+    # `or 0`, not .get(k, 0): a concept re-offered because it is currently merged into
+    # a primary has mention_count PRESENT and None — it has no trends row of its own —
+    # so the .get default never fires and `-None` raises. Same reason the count is
+    # omitted from the line rather than printed as "None mentions".
     lines = ["Concepts on this week's board:"]
-    for c in sorted(concepts, key=lambda c: -c.get("mention_count", 0)):
-        lines.append(f"  [{_class_hint(c)}] {c['concept_norm']}   "
-                     f"({c.get('mention_count')} mentions)")
+    for c in sorted(concepts, key=lambda c: -(c.get("mention_count") or 0)):
+        n = c.get("mention_count")
+        lines.append(f"  [{_class_hint(c)}] {c['concept_norm']}"
+                     + (f"   ({n} mentions)" if n else ""))
     # Sized from the input, not a flat cap. The first version asked for every concept
     # echoed back under MAX_TOKENS * 2 = 1400, and 40 concepts did not fit: the reply was
     # truncated mid-JSON, BOTH attempts hit exactly the cap, and the whole grouping was
@@ -1233,7 +1238,7 @@ def build_recovery_prompt(concept, snippets, ruled_out):
     """Same context as the proposer, plus what has already been ruled out and why, so
     the second look spends its effort somewhere new."""
     lines = [f"Concept (raw): {concept['concept_norm']}",
-             f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count')}",
+             f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count') or 'n/a'}",
              ""]
     if ruled_out:
         lines.append("ALREADY RULED OUT by review — do not offer these again:")
