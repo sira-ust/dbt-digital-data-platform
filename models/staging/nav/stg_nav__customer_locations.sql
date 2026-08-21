@@ -44,6 +44,15 @@ select
 
     nullif(trim(cast(c.salesperson_code as {{ dbt.type_string() }})), '') as salesperson_code,
 
+    -- NAV stores this as in_active (1 = inactive), which reads backwards in a
+    -- filter, so it is flipped once here. 3,485 of 7,198 customers (48%) are
+    -- inactive and every one of them was a live geofence candidate: 975 of 8,048
+    -- recorded visits and 31,948 on-site minutes were credited to dead accounts.
+    -- Excluding them from the candidate set is NOT safe (a rep can visit a
+    -- lapsed customer), so this is carried as a column and used as a tie-break
+    -- in int_rep_customer_presence instead.
+    (coalesce(cast(c.in_active as {{ dbt.type_int() }}), 0) = 0)          as is_active,
+
     -- provenance: which string was actually resolved, and when
     g.geocoded_address,
     g.geocoded_at

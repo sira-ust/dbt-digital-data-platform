@@ -111,6 +111,34 @@ models:
           - accepted_values:
               arguments:
                 values: [search, filter, icon_click, catalog_view, item_detail, image_enlarge, oos_check]
+      - name: customer_key
+        description: >
+          The customer the event acted on. REPAIRED here: a BLE-paired iPad hands
+          its open cart to the PDA, so its own events arrive with no
+          ust_customer_no, and every model filtering `customer_key is not null`
+          was dropping that work. Filled from the pairing when it is missing —
+          see customer_key_source, and the model header for the mechanism.
+      - name: customer_key_source
+        description: >
+          Provenance for customer_key. 'event' = the app named it. 'ble_session' =
+          taken from the customer the BLE connect event named. 'paired_pda' =
+          taken from the customer the paired PDA had open. Null when there is no
+          customer at all (background/system events). Filter to 'event' for
+          anything that must be exact.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['event', 'ble_session', 'paired_pda']
+      - name: is_ble_paired
+        description: >
+          Was an iPad BLE-paired to a PDA for this rep at this moment. Derived
+          from the L1=17 BLE events and expired after
+          var('ble_pairing_expiry_minutes'), because the app logs no reliable
+          unpair event — ZERO Unpair / Forget Device in August 2026.
+      - name: ble_pda_device
+        description: >
+          device_name of the PDA holding the pairing. The open order stays with
+          THIS PDA across a handoff to another one, per the app team.
       - name: feature_group
         description: "Feature rollup: discovery / navigation / cart / stock."
       - name: page_context
@@ -497,6 +525,28 @@ models:
           before it is idle time, not work on this customer.
       - name: device
         description: PDA / iPad / Android tablet.
+      - name: device_group
+        description: >
+          Same as device, EXCEPT 'PDA + iPad (paired)' while BLE-paired. Use this
+          for anything that measures time: while paired the rep drives the iPad
+          from the PDA and events alternate every few seconds, so treating them
+          as two devices bills the time between them to neither.
+      - name: is_ble_paired
+        description: >
+          Was the iPad BLE-paired to a PDA at this moment. Derived from the L1=17
+          BLE events, expiring after var('ble_pairing_expiry_minutes') because
+          the app logs no reliable unpair event (ZERO Unpair / Forget Device in
+          August 2026).
+      - name: ble_pda_device
+        description: >
+          device_name of the PDA holding the pairing. The order stays with THIS
+          PDA across a handoff to another one, per the app team.
+      - name: customer_key_source
+        description: >
+          Passed through from int_events_enriched, where the repair happens.
+          'event' = the app named the customer; 'ble_session' / 'paired_pda' =
+          inherited because BLE pairing had moved the open cart to the PDA.
+          Filter to 'event' for anything that must be exact.
       - name: increment_id
         description: Order number; populated on submit rows only, and exact.
 
@@ -545,11 +595,12 @@ models:
         description: GPS fixes behind this visit.
       - name: is_ambiguous
         description: >
-          True when another customer also sat inside the geofence for any fix in
-          this visit — the match is plausible, not proven. 10.3% of customers
-          have a neighbour within 25m, which is inside GPS error, so "nearest"
-          there is a coin flip rather than a measurement. Exclude these from
-          strict visit counts.
+          True when another ACTIVE customer also sat inside the geofence for any
+          fix in this visit — the match is plausible, not proven. Inactive
+          accounts no longer count toward this and lose every tie-break, which is
+          what stopped a dead account at a shared address from winning on row
+          order. "Nearest" is still a coin flip where two live customers sit
+          within GPS error of each other. Exclude these from strict visit counts.
       - name: devices
         description: Which device(s) recorded the visit, sorted.
 
