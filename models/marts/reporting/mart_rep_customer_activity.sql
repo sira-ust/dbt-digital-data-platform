@@ -224,10 +224,17 @@ stints as (
         select
             e.customer_day_key, e.session_seq, p.was_on_site, e.device_group,
             e.event_at_utc, e.entity_id,
-            row_number() over (partition by e.customer_day_key, e.session_seq, p.was_on_site
+            -- Islands over the WHOLE session, so a stint breaks whenever either
+            -- the device OR the in/out-of-visit state changes. Partitioning the
+            -- outer row_number by was_on_site instead made the off-visit events
+            -- look consecutive across the on-site stretch sitting between them,
+            -- so their stint span was measured end to end: SUN015 on 2026-08-18
+            -- billed 105 minutes to "visited, keyed elsewhere" for two fragments
+            -- (14:12-14:14 and 15:30-15:57) either side of a 76-minute visit.
+            row_number() over (partition by e.customer_day_key, e.session_seq
                                order by e.event_at_utc, e.entity_id)
-          - row_number() over (partition by e.customer_day_key, e.session_seq, p.was_on_site,
-                                            e.device_group
+          - row_number() over (partition by e.customer_day_key, e.session_seq,
+                                            e.device_group, p.was_on_site
                                order by e.event_at_utc, e.entity_id)      as stint_grp
         from activity_events as e
         join event_placement as p
