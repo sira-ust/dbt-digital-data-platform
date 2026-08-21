@@ -155,7 +155,16 @@ session_scenario as (
         b.was_on_site                                                     as during_visit,
         max(case when v.customer_day_key is not null then 1 else 0 end)   as visited_that_day,
         max(case when v.is_ambiguous then 1 else 0 end)                   as is_ambiguous,
-        sum(case when v.arrived_at <= b.session_end
+        -- Attributed ONLY to the on-site portion. Splitting a session at the
+        -- visit boundary means both halves still overlap the visit window in
+        -- wall-clock terms, so the old overlap test handed the same visit's
+        -- minutes to BOTH rows: rep 026 on 2026-08-18 summed to 449 on-site
+        -- minutes against a true GPS total of 307, because SUN013 (66) and
+        -- SUN015 (76) were each counted twice. was_on_site already identifies
+        -- which portion was actually inside the visit, so the minutes go there
+        -- and the keyed-elsewhere row gets zero.
+        sum(case when b.was_on_site = 1
+                  and v.arrived_at <= b.session_end
                   and b.session_start <= v.departed_at
                  then v.on_site_minutes else 0 end)                       as overlap_on_site_minutes
     from session_bounds as b
