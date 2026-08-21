@@ -49,10 +49,48 @@ presence as (
 
 ),
 
--- ── classify every SESSION against the visits for that customer-day ────────
--- order_channel (PDA = rep keyed it, WEB/APP = customer placed it) lives on
--- fct_orders, not the intermediate. fct_orders is unique on increment_id so
--- this cannot fan out.
+-- ── was each EVENT inside a visit, or outside it? ─────────────────────────
+-- Flagged per event, NOT per session, because the two are different shapes. A
+-- session ends only on an idle gap of var('activity_gap_minutes'), so it happily
+-- runs straight through the rep walking out of the store — into the car, or the
+-- evening at home. Testing "did the session overlap the visit at all" then
+-- labels the WHOLE session on-site on the strength of any overlap.
+--
+-- Measured on rep 026 / 2026-08-17: his JUN003 session touched the visit for
+-- THREE MINUTES (10 events, 11:12-11:15) and then ran another 53 minutes and 829
+-- events after he left, all of it reported as on-site. NEW051 and YMA002 were
+-- genuine mixed sessions — 476 events in store then 346 after, and 178 then 285.
+--
+-- Splitting here means one session can produce TWO rows, one per side of the
+-- boundary. That is the same grain change the scenario column already made at
+-- day level, and for the same reason: a single label cannot describe both halves
+-- without lying about one of them.
+event_placement as (
+
+    select
+        e.entity_id,
+        e.customer_day_key,
+        e.sales_code,
+        e.customer_key,
+        e.activity_date,
+        e.session_seq,
+        e.event_at_local,
+        e.customer_key_source,
+        max(case
+                when v.arrived_at <= e.event_at_local
+                 and e.event_at_local <= v.departed_at then 1
+                else 0
+            end)                                                         as was_on_site
+    from activity_events as e
+    left join presence as v
+        on v.customer_day_key = e.customer_day_key
+    group by
+        e.entity_id, e.customer_day_key, e.sales_code, e.customer_key,
+        e.activity_date, e.session_seq, e.event_at_local, e.customer_key_source
+
+),
+
+-- ── classify every SESSION PORTION against the visits for that customer-day ─
 session_bounds as (
 
     select
@@ -61,15 +99,46 @@ session_bounds as (
         e.customer_key,
         e.activity_date,
         e.session_seq,
+        e.was_on_site,
         min(e.event_at_local)                                            as session_start,
         max(e.event_at_local)                                            as session_end,
         count(*)                                                         as event_count,
-        max(case when e.is_submit then e.increment_id end)               as increment_id,
-        max(case when e.is_submit then o.order_channel end)              as order_channel
-    from activity_events as e
-    left join {{ ref('fct_orders') }} as o
-        on o.increment_id = e.increment_id
-    group by e.customer_day_key, e.sales_code, e.customer_key, e.activity_date, e.session_seq
+        sum(case when e.customer_key_source <> 'event' then 1 else 0 end) as inherited_event_count
+    from event_placement as e
+    group by
+        e.customer_day_key, e.sales_code, e.customer_key, e.activity_date,
+        e.session_seq, e.was_on_site
+
+),
+
+-- every order a session actually submitted, not just one. A session can
+-- submit more than one order (e.g. two back-to-back sends) — collapsing to a
+-- single MAX(increment_id) silently dropped every order but the
+-- lexicographically largest one (confirmed on real data 2026-08-20: 4 of 42
+-- order-bearing sessions for one rep alone had 2 distinct orders, and the
+-- mart was missing all 4 of the lower-sorting ones). `distinct` here is the
+-- resubmit case (same increment_id logged twice), a different thing from
+-- multiple genuinely different orders — both are handled by carrying every
+-- DISTINCT increment_id through as an array instead of picking one.
+-- order_channel (PDA = rep keyed it, WEB/APP = customer placed it) lives on
+-- fct_orders, not the intermediate; verified consistent across every
+-- multi-order session found, so one value per session is still safe.
+session_orders as (
+
+    select
+        customer_day_key,
+        session_seq,
+        array_agg(increment_id)                                          as increment_ids,
+        max(order_channel)                                               as order_channel
+    from (
+        select distinct
+            e.customer_day_key, e.session_seq, e.increment_id, o.order_channel
+        from activity_events as e
+        left join {{ ref('fct_orders') }} as o
+            on o.increment_id = e.increment_id
+        where e.is_submit
+    ) as submits
+    group by customer_day_key, session_seq
 
 ),
 
@@ -77,21 +146,29 @@ session_scenario as (
 
     select
         b.*,
-        -- did THIS session happen inside a visit to THIS customer?
-        max(case when v.arrived_at <= b.session_end
-                  and b.session_start <= v.departed_at then 1 else 0 end) as during_visit,
+        so.increment_ids,
+        so.order_channel,
+        -- was THIS PORTION of the session inside a visit? Decided per event in
+        -- event_placement, so a session straddling the departure contributes one
+        -- on-site row and one 'keyed elsewhere' row instead of being labelled
+        -- wholly on-site on the strength of a 3-minute overlap.
+        b.was_on_site                                                     as during_visit,
         max(case when v.customer_day_key is not null then 1 else 0 end)   as visited_that_day,
         max(case when v.is_ambiguous then 1 else 0 end)                   as is_ambiguous,
         sum(case when v.arrived_at <= b.session_end
                   and b.session_start <= v.departed_at
                  then v.on_site_minutes else 0 end)                       as overlap_on_site_minutes
     from session_bounds as b
+    left join session_orders as so
+        on so.customer_day_key = b.customer_day_key
+       and so.session_seq      = b.session_seq
     left join presence as v
         on v.customer_day_key = b.customer_day_key
     group by
         b.customer_day_key, b.sales_code, b.customer_key, b.activity_date,
-        b.session_seq, b.session_start, b.session_end, b.event_count,
-        b.increment_id, b.order_channel
+        b.session_seq, b.was_on_site, b.session_start, b.session_end,
+        b.event_count, b.inherited_event_count,
+        so.increment_ids, so.order_channel
 
 ),
 
@@ -121,23 +198,33 @@ labelled as (
 ),
 
 -- ── device minutes per session, from stints ───────────────────────────────
+-- Keyed on device_group, NOT device: while BLE-paired the rep drives the iPad
+-- from the PDA, so events alternate every few seconds. Splitting a stint on
+-- every flip bills the time between them to neither device, which is why rep
+-- 026 / JUN003 / 2026-08-17 reported pda_minutes = 0 on a session holding 5 PDA
+-- events. A pairing is therefore ONE stint carrying paired_seconds.
 stints as (
 
     select
         customer_day_key,
         session_seq,
-        device,
+        was_on_site,
+        device_group,
         {{ dbt.datediff('min(event_at_utc)', 'max(event_at_utc)', 'second') }} as stint_seconds
     from (
         select
-            customer_day_key, session_seq, device, event_at_utc,
-            row_number() over (partition by customer_day_key, session_seq
-                               order by event_at_utc, entity_id)
-          - row_number() over (partition by customer_day_key, session_seq, device
-                               order by event_at_utc, entity_id)          as stint_grp
-        from activity_events
+            e.customer_day_key, e.session_seq, p.was_on_site, e.device_group,
+            e.event_at_utc, e.entity_id,
+            row_number() over (partition by e.customer_day_key, e.session_seq, p.was_on_site
+                               order by e.event_at_utc, e.entity_id)
+          - row_number() over (partition by e.customer_day_key, e.session_seq, p.was_on_site,
+                                            e.device_group
+                               order by e.event_at_utc, e.entity_id)      as stint_grp
+        from activity_events as e
+        join event_placement as p
+            on p.entity_id = e.entity_id
     ) as runs
-    group by customer_day_key, session_seq, device, stint_grp
+    group by customer_day_key, session_seq, was_on_site, device_group, stint_grp
 
 ),
 
@@ -146,11 +233,14 @@ session_device as (
     select
         customer_day_key,
         session_seq,
-        sum(case when device = 'PDA'            then stint_seconds else 0 end) as pda_seconds,
-        sum(case when device = 'iPad'           then stint_seconds else 0 end) as ipad_seconds,
-        sum(case when device = 'Android tablet' then stint_seconds else 0 end) as tablet_seconds
+        was_on_site,
+        sum(case when device_group = 'PDA'            then stint_seconds else 0 end) as pda_seconds,
+        sum(case when device_group = 'iPad'           then stint_seconds else 0 end) as ipad_seconds,
+        sum(case when device_group = 'Android tablet' then stint_seconds else 0 end) as tablet_seconds,
+        sum(case when device_group = 'PDA + iPad (paired)'
+                                                      then stint_seconds else 0 end) as paired_seconds
     from stints
-    group by customer_day_key, session_seq
+    group by customer_day_key, session_seq, was_on_site
 
 ),
 
@@ -168,21 +258,27 @@ by_scenario as (
         cast(round(sum(d.pda_seconds)    / 60.0) as {{ dbt.type_int() }}) as pda_minutes,
         cast(round(sum(d.ipad_seconds)   / 60.0) as {{ dbt.type_int() }}) as ipad_minutes,
         cast(round(sum(d.tablet_seconds) / 60.0) as {{ dbt.type_int() }}) as android_tablet_minutes,
+        cast(round(sum(d.paired_seconds) / 60.0) as {{ dbt.type_int() }}) as paired_minutes,
         max(l.overlap_on_site_minutes)                                   as on_site_minutes,
         {{ sort_array('array_agg(' ~ format_hhmm('l.session_start') ~ ')') }}   as opened_at,
         min(l.session_start)                                             as first_touch_local,
         max(l.session_end)                                               as last_touch_local,
         sum(l.event_count)                                               as event_count,
+        sum(l.inherited_event_count)                                     as inherited_event_count,
         max(l.is_ambiguous) = 1                                          as is_ambiguous
     from labelled as l
     left join session_device as d
         on d.customer_day_key = l.customer_day_key
        and d.session_seq      = l.session_seq
+       and d.was_on_site      = l.was_on_site
     group by l.customer_day_key, l.sales_code, l.customer_key, l.activity_date, l.scenario
 
 ),
 
--- orders per scenario, deduped (a resubmit logs the same increment_id twice)
+-- orders per scenario, deduped (a resubmit logs the same increment_id twice).
+-- increment_ids is one array per SESSION, so explode it to one row per order
+-- before deduping — a session that submitted 2 distinct orders must produce 2
+-- rows here, not collapse to 1.
 scenario_orders as (
 
     select
@@ -193,7 +289,13 @@ scenario_orders as (
         array_agg(increment_id)                                          as order_ids
     from (
         select distinct customer_day_key, scenario, increment_id, order_channel
-        from labelled
+        from (
+            select
+                customer_day_key, scenario, order_channel,
+                {{ unnest('increment_ids') }}                            as increment_id
+            from labelled
+            where increment_ids is not null
+        ) as exploded
         where increment_id is not null
     ) as deduped
     group by customer_day_key, scenario
@@ -233,7 +335,8 @@ combined as (
     select
         a.customer_day_key, a.sales_code, a.customer_key, a.activity_date,
         a.scenario, a.sessions,
-        a.pda_minutes, a.ipad_minutes, a.android_tablet_minutes,
+        a.pda_minutes, a.ipad_minutes, a.android_tablet_minutes, a.paired_minutes,
+        a.inherited_event_count,
         a.on_site_minutes, a.opened_at,
         a.first_touch_local, a.last_touch_local,
         coalesce(o.orders_submitted, 0)                                  as orders_submitted,
@@ -252,7 +355,8 @@ combined as (
         v.customer_day_key, v.sales_code, v.customer_key, v.activity_date,
         'visit only, no app'                                             as scenario,
         0                                                                as sessions,
-        0, 0, 0,
+        0, 0, 0, 0,
+        0                                                                as inherited_event_count,
         v.on_site_minutes,
         {{ null_string_array() }}                                        as opened_at,
         cast(null as timestamp), cast(null as timestamp),
@@ -276,7 +380,11 @@ select
     c.pda_minutes,
     c.ipad_minutes,
     c.android_tablet_minutes,
-    c.pda_minutes + c.ipad_minutes + c.android_tablet_minutes            as keying_minutes,
+    -- time worked with the iPad BLE-paired to the PDA. Kept separate because it
+    -- cannot be split between the two: they are one workstation for that stretch.
+    c.paired_minutes,
+    c.pda_minutes + c.ipad_minutes + c.android_tablet_minutes
+        + c.paired_minutes                                               as keying_minutes,
     c.on_site_minutes,
 
     c.opened_at,
@@ -289,6 +397,9 @@ select
     c.order_ids,
 
     c.event_count,
+    -- how many of those events only have a customer because a BLE pairing let us
+    -- inherit it. Compare against event_count before treating a row as exact.
+    c.inherited_event_count,
     c.is_ambiguous,
 
     -- the standard noise filter: the rep spent measurable time, sent/handled an
@@ -296,7 +407,8 @@ select
     -- Do NOT filter on event_count instead — `event_count >= 4` discards 31% of
     -- all orders, because a submit landing with no preceding cart activity is a
     -- legitimate one-event row.
-    (c.pda_minutes + c.ipad_minutes + c.android_tablet_minutes > 0
+    (c.pda_minutes + c.ipad_minutes + c.android_tablet_minutes
+        + c.paired_minutes > 0
      or c.orders_submitted > 0
      or coalesce(c.on_site_minutes, 0) > 0)                              as has_activity
 from combined as c

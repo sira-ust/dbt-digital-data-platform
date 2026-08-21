@@ -76,11 +76,11 @@ description_code,function_name,l1_category_name,payload_format,has_geo,is_system
 08020000,Delete: Sales Order List,Delete Order,bare_value,false,false,,INFO,"PDA,CatalogFS"
 08030000,Auto Delete Order,Delete Order,bare_value,false,false,,INFO,"PDA,CatalogFS"
 09010000,Create Order,Create Order,bare_value,true,false,,INFO,"PDA,CatalogFS"
-09020000,Copy to New Order: Sales List,Create Order,none,true,false,,INFO,PDA
-09030000,Copy to New Order: Office List,Create Order,none,true,false,,INFO,PDA
+09020000,Copy to New Order: Sales List,Create Order,bare_value,true,false,,INFO,PDA
+09030000,Copy to New Order: Office List,Create Order,bare_value,true,false,,INFO,PDA
 09040000,Copy to New Order: Recycle Bin,Create Order,none,true,false,,INFO,PDA
-09050000,(BLE Only) Create New Order,Create Order,none,true,false,,INFO,PDA
-09060000,(BLE Only) Use Existing Order on Catalog,Create Order,none,true,false,,INFO,PDA
+09050000,(BLE Only) Create New Order,Create Order,bare_value,true,false,,INFO,PDA
+09060000,(BLE Only) Use Existing Order on Catalog,Create Order,bare_value,true,false,,INFO,PDA
 09070000,(BLE Only) Merge Orders,Create Order,none,true,false,,INFO,PDA
 09080000,Item Long Press +: Create New Order,Create Order,none,true,false,,INFO,CatalogFS
 10000000,Order operation (generic),Order Operations,,false,false,,,
