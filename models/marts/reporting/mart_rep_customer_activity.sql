@@ -155,7 +155,16 @@ session_scenario as (
         b.was_on_site                                                     as during_visit,
         max(case when v.customer_day_key is not null then 1 else 0 end)   as visited_that_day,
         max(case when v.is_ambiguous then 1 else 0 end)                   as is_ambiguous,
-        sum(case when v.arrived_at <= b.session_end
+        -- Attributed ONLY to the on-site portion. Splitting a session at the
+        -- visit boundary means both halves still overlap the visit window in
+        -- wall-clock terms, so the old overlap test handed the same visit's
+        -- minutes to BOTH rows: rep 026 on 2026-08-18 summed to 449 on-site
+        -- minutes against a true GPS total of 307, because SUN013 (66) and
+        -- SUN015 (76) were each counted twice. was_on_site already identifies
+        -- which portion was actually inside the visit, so the minutes go there
+        -- and the keyed-elsewhere row gets zero.
+        sum(case when b.was_on_site = 1
+                  and v.arrived_at <= b.session_end
                   and b.session_start <= v.departed_at
                  then v.on_site_minutes else 0 end)                       as overlap_on_site_minutes
     from session_bounds as b
@@ -215,10 +224,17 @@ stints as (
         select
             e.customer_day_key, e.session_seq, p.was_on_site, e.device_group,
             e.event_at_utc, e.entity_id,
-            row_number() over (partition by e.customer_day_key, e.session_seq, p.was_on_site
+            -- Islands over the WHOLE session, so a stint breaks whenever either
+            -- the device OR the in/out-of-visit state changes. Partitioning the
+            -- outer row_number by was_on_site instead made the off-visit events
+            -- look consecutive across the on-site stretch sitting between them,
+            -- so their stint span was measured end to end: SUN015 on 2026-08-18
+            -- billed 105 minutes to "visited, keyed elsewhere" for two fragments
+            -- (14:12-14:14 and 15:30-15:57) either side of a 76-minute visit.
+            row_number() over (partition by e.customer_day_key, e.session_seq
                                order by e.event_at_utc, e.entity_id)
-          - row_number() over (partition by e.customer_day_key, e.session_seq, p.was_on_site,
-                                            e.device_group
+          - row_number() over (partition by e.customer_day_key, e.session_seq,
+                                            e.device_group, p.was_on_site
                                order by e.event_at_utc, e.entity_id)      as stint_grp
         from activity_events as e
         join event_placement as p
