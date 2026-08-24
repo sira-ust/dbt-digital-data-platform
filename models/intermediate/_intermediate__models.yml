@@ -391,8 +391,10 @@ models:
       that. Known cost: a spike straddling a Sunday splits across two weeks and
       ranks lower in both (an earlier design used a trailing multi-week window to
       avoid that, at the price of overlapping periods that can't be compared week to
-      week). History is bounded by social_trend_history_weeks. A mid-week run leaves
-      the newest week partial — see is_partial_week / days_observed.
+      week). Bounded to the latest social_trend_history_weeks COMPLETE weeks: a week
+      still in progress is not computed at all until it finishes, so max(week_start) is
+      always a finished week and never half-counted. The first week ever collected is
+      dropped permanently, since it can never become complete.
 
       TWO RANKING CLASSES, ranked separately: 'dish' (from mentioned_dishes) and
       'item' (from ingredients, minus seed_social_generic_terms). trend_rank is
@@ -403,9 +405,9 @@ models:
 
       trend_score is AUTHOR-DIVERSITY based (distinct_authors_adj x log-dampened,
       per-channel-normalised engagement/views), replacing a pure mention-volume
-      score that correlated ~0.86 with raw mention_count — see trend_score_legacy,
-      kept alongside for comparison, and author_quality below for why the
-      exclusion rule runs on named (non-anonymised) authors, not the raw count.
+      score that correlated ~0.86 with raw mention_count. See author_quality below
+      for why the exclusion rule runs on named (non-anonymised) authors, not the
+      raw count.
       Channel medians are per (week, channel) with an all-history fallback for thin
       windows; the shared-post divisor is per mention within class. For rise, use
       mention_share / mention_share_change (volume-neutral) over is_rising.
@@ -414,6 +416,8 @@ models:
       canonicalises them downstream. The GATE scripts/resolve_trending_concepts.py
       reads to pick the CURRENT week's top-N concepts per class (only rows with a
       non-null trend_rank — see trend_rank below).
+
+      {{ doc('social_time_windows') }}
     config:
       tags: ["social"]
     tests:
@@ -453,17 +457,6 @@ models:
           Sortable ISO week label, "2026-W34". The YEAR is the ISO year (taken from the
           week's Thursday), not the calendar year of week_start: Monday 2025-12-29
           belongs to 2026-W01, and labelling it "2025-W01" would be wrong.
-      - name: days_observed
-        description: >
-          How many of the week's 7 days we actually hold data for. Short at both ends
-          of the series — the first week ever collected and the week currently in
-          progress.
-      - name: is_partial_week
-        description: >
-          days_observed < 7, so this week's volume is low for a reason unrelated to
-          the trend (a mid-week run, or the first week collected). Exclude these weeks
-          from week-over-week reads, or use mention_share, which is a share of the same
-          short week and stays comparable.
       - name: mention_count
         description: Distinct food-relevant, non-spam mentions naming this concept THAT WEEK.
       - name: mention_share
@@ -473,11 +466,9 @@ models:
           collection volume doubles — or a week is partial — every share is still
           comparable. Guarded by assert_social_concept_trends_mention_share_sums.
       - name: total_engagement
-        description: Summed ACTIVE engagement (likes + comments + shares) across those mentions (deduped per mention). Feeds trend_score_legacy only.
+        description: Summed ACTIVE engagement (likes + comments + shares) across those mentions (deduped per mention). Published by mart_social_trending_items; the ranking itself uses the per-channel-normalised engagement_norm, not this raw sum.
       - name: total_views
-        description: Summed views across those mentions (video/post view counts). Feeds trend_score_legacy only.
-      - name: net_sentiment
-        description: positives − negatives over those mentions (model-judged sentiment).
+        description: Summed views across those mentions (video/post view counts). Published by mart_social_trending_items; the ranking uses views_norm, not this raw sum.
       - name: is_rising
         description: >
           mention_share went UP versus the previous week with a row. REDEFINED at this
@@ -525,11 +516,6 @@ models:
           exclusion — measured at ~5% of the actual top-20 vs ~38% of the full long tail, and a
           single-platform trend (TikTok-only food virality is common and legitimate) isn't
           evidence of anything wrong.
-      - name: trend_score_legacy
-        description: >
-          The original mention-count-led score: mention_count x (1 + ln(1+total_engagement)/eng_weight
-          + ln(1+total_views)/views_weight). Kept (not deleted) so rankings can be compared over
-          the next few weeks, not recomputed retroactively.
       - name: trend_score
         description: >
           distinct_authors_adj x (1 + ln(1+engagement_norm)/eng_weight + ln(1+views_norm)/views_weight)

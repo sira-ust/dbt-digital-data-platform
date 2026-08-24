@@ -136,8 +136,6 @@ sources:
             description: Multi-label ingredients named (array of strings). A loose list of what the post mentions — raw commodities included; NOT the sellable-product signal (see mentioned_products). Feeds the resolver's ingredient-basket side.
           - name: brands
             description: Multi-label brand / restaurant / product / retailer names (array of strings).
-          - name: sentiment_normalized
-            description: Model-judged sentiment (positive/negative/neutral), independent of the raw Mentionlytics label.
           - name: confidence
             description: Model's overall self-rated certainty, 0.0–1.0.
           - name: enriched_at
@@ -194,10 +192,14 @@ sources:
             description: Why each rejected item was thrown out, parallel to rejected_prtnums.
           - name: name_mismatch_prtnums
             description: Diagnostic — part numbers where the proposer's claimed item name disagreed with what that part number actually is.
-          - name: canonical_key
-            description: canonical_label deglossed + accent-folded; shared by cross-script twins of one dish (som tam / ส้มตำ).
-          - name: alias_of
-            description: concept_norm of the twin this row's answer was copied from (null if this row is the source), so one dish can't get two contradictory answers.
+          - name: group_primary
+            description: >
+              concept_norm of the concept representing this row's group — the resolver
+              judges which concepts are the same thing in one pass over the whole board,
+              so a row whose group_primary is not itself is a duplicate. Not grouped by
+              SKU: two different trends can share one.
+          - name: group_label
+            description: One display name for the whole group.
           - name: match_confidence
             description: The REVIEW pass's calibrated confidence in the items it kept, 0.0–1.0 — the number social_resolve_min_confidence gates on.
           - name: proposer_confidence

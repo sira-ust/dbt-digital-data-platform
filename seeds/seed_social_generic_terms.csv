@@ -57,3 +57,12 @@ bún,item,vi,ambiguous_across_languages — vi bún (generic rice noodle) folds 
 đá,item,vi,ambiguous_across_languages — vi đá (ice) folds onto "da" which is also vi da (skin),false
 chili,item,en,ambiguous_across_languages — generic as a raw commodity but the chili pastes/sauces we stock are specific,false
 พริก,item,th,ambiguous_across_languages — same as chili,false
+coffee,item,en,too_broad — a category not a line item; observed rank 7 on the item board 2026-W32,true
+cake,item,en,too_broad — the packaged cakes we stock are named (euro cake / fruit cake),true
+cookies,item,en,too_broad — a category; specific biscuit products are named,true
+chocolate,item,en,too_broad — a category; specific bars/products are named,true
+ice cream,item,en,too_broad — a category; specific tubs/brands are named,true
+jelly,item,en,too_broad — a category,true
+green tea,item,en,borderline — arguably a tea SKU but as broad as coffee; may also be swallowing the matcha signal. Left OFF pending a buyer's call,false
+yogurt,item,en,borderline — a category (greek yogurt / oat milk are the specific forms) but a yogurt SKU is orderable. Left OFF pending a buyer's call,false
+fresh milk,item,en,borderline — milk cartons ARE orderable so kept ON the board; listed only to record the decision,false

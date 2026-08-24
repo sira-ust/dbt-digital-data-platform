@@ -82,7 +82,7 @@ directly if a GUI is preferred.
 
 ## Layers
 
-Two source systems flow through staging → intermediate → marts:
+Four source systems flow through staging → intermediate → marts:
 
 ```
 SOURCES
@@ -90,44 +90,87 @@ SOURCES
   jdawms (WMS)        16 replica tables (dlytrn, inv_snap, invdtl, invlod, invsub,
                       invsum, locmst, pckwrk_dtl, pckwrk_hdr, prtdsc, prtftp,
                       prtftp_dtl, prtmst, rplcfg, shipment, shipment_line)
+  mentionlytics       weekly social-listening xlsx drop, plus the two tables the
+                      offline scripts write back (mention_enrichment, concept_resolution)
+  nav (ERP)           16 replica tables; only `customer` is modelled so far.
+                      Coordinates come from ust_external.nav_customer_geocode,
+                      written out-of-band by scripts/geocode_customers.py
         │
 staging/ (view)       stg_mysql__*  (3)  ·  stg_jdawms__*  (16)
+                      stg_mentionlytics__*  (3)  ·  stg_nav__*  (1)
                       1:1 lossless: cast, trim, dedup only — no decoding
         │
-seeds/ (CSV)          event dictionary · app registry · categories ·
-                      jdawms code descriptions  (reference data)
+seeds/ (CSV)          event dictionary · app registry · categories · WMS code
+                      descriptions · social stoplist  (reference data)
         │
-intermediate/ (view)  int_events_decoded         decode 8-digit code, event_time→UTC, location/source parse
-                      int_events_enriched        feature / outcome / page_context enrichment
+intermediate/         int_events_decoded         decode 8-digit code, event_time→UTC, location/source parse
+                      int_events_enriched        feature / outcome enrichment, ONE rep-day clock,
+                                                 and the BLE-repaired customer_key (see below)
                       int_rep_order_cycle        reconstruct sales-rep order cycles from event bursts
+                      int_rep_customer_activity  rep app work per customer per day — sessions, device stints
+                      int_rep_customer_presence  where the rep physically was, from GPS — one row per visit
                       int_item_demand_daily      demand per sku × day from view/cart events
+                      int_social_concept_trends  weekly ranked dish / item boards from social mentions
                       int_jdawms_items           WMS item master (prtmst + prtdsc names / ABC / velocity)
+                      int_jdawms_items_active    active subset of the item master
                       int_jdawms_inventory_daily daily on-hand / shippable per item × warehouse
+                      int_jdawms_sale_picks_daily daily picks / sales
+                      int_jdawms_stock_weekly    weekly stock levels
         │
 marts/core/facts/     fct_orders                 one row per submitted order (increment_id)
                       fct_events                 one row per event, decoded + enriched
                       fct_order_cycles           one row per order cycle (rep journey)
+                      fct_social_mentions        one row per genuine, non-spam mention
         │
 marts/reporting/      mart_rep_weekly            weekly sales-rep scorecard
                       mart_customer_weekly       weekly customer activity + churn signal
                       mart_feature_pairing       weekly feature co-occurrence
                       mart_rep_order_journey     rep order-journey detail
+                      mart_rep_customer_activity was the rep in the store, and what did they do there?
+                                                 rep × customer × day × scenario
+                      mart_rep_customer_activity_events  the same work, event by event
                       mart_item_demand_supply    weekly demand × WMS supply per item
+                      mart_social_trending_items weekly trending board × do we stock it?
         │
-dq/                   dq_quarantine_invalid_source · dq_unmapped_event_codes · dq_unmatched_demand_skus
-tests/                assert_sales_agents_have_sales_code (+ YAML tests; see TESTING.md)
+dq/                   dq_quarantine_invalid_source · dq_unmapped_event_codes
+                      dq_unmatched_demand_skus · dq_social_mentions
+                      dq_social_generic_term_hits
+tests/                8 singular tests (+ YAML tests; see TESTING.md)
 ```
 
 | Layer | Purpose |
 |---|---|
-| **Source** | `staging/*/_*__sources.yml` — declares the `mysql` and `jdawms` sources (target-dependent: mock on DuckDB, real tables on Databricks) |
+| **Source** | `staging/*/_*__sources.yml` — declares the `mysql`, `jdawms`, `mentionlytics`, `nav` and `ust_external` sources (target-dependent: mock on DuckDB, real tables on Databricks) |
 | **Staging** | `stg_<source>__*` — 1:1 lossless views: cast, trim, dedup. No decoding or business logic |
-| **Seeds** | Event dictionary, app registry, categories, WMS code descriptions — reference data for decoding + DQ |
-| **Intermediate** | Decoding, enrichment, and grain shaping (event / day) — the reusable foundation for facts and marts |
-| **Facts** | `fct_*` — analytics-ready event / order / cycle grain |
-| **Reporting** | `mart_*` — weekly rollups and cross-source (demand × supply) analytics |
+| **Seeds** | Event dictionary, app registry, categories, WMS code descriptions, social stoplist — reference data for decoding + DQ |
+| **Intermediate** | Decoding, enrichment, and grain shaping (event / day / visit) — the reusable foundation for facts and marts |
+| **Facts** | `fct_*` — analytics-ready event / order / cycle / mention grain |
+| **Reporting** | `mart_*` — weekly rollups, rep store-visit reporting, and cross-source (demand × supply, social × WMS) analytics |
 | **DQ** | `dq_*` — queryable quarantine / drift-monitoring tables |
 | **Tests** | YAML generic tests + singular tests in `tests/` — see [TESTING.md](TESTING.md) |
+
+### Two things worth knowing before reading the rep models
+
+**A rep carries several devices, and BLE pairing moves work between them.** Pairing an
+iPad to a PDA transfers the open cart to the PDA — the devices do not mirror, the PDA
+gains control of the iPad's catalog screen. The iPad's taps then arrive with no
+customer number, and anything filtering `customer_key is not null` used to drop them:
+a paired iPad lost 66.8% of its cart edits. `int_events_enriched` now fills the
+customer in from the pairing when the event does not carry one, and records in
+`customer_key_source` whether it was `event` (declared by the app) or inherited. Filter
+to `event` for anything that must be exact. While paired the two devices are one
+workstation, so `mart_rep_customer_activity` reports `paired_minutes` separately —
+that time cannot be attributed to either device alone.
+
+**One local clock per rep-day, computed once.** `device_timezone` is a device setting,
+and the PDA app reads Android's `getRawOffset()`, which ignores daylight saving — so a
+PDA and an iPad in the same pocket report offsets an hour apart in summer.
+`int_events_enriched` publishes `rep_day_offset_hours` and `rep_local_date`, and both
+`int_rep_customer_activity` and `int_rep_customer_presence` read them, guarded by
+`assert_presence_and_activity_share_one_clock`. Never re-derive the local date from
+`event_at_local` — group by `rep_local_date`. Durations are unaffected either way:
+every gap and dwell is computed on `event_at_utc`, which is epoch-derived and needs no
+timezone at all.
 
 ## Column documentation (glossaries)
 
@@ -184,6 +227,16 @@ singular-test-vs-DQ-model distinction live in [TESTING.md](TESTING.md).
 - Ongoing source drift to monitor / quarantine → a model in `models/dq/`
 - One-off investigation → `analyses/`
 
+## Social pipeline run order
+
+    parse_mentions.py (Databricks)  or  convert_mentionlytics.py (local)
+      -> enrich_mentions.py
+      -> resolve_trending_concepts.py
+      -> dbt build --select tag:social
+
+`parse_mentions.py` is append-only; `stg_mentionlytics__mentions` dedupes on
+mention_id by latest loaded_at, so overlapping weekly drops self-reconcile.
+
 ## Repo structure
 
 ```
@@ -197,7 +250,22 @@ singular-test-vs-DQ-model distinction live in [TESTING.md](TESTING.md).
 │   ├── generate_jdawms_glossary.py     # WMS column glossary (from seed dictionary)
 │   ├── generate_seed_value_glossaries.py
 │   ├── snapshot_uc_schema.py           # one-time UC schema pull (git-tracked CSV)
-│   └── generate_jdawms_mock.py         # mock parquet for local dev (no UC cost)
+│   ├── generate_jdawms_mock.py         # mock parquet for local dev (no UC cost)
+│   ├── geocode_customers.py            # NAV addresses -> coordinates via the Google API
+│   ├── convert_mentionlytics.py        # social step 1, LOCAL: xlsx -> DuckDB
+│   ├── enrich_mentions.py              # social step 2: LLM labels the mentions
+│   ├── resolve_trending_concepts.py    # social step 3: resolve top concepts to WMS SKUs
+│   ├── check_batch_bleed.py            # ad hoc: does batching the enrichment leak labels
+│   │                                   #   between mentions in one call? run after prompt
+│   │                                   #   or batch-size changes, not on a schedule
+│   ├── check_fold_consistency.py       # ad hoc: concept-folding sanity check
+│   └── databricks/
+│       ├── parse_mentions.py           # social step 1, DATABRICKS: xlsx in a Volume ->
+│       │                               #   social.mentions. Wired as a spark_python_task
+│       │                               #   (Source: Git) in the workspace job, NOT called
+│       │                               #   from this repo — so nothing here references it
+│       ├── job.yml                     # daily dbt job bundle
+│       └── geocode_weekly_job.yml      # weekly geocode job bundle
 ├── analyses/                           # demand_missed_opportunity · demand_promote_candidates · demand_restock_risk
 ├── seeds/
 ├── macros/
@@ -217,4 +285,18 @@ singular-test-vs-DQ-model distinction live in [TESTING.md](TESTING.md).
 | Phase | Scope |
 |---|---|
 | **Phase 1 (done)** | mysql event-log + jdawms WMS staging → intermediate → facts + reporting marts; DQ tests & monitoring; demand-vs-supply analytics |
-| **Phase 2 (future)** | Incremental `fct_*` materialization; additional ERP / replication sources; BI layer |
+| **Phase 2 (done)** | Social listening (mentionlytics + offline LLM enrichment / SKU resolution) → weekly trending board × WMS stock |
+| **Phase 3 (done)** | NAV customer master + out-of-band geocoding → rep store-visit reporting: GPS presence, BLE-aware activity attribution, one clock per rep-day |
+| **Phase 4 (future)** | Incremental `fct_*` materialization; more of the NAV replica than the customer master; BI layer |
+
+Known gaps carried deliberately, documented at the model that owns them:
+
+- The PDA app omits daylight saving from its reported timezone (an app fix is
+  pending). On rep-days where only a PDA was used the *displayed* clock runs an
+  hour behind; both rep models share the same offset, so the analysis stays
+  self-consistent and no duration is affected.
+- 123 geocoded points hold more than one active customer — shopping centres, and
+  businesses with several accounts. Those visits are published with
+  `is_ambiguous`, not silently resolved.
+- NAV holds one address per customer and it doubles as the delivery point, so some
+  accounts geocode to a head office rather than the site a rep visits.

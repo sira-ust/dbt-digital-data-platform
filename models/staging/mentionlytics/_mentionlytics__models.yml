@@ -96,8 +96,6 @@ models:
         description: Multi-label ingredients (array) — a loose list including raw commodities. Not ranked; feeds the resolver's basket side. See mentioned_products for the sellable-product signal.
       - name: brands
         description: Multi-label brand / restaurant / product / retailer names (array).
-      - name: sentiment_normalized
-        description: Model-judged sentiment (positive/negative/neutral), independent of the raw label.
       - name: confidence
         description: Model self-rated certainty, 0.0–1.0.
       - name: enriched_at
@@ -124,17 +122,17 @@ models:
         tests: [unique, not_null]
       - name: canonical_label
         description: LLM canonical display name, merging cross-language/spelling variants.
-      - name: canonical_key
+      - name: group_primary
         description: >
-          canonical_label deglossed + accent-folded (the same normalisation as
-          concept_norm). Two concepts sharing this key are the same dish under two
-          spellings/scripts — how the resolver detects cross-script twins that
-          fold_concept can't merge (som tam / ส้มตำ).
-      - name: alias_of
-        description: >
-          concept_norm of the twin whose answer was copied onto this row (same
-          canonical_key, better-grounded result); null when this row IS the
-          better-grounded one. Set so one dish can't get two contradictory answers.
+          concept_norm of the concept that REPRESENTS this row's group. The resolver
+          looks at the whole week's board in one pass and judges which concepts are the
+          same thing under different names (matcha / matcha powder, som tam / ส้มตำ), so
+          a row whose group_primary is not itself is a duplicate of the one that is.
+          Deliberately NOT grouped by matched_prtnum: two different trends can share a
+          SKU (a generic category and a branded product often do), so sameness is judged
+          explicitly. Every member of a group carries the same resolution answer.
+      - name: group_label
+        description: One display name for the whole group, set by the same pass.
       - name: concept_type
         description: LLM item-level type — dish / category / ingredient / product / brand.
       - name: result_type

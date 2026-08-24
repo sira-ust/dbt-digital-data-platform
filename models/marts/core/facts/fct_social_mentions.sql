@@ -75,8 +75,8 @@ enriched as (
         m.total_engagement,
         m.total_engagement_with_views,
 
-        m.sentiment,                    -- raw Mentionlytics label
-        e.sentiment_normalized,         -- model-judged
+        m.sentiment,                    -- raw Mentionlytics label (free, from the
+                                        -- source; the LLM no longer judges sentiment)
 
         -- LLM attributes (null for not-yet-enriched mentions)
         e.is_food_relevant,
@@ -129,7 +129,6 @@ select
 
     -- sentiment
     sentiment,
-    sentiment_normalized,
 
     -- LLM attributes
     is_food_relevant,

@@ -20,7 +20,6 @@ typed as (
         mentioned_products,
         ingredients,
         brands,
-        nullif(trim(cast(sentiment_normalized as {{ dbt.type_string() }})), '') as sentiment_normalized,
         cast(confidence as double)                                              as confidence,
         cast(enriched_at as timestamp)                                          as enriched_at,
         nullif(trim(cast(model_version as {{ dbt.type_string() }})), '')        as model_version
@@ -45,7 +44,6 @@ select
     mentioned_products,
     ingredients,
     brands,
-    sentiment_normalized,
     confidence,
     enriched_at,
     model_version

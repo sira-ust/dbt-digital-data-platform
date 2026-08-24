@@ -5,19 +5,24 @@ via the workspace serving endpoint, ambient auth on the databricks backend). dbt
 stays deterministic and never calls the LLM; this writes a table dbt then reads.
 GATED: only the top-N ranked concepts are resolved, so the long tail costs nothing.
 
-TWO PASSES, because precision is what this table is judged on (v5). One model
-proposing matches is not accurate enough on its own — it will pad a basket with
-plausible-sounding but wrong items ("DF TOMYUM PASTE" under a rice-noodle-curry
-dish), and nothing downstream can tell a wrong-but-real SKU from a right one:
+THREE PASSES, because BOTH kinds of error cost something here. One model proposing
+matches will pad a basket with plausible-but-wrong items ("DF TOMYUM PASTE" under a
+rice-noodle-curry dish) — and it will also miss a product we plainly stock, which is
+worse, because "we don't carry this" sends someone to source it.
   ① PROPOSE — read the mention snippets + the catalog, classify, pick items.
-  ② VERIFY  — a SECOND, INDEPENDENT call that sees only the concept, the same
-              snippets, and the candidates rendered with their AUTHORITATIVE
-              catalog names, and is prompted to REFUTE each one. Items it can't
-              defend are dropped, and ITS confidence (not the proposer's) is what
-              the mart's social_resolve_min_confidence floor gates on. If the
-              verify call fails we write NOTHING for that concept — it stays
-              unresolved and is retried next run, rather than shipping an
-              unverified guess.
+  ② VERIFY  — a SECOND, INDEPENDENT call seeing only the concept, the same snippets,
+              and the candidates rendered with their AUTHORITATIVE catalog names,
+              prompted to REFUTE each one. What it can't defend is dropped, and ITS
+              confidence (not the proposer's) is what the mart's
+              social_resolve_min_confidence floor gates on. A failed verify call
+              writes NOTHING — the concept stays unresolved and is retried next run
+              rather than shipping an unverified guess.
+  ③ RECOVER — only when ② leaves "none". Verify can only SUBTRACT, so a proposer miss
+              is otherwise unrecoverable and surfaces as a false "nothing like this in
+              stock". This pass gets the whole catalog again plus what was already
+              ruled out, hunts for the plain/base form and warehouse-shorthand names,
+              and ITS candidates go back through ② — recall improves, precision does
+              not move, because nothing reaches the table unreviewed.
 The proposer's self-rated confidence is kept alongside as proposer_confidence, so
 the two can be compared (v4 clustered at 0.72 — just above a 0.70 floor, which
 made the floor inert).
@@ -123,7 +128,24 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v5"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
+PROMPT_VERSION = "v9"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
+                                         # v6 = SECOND LOOK on a "none": recall matters as much as
+                                         #      precision here, because a false "we don't carry this"
+                                         #      sends someone to source a product we already sell
+                                         # v7 = board-level grouping is REVIEWED before it is applied
+                                         #      (v6's first run merged 3 wrong out of 4)
+                                         # v8 = the brand guard, which shipped mid-v7 WITHOUT a bump.
+                                         #      BUMP FOR EVERY BEHAVIOUR CHANGE, no exceptions: the
+                                         #      done-set is version-aware, so concepts already at the
+                                         #      current version are skipped and the fix silently never
+                                         #      reaches them. That is exactly what happened — the three
+                                         #      bad merges survived into a run whose whole purpose was
+                                         #      to block them, because they were already stamped v7.
+                                         # v9 = merged-away members are re-offered to the gate, so a
+                                         #      wrong merge can be revisited at all. Before this, folding
+                                         #      a concept away removed it from the ranking and therefore
+                                         #      from the gate forever — v7 and v8 both reported success
+                                         #      while never once looking at the merge they existed to fix.
 _CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
 VERIFY_MAX_TOKENS = 1200                 # per-candidate verdicts + reasons
@@ -211,6 +233,14 @@ result_type decides what we show marketing:
                   return FEWER or an empty list — an empty basket beats a wrong one.
   - "none"      : nothing in the catalog is a real fit -> empty arrays.
 
+BEFORE YOU CONCLUDE "none", CHECK THE PLAIN FORM. A flavoured or branded variant being \
+wrong does not mean the product is absent: "sriracha mayo" is not "mayonnaise", but a \
+plain Japanese mayonnaise in the catalog IS. Also look past warehouse shorthand — the \
+catalog is written in abbreviations and brand-led names, so the item you want may not \
+read like the words in the concept. Saying we carry nothing when we do carry it is the \
+most expensive mistake available here, because it tells the sales team to go and source \
+something we already sell.
+
 PREFER "none" OR AN EMPTY BASKET OVER A WEAK MATCH. If no catalog item is genuinely \
 the same kind of food, return "none" — do NOT stretch. Three hard rules: a substitute \
 must be something a shopper would actually accept in place of the trending item; a \
@@ -231,6 +261,113 @@ hint about WHERE people saw the item, not a match key — a shared brand/word be
 a snippet and a catalog item name is meaningless unless the underlying PRODUCT is \
 genuinely the same kind of food (a brand called "XYZ" on a banh mi post does not \
 make "XYZ Noodles" a match)."""
+
+GROUP_INSTRUCTIONS = """You are given ALL of this week's trending food concepts from \
+Thai/Vietnamese social listening, in one list. Some of them are THE SAME THING under a \
+different name, and the board currently shows them as separate entries — splitting one \
+trend's mentions in two and wasting a slot. Group those together.
+
+Return ONE JSON object — no markdown, no prose:
+{"groups": [ {"primary": string, "members": [string], "label": string} ]}
+  primary  the raw concept text that best represents the group; MUST be one of members
+  members  the raw concept texts in the group, copied EXACTLY as given
+  label    one clean display name for the group
+
+LIST ONLY THE GROUPS THAT HAVE TWO OR MORE MEMBERS. Anything you do not mention is \
+assumed to stand alone, which is the normal case — most concepts are not duplicates of \
+anything, and `"groups": []` is a perfectly good answer. Do NOT echo back the concepts \
+you are leaving alone: there is no need, and a long reply risks being cut off before it \
+is valid JSON.
+
+APPLY THIS ONE TEST, and nothing else. Ask: does either text carry a word that NARROWS \
+what is being referred to — a brand, a variety, a flavour, a preparation, a cut, a \
+region? If yes, THEY ARE DIFFERENT. Only merge when the two texts denote the identical \
+thing, one being a translation, transliteration, or spelling variant of the other.
+
+Worked through, so the test is unambiguous:
+  "som tam" / "ส้มตำ"                 SAME — transliteration, nothing narrowed
+  "banh khot" / "bánh khọt"           SAME — diacritics only
+  "matcha" / "matcha powder"          SAME — "powder" is the form matcha comes in, it
+                                      does not narrow which thing is meant
+  "มาม่า" / "instant noodles"          DIFFERENT — มาม่า (Mama) is a BRAND. A brand always
+                                      narrows. Never merge a brand into a category.
+  "น้ำพริก" / "น้ำพริกแซ่บ"              DIFFERENT — "แซ่บ" narrows it to one variety
+  "ก๋วยเตี๋ยว" / "ก๋วยเตี๋ยวเรือ"          DIFFERENT — "เรือ" (boat) narrows it to one dish
+  "fried chicken" / "grilled chicken" DIFFERENT — the preparation narrows it
+  "ice cream" / "frozen yogurt"       DIFFERENT — merely the same category
+  "pork" / "crispy pork"              DIFFERENT — "crispy" narrows it
+
+A shared head word is NOT evidence of sameness. Most of the pairs above share one, and \
+almost all of them are different things. If one text is a longer version of the other, \
+assume the extra words matter and DO NOT MERGE unless those words only restate the same \
+thing.
+
+Also never merge across boards: each concept is tagged [dish] or [item], and a group \
+must be entirely one or the other even for identical text.
+
+WHEN IN DOUBT, LEAVE THEM SEPARATE. A wrong merge fuses two real trends into one and \
+buries the more specific signal — a brand disappearing inside a category is the exact \
+failure this must avoid. A missed merge only costs a duplicate row, which is visible and \
+harmless by comparison. Merging nothing is a good answer."""
+
+
+MERGE_REVIEW_INSTRUCTIONS = """You are reviewing proposed merges of trending food \
+concepts. Another model claimed each pair below refers to the SAME thing. Your job is to \
+REFUTE that wherever it does not hold. Default to REFUSING the merge.
+
+Refuse whenever either text carries a word that NARROWS what is meant — a brand, a \
+variety, a flavour, a preparation, a cut, a region. A brand ALWAYS narrows ("มาม่า" is \
+Mama, a brand, and is not "instant noodles"). A qualifier ALWAYS narrows ("น้ำพริกแซ่บ" is \
+one variety of "น้ำพริก"; "ก๋วยเตี๋ยวเรือ" is one dish within "ก๋วยเตี๋ยว"). Sharing a head word \
+is not sameness.
+
+Accept ONLY when the two texts denote the identical thing — a translation, \
+transliteration, diacritic or spelling variant, or a form of the same substance \
+("matcha" / "matcha powder").
+
+Return ONE JSON object, no prose:
+{"verdicts": [ {"primary": string, "member": string, "same": boolean, "reason": string} ]}
+one entry per proposed pair, copying primary and member EXACTLY as given, reason <= 100 \
+chars. A merge you do not explicitly accept is discarded, so silence rejects."""
+
+RECOVERY_INSTRUCTIONS = """You are a SECOND-CHANCE CATALOG SEARCH, and you exist to \
+stop one specific mistake.
+
+A first pass looked at this trending concept and concluded we stock nothing suitable — \
+either it proposed nothing, or a reviewer threw out everything it proposed. That answer \
+reaches the sales team as "we do not carry this and have nothing like it", which sends \
+someone to source a product we may already sell. Observed for real: a "mayonnaise" \
+trend was reported as not-carried because the first pass offered only a SRIRACHA mayo \
+(correctly rejected as a flavoured variant) and never noticed the plain Japanese \
+mayonnaise sitting in the catalog.
+
+So search the WHOLE catalog again, properly, and specifically for:
+  - THE PLAIN OR BASE FORM. A wrong flavoured variant says nothing about whether the
+    plain product exists.
+  - THE SAME PRODUCT UNDER WAREHOUSE SHORTHAND — abbreviations, a brand-led name, a
+    different word order, a pack-size suffix. The catalog is not written the way people
+    post.
+  - A GENUINE SUBSTITUTE: the same kind of food a buyer would accept instead. We would
+    rather offer a real alternative than nothing.
+
+You are told which part numbers were ALREADY RULED OUT, and why. Respect those verdicts \
+— do NOT offer them again. Find something else, or nothing.
+
+Return ONE JSON object in exactly the same shape as the matcher:
+{
+  "canonical_label": string,
+  "concept_type": string,
+  "result_type": string,           // "carried" | "substitute" | "basket" | "none"
+  "matched_prtnum": string|null,
+  "recommended_prtnums": [string],
+  "recommended_item_names": [string],
+  "match_confidence": number
+}
+
+Every prtnum MUST exist in the catalog exactly. If after a real search nothing genuinely \
+fits, return "none" — an honest none is still the right answer, and whatever you do \
+return still has to survive review. This pass exists to make sure the none is honest, \
+not to manufacture a match."""
 
 VERIFY_INSTRUCTIONS = """You are a STRICT REVIEWER. Another model proposed a match \
 between a TRENDING FOOD CONCEPT from Thai/Vietnamese social listening and items in \
@@ -328,6 +465,12 @@ def get_client(backend):
 # case is a couple of extra attempts before the flag settles.
 _TEMPERATURE_SUPPORTED = True
 
+# per-stage token/call counters, reported once at the end by report_usage().
+# Incremented from the thread pool; a lost update under contention would only skew
+# a diagnostic, never a result.
+_USAGE = defaultdict(lambda: {'calls': 0, 'input': 0, 'cache_read': 0,
+                             'output': 0, 'truncated': 0})
+
 
 def _create_message(client, **kwargs):
     global _TEMPERATURE_SUPPORTED
@@ -347,8 +490,19 @@ def _create_message(client, **kwargs):
 # Backend I/O
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _top_concepts_sql(trends_rel, top_n):
-    """Concepts on the CURRENT week's board, either class.
+def _top_concepts_sql(trends_rel, top_n, resolution_rel=None):
+    """Concepts on the CURRENT week's board, either class — PLUS anything currently
+    merged into one of them.
+
+    That second half is not an optimisation, it closes a trap. Grouping is applied in
+    the ranking BEFORE this gate reads it, so a merged-away member no longer exists as
+    a concept in the trends table. Without it here, the member can never enter the
+    gate, is never re-resolved, and its merge becomes PERMANENT — immune to a prompt
+    fix, a guard, or a version bump, because nothing ever looks at it again. That is
+    exactly what happened to มาม่า -> "instant noodles": a v6 mistake that survived v7
+    and v8 untouched (2026-08-20), while every run reported success. Re-offering the
+    members means every merge is re-decided every run, so a wrong one self-corrects
+    on the next pass instead of outliving the code that made it.
 
     int_social_concept_trends is a weekly series of boards, so it holds every
     concept that was ever top-N over social_trend_history_weeks. Scoping to the
@@ -363,7 +517,7 @@ def _top_concepts_sql(trends_rel, top_n):
     mention_count is max(), not sum(): summing across overlapping trailing windows
     is not a count of anything.
     """
-    return f"""
+    board = f"""
         select concept_norm,
                max(case when concept_class = 'dish' then 1 else 0 end) as is_dish,
                max(case when concept_class = 'item' then 1 else 0 end) as is_item,
@@ -371,6 +525,37 @@ def _top_concepts_sql(trends_rel, top_n):
         from {trends_rel}
         where trend_rank <= {top_n}
           and week_start = (select max(week_start) from {trends_rel})
+        group by concept_norm
+    """
+    if not resolution_rel:
+        return board
+    # members inherit their primary's class flags (they have no trends row of their own
+    # any more) and a null mention_count, which max() lets the primary's value win
+    return f"""
+        with board as ({board}),
+        latest as (
+            select concept_norm, group_primary,
+                   row_number() over (partition by concept_norm
+                                      order by resolved_at desc) as _rn
+            from {resolution_rel}
+        ),
+        members as (
+            select l.concept_norm, b.is_dish, b.is_item,
+                   cast(null as int) as mention_count
+            from latest as l
+            join board as b on b.concept_norm = l.group_primary
+            where l._rn = 1
+              and l.group_primary is not null
+              and l.concept_norm <> l.group_primary
+        ),
+        combined as (
+            select * from board
+            union all
+            select * from members
+        )
+        select concept_norm, max(is_dish) as is_dish, max(is_item) as is_item,
+               max(mention_count) as mention_count
+        from combined
         group by concept_norm
     """
 
@@ -394,7 +579,8 @@ def _latest_week_sql(trends_rel):
 
 def _snippet_window(week_end_str, days=SNIPPET_WINDOW_DAYS):
     """Snippet evidence spans the last `days` ending at the board's week, NOT the
-    single ranked week.
+    single ranked week. This is window #5 of five — the set, and why they differ, is
+    in models/docs/_social_windows.md.
 
     The two windows answer different questions and must not be tied together. The
     RANKING window is one calendar week because that's the reporting period. The
@@ -457,13 +643,25 @@ def _current_rows_sql(table, version):
 
 
 def _as_date_str(v):
+    """Date -> 'YYYY-MM-DD', or None when there is no date.
+
+    The None case is NOT hypothetical: `select max(week_end)` over an EMPTY trends
+    table returns one row holding NULL, which pandas hands back as NaT — so a
+    `len(rows)` guard passes and NaT.strftime() then raises ValueError. That crashed
+    the script with a stack trace instead of reporting "nothing to resolve" whenever
+    it ran before int_social_concept_trends had been built."""
     if v is None:
         return None
     try:
+        if v != v:            # NaN / NaT are never equal to themselves
+            return None
+    except Exception:
+        pass
+    try:
         return v.strftime("%Y-%m-%d")
-    except AttributeError:
+    except (AttributeError, ValueError):
         s = str(v).strip()
-        return s[:10] or None
+        return None if s in ("", "NaT", "None", "nan", "NaN") else s[:10]
 
 
 def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
@@ -471,7 +669,8 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
     if backend == "databricks":
         spark = _get_spark()
         concepts = [r.asDict() for r in
-                    spark.sql(_top_concepts_sql(DBX_TRENDS_TABLE, top_n)).collect()]
+                    spark.sql(_top_concepts_sql(DBX_TRENDS_TABLE, top_n,
+                                                DBX_RESOLUTION_TABLE)).collect()]
         wb = spark.sql(_latest_week_sql(DBX_TRENDS_TABLE)).collect()
         w_start, w_end = _snippet_window(_as_date_str(wb[0][0]) if wb else None)
         mentions = [r.asDict() for r in
@@ -490,7 +689,9 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
     else:
         import duckdb
         con = duckdb.connect(duckdb_path, read_only=True)
-        concepts = con.sql(_top_concepts_sql(DUCKDB_TRENDS_REL, top_n)).df().to_dict("records")
+        concepts = con.sql(_top_concepts_sql(
+            DUCKDB_TRENDS_REL, top_n,
+            f"read_parquet('{LOCAL_RESOLUTION_PATH}')")).df().to_dict("records")
         wb = con.sql(_latest_week_sql(DUCKDB_TRENDS_REL)).df()
         w_start, w_end = _snippet_window(_as_date_str(wb["week_end"][0]) if len(wb) else None)
         mentions = con.sql(
@@ -508,13 +709,25 @@ def read_all(backend, top_n, duckdb_path, version=_CURRENT_VERSION):
         except Exception:
             existing = []
 
+    if not concepts and not w_end:
+        print("int_social_concept_trends is EMPTY — nothing to resolve. Build it first: "
+              "dbt build --select +int_social_concept_trends", file=sys.stderr)
+
+    # Every string the enrichment ever called a BRAND, folded to concept keys. Used as a
+    # hard guard on grouping below: a brand must never be folded into a category. This is
+    # the one part of that judgment that needs no model — the brands were already
+    # extracted.
+    brand_keys = {_concept_key(b) for m in mentions
+                  for b in _raw_list(m.get("brands"))}
+
     wanted = {c["concept_norm"] for c in concepts}
     snippets = bucket_snippets(mentions, wanted)
     resolved = {r.get("concept_norm") for r in existing}
     new = [c for c in concepts if c["concept_norm"] not in resolved]
     print(f"snippet window: {w_start} .. {w_end}  "
-          f"({len(mentions)} mentions naming a dish or a product)")
-    return new, snippets, catalog, existing
+          f"({len(mentions)} mentions naming a dish or a product, "
+          f"{len(brand_keys)} distinct brands seen)")
+    return new, snippets, catalog, existing, brand_keys
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -651,6 +864,14 @@ def _dbx_resolution_schema():
     return StructType([
         StructField("concept_norm", StringType()),
         StructField("canonical_label", StringType()),
+        StructField("group_primary", StringType()),
+        StructField("group_label", StringType()),
+        # LEGACY, always null: canonical_key/alias_of were the label-matching
+        # harmonisation that grouping replaced (v6). They are still columns on the
+        # existing Delta table, and writing a DataFrame that simply omits them relies
+        # on schema evolution filling them — so they are declared here instead and the
+        # append matches the table exactly. Drop them from this list once the table
+        # has been rebuilt without them.
         StructField("canonical_key", StringType()),
         StructField("alias_of", StringType()),
         StructField("concept_type", StringType()),
@@ -671,8 +892,9 @@ def _dbx_resolution_schema():
 
 
 _RECORD_DEFAULTS = {
-    "concept_norm": None, "canonical_label": None, "canonical_key": None,
-    "alias_of": None, "concept_type": None, "result_type": None,
+    "concept_norm": None, "canonical_label": None, "group_primary": None,
+    "group_label": None, "canonical_key": None, "alias_of": None,
+    "concept_type": None, "result_type": None,
     "matched_prtnum": None, "recommended_prtnums": [], "recommended_item_names": [],
     "recommended_reasons": [], "rejected_prtnums": [], "rejected_reasons": [],
     "name_mismatch_prtnums": [], "match_confidence": None,
@@ -759,7 +981,7 @@ def _render_snippets(snippets):
 def build_user_prompt(concept, snippets):
     lines = [
         f"Concept (raw): {concept['concept_norm']}",
-        f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count')}",
+        f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count') or 'n/a'}",
         "",
     ]
     return "\n".join(lines + _render_snippets(snippets))
@@ -809,17 +1031,26 @@ def _call_json(client, instructions, catalog_block, user_prompt, max_tokens,
                 client, model=MODEL, max_tokens=max_tokens, system=system,
                 messages=[{"role": "user", "content": user_prompt}],
             )
-            # TEMP DIAGNOSTIC (remove after confirming whether the Databricks
-            # serving proxy honors cache_control — see cache_creation vs
-            # cache_read below; if cache_read stays 0 across the whole run,
-            # caching isn't taking effect and the catalog is being sent at
-            # full price on every call).
+            # usage is accumulated per stage and reported ONCE at the end of the run.
+            # It used to print per call, and ~100 such lines per run is what let a
+            # truncated grouping reply hide in plain sight (2026-08-19).
             u = resp.usage
-            print(f"  [cache-check/{stage}] {label!r}: "
-                  f"input={u.input_tokens} "
-                  f"cache_create={getattr(u, 'cache_creation_input_tokens', None)} "
-                  f"cache_read={getattr(u, 'cache_read_input_tokens', None)} "
-                  f"output={u.output_tokens}")
+            t = _USAGE[stage]
+            t["calls"] += 1
+            t["input"] += u.input_tokens or 0
+            t["cache_read"] += getattr(u, "cache_read_input_tokens", 0) or 0
+            t["output"] += u.output_tokens or 0
+
+            # A reply cut off at max_tokens is not invalid JSON by accident — it is our
+            # ceiling being too low, and retrying reproduces it exactly. Say which it is,
+            # and stop wasting the retry.
+            if getattr(resp, "stop_reason", None) == "max_tokens":
+                t["truncated"] += 1
+                print(f"  WARN {stage} {label!r}: reply hit the {max_tokens}-token "
+                      f"ceiling and was cut off — raise it; retrying would truncate "
+                      f"identically", file=sys.stderr)
+                return None
+
             data = extract_json(next((b.text for b in resp.content if b.type == "text"), ""))
             if data and is_valid(data):
                 return data
@@ -827,6 +1058,20 @@ def _call_json(client, instructions, catalog_block, user_prompt, max_tokens,
             if attempt == MAX_ATTEMPTS:
                 print(f"  WARN {stage} {label!r}: {e}", file=sys.stderr)
     return None
+
+
+def report_usage():
+    """One line per stage at the end of a run: calls, tokens, and whether prompt
+    caching actually took effect. Confirmed 2026-08-19 that the Databricks serving
+    proxy DOES honour cache_control — the 81.5k-token catalog block reads from cache
+    on every call after the first."""
+    if not _USAGE:
+        return
+    print("usage by stage (cache_read > 0 means the catalog block is being cached):")
+    for stage, t in _USAGE.items():
+        print(f"  {stage:<9} {t['calls']:>4} calls  in={t['input']:>8}  "
+              f"cached_in={t['cache_read']:>9}  out={t['output']:>7}"
+              + (f"  TRUNCATED={t['truncated']}" if t["truncated"] else ""))
 
 
 def _proposal_ok(d):
@@ -844,6 +1089,183 @@ def propose_one(client, catalog_block, concept, snippets):
     return _call_json(client, INSTRUCTIONS, catalog_block,
                       build_user_prompt(concept, snippets), MAX_TOKENS,
                       _proposal_ok, "propose", concept["concept_norm"])
+
+
+def group_concepts(client, concepts, brand_keys=frozenset()):
+    """ONE call over the whole board: which concepts are the same thing?
+
+    Why this exists: every concept is otherwise resolved in ISOLATION, so when the model
+    sees "matcha" it has no idea "matcha powder" is also on this week's board. Both
+    answers come back correct and separately labelled, and the board shows one trend
+    twice with its mentions split (observed 2026-08-19: ranks 1 and 4, both SKU 68250).
+    Nothing downstream can spot that, because there is nothing wrong with either row.
+
+    NOT grouped by matched_prtnum, though that would have caught this case: two genuinely
+    different trends can share a SKU — a generic category and a branded product often
+    resolve to the same item — so SKU equality over-merges. Sameness has to be judged
+    explicitly, which is what this call does.
+
+    Returns {concept_norm: (primary_concept_norm, group_label)}. Fails SAFE: on any
+    validation problem every concept becomes its own group, i.e. today's behaviour."""
+    ungrouped = {c["concept_norm"]: (c["concept_norm"], None) for c in concepts}
+    if len(concepts) < 2:
+        return ungrouped
+
+    # `or 0`, not .get(k, 0): a concept re-offered because it is currently merged into
+    # a primary has mention_count PRESENT and None — it has no trends row of its own —
+    # so the .get default never fires and `-None` raises. Same reason the count is
+    # omitted from the line rather than printed as "None mentions".
+    lines = ["Concepts on this week's board:"]
+    for c in sorted(concepts, key=lambda c: -(c.get("mention_count") or 0)):
+        n = c.get("mention_count")
+        lines.append(f"  [{_class_hint(c)}] {c['concept_norm']}"
+                     + (f"   ({n} mentions)" if n else ""))
+    # Sized from the input, not a flat cap. The first version asked for every concept
+    # echoed back under MAX_TOKENS * 2 = 1400, and 40 concepts did not fit: the reply was
+    # truncated mid-JSON, BOTH attempts hit exactly the cap, and the whole grouping was
+    # discarded (observed 2026-08-19 — nothing merged, and the log looked like a model
+    # that had simply found no duplicates). The prompt now asks only for the groups that
+    # actually merge, so this ceiling is generous rather than tight; it still scales with
+    # the board, because a silent truncation is indistinguishable from an honest "no
+    # duplicates" in the output.
+    data = _call_json(client, GROUP_INSTRUCTIONS, None, "\n".join(lines),
+                      MAX_TOKENS + 100 * len(concepts),
+                      lambda d: isinstance(d.get("groups"), list),
+                      "group", f"{len(concepts)} concepts")
+    if data is None:
+        return ungrouped
+
+    # VALIDATE before trusting: a bad grouping fuses real trends, so anything that
+    # doesn't account for exactly the input set is discarded wholesale.
+    by_norm = {c["concept_norm"]: c for c in concepts}
+    # every concept starts alone; the reply only has to describe the merges
+    mapping, seen = dict(ungrouped), set()
+    for g in data["groups"]:
+        members = [str(m) for m in (g.get("members") or [])]
+        primary = str(g.get("primary") or "")
+        label = str(g.get("label") or "").strip() or None
+        if not members or primary not in members:
+            print("  WARN grouping: primary not in its own members — ignoring the "
+                  "whole grouping", file=sys.stderr)
+            return ungrouped
+        classes = set()
+        for m in members:
+            if m not in by_norm or m in seen:
+                print(f"  WARN grouping: {m!r} unknown or repeated — ignoring the "
+                      f"whole grouping", file=sys.stderr)
+                return ungrouped
+            seen.add(m)
+            classes.add(_class_hint(by_norm[m]))
+        if len(classes) > 1:
+            print(f"  WARN grouping: group {primary!r} mixes boards {classes} — "
+                  f"ignoring the whole grouping", file=sys.stderr)
+            return ungrouped
+        if len(members) > 1:
+            for m in members:
+                mapping[m] = (primary, label)
+
+    # ── REFUTE THE MERGES ────────────────────────────────────────────────────────
+    # First real run merged 3 wrong out of 4 — a brand into its category (มาม่า into
+    # "instant noodles"), and two varieties into their base — while missing the one pair
+    # the prompt used as its worked example. Prompt rules alone did not hold, and the
+    # error is asymmetric: a wrong merge buries the more specific signal, which is the
+    # opposite of what the item board is for. So proposed merges now face the same
+    # propose-then-refute treatment that fixed the SKU matching, defaulting to refusal.
+    proposed = [(m, p) for m, (p, _) in mapping.items() if p != m]
+    if proposed:
+        keep = review_merges(client, proposed)
+        for member, primary in proposed:
+            # DETERMINISTIC GUARD, applied after the review and overriding it. If exactly
+            # one side is a string the enrichment called a brand, this is a brand being
+            # folded into a category — the worst of the v6 mistakes (มาม่า into "instant
+            # noodles"), and the part of the judgment that needs no model at all. Note no
+            # string rule can replace the review generally: a superstring test blocks
+            # ก๋วยเตี๋ยวเรือ and น้ำพริกแซ่บ correctly but ALSO blocks matcha powder, which must
+            # merge, and misses มาม่า entirely. Blocking costs at most a visible duplicate.
+            if (member in brand_keys) != (primary in brand_keys):
+                brand, other = ((member, primary) if member in brand_keys
+                                else (primary, member))
+                print(f"  merge BLOCKED: {brand!r} is a known brand and {other!r} is "
+                      f"not — a brand is never the same thing as a category")
+                mapping[member] = (member, None)
+                continue
+            if (primary, member) not in keep:
+                mapping[member] = (member, None)     # refused -> stands alone
+
+    merged = {p for p, _ in mapping.values() if sum(1 for v in mapping.values()
+                                                    if v[0] == p) > 1}
+    for p in sorted(merged):
+        members = sorted(m for m, v in mapping.items() if v[0] == p and m != p)
+        print(f"  grouped: {p!r} absorbs {members}")
+    print(f"  grouping: {len(concepts)} concepts -> "
+          f"{len(set(p for p, _ in mapping.values()))} groups")
+    return mapping
+
+
+def review_merges(client, proposed):
+    """Second opinion on each proposed merge. Returns the set of (primary, member) pairs
+    that survive; anything not explicitly accepted is discarded, so a failed or
+    unparseable call refuses every merge and the board simply stays unmerged."""
+    lines = ["Proposed merges — for each, are these the SAME thing?", ""]
+    for member, primary in sorted(proposed):
+        lines.append(f'  primary: "{primary}"   member: "{member}"')
+    data = _call_json(client, MERGE_REVIEW_INSTRUCTIONS, None, "\n".join(lines),
+                      MAX_TOKENS + 120 * len(proposed),
+                      lambda d: isinstance(d.get("verdicts"), list),
+                      "merge-review", f"{len(proposed)} merges")
+    if data is None:
+        print(f"  merge review failed — refusing all {len(proposed)} proposed merges",
+              file=sys.stderr)
+        return set()
+
+    asked = {(p, m) for m, p in proposed}
+    keep = set()
+    for v in data["verdicts"]:
+        if not isinstance(v, dict):
+            continue
+        pair = (str(v.get("primary")), str(v.get("member")))
+        if pair not in asked:
+            continue
+        if v.get("same"):
+            keep.add(pair)
+        else:
+            print(f"  merge REFUSED: {pair[1]!r} is not {pair[0]!r} — "
+                  f"{str(v.get('reason') or '')[:100]}")
+    return keep
+
+
+def build_recovery_prompt(concept, snippets, ruled_out):
+    """Same context as the proposer, plus what has already been ruled out and why, so
+    the second look spends its effort somewhere new."""
+    lines = [f"Concept (raw): {concept['concept_norm']}",
+             f"Seen as: {_class_hint(concept)}   Mentions: {concept.get('mention_count') or 'n/a'}",
+             ""]
+    if ruled_out:
+        lines.append("ALREADY RULED OUT by review — do not offer these again:")
+        for prtnum, reason in ruled_out:
+            lines.append(f"  - {prtnum}: {reason or '(no reason given)'}")
+    else:
+        lines.append("The first pass proposed nothing at all.")
+    lines.append("")
+    return "\n".join(lines + _render_snippets(snippets))
+
+
+def recover_one(client, catalog_block, concept, snippets, ruled_out):
+    """Second look at the catalog for a concept that came back 'none'.
+
+    Exists because the verify pass can only SUBTRACT. Withholding the catalog from the
+    reviewer is deliberate — it keeps it judging the candidates in front of it instead
+    of shopping for replacements — but the cost is that a proposer MISS is
+    unrecoverable, and for a 'none' result that miss becomes a false "nothing like this
+    in stock" on the board. That is the most expensive error this table can make: it
+    sends someone to source a product we already sell (observed with mayonnaise,
+    2026-08-19).
+
+    Whatever this returns is still put through verify_one, so recall improves without
+    loosening precision one bit."""
+    return _call_json(client, RECOVERY_INSTRUCTIONS, catalog_block,
+                      build_recovery_prompt(concept, snippets, ruled_out),
+                      MAX_TOKENS, _proposal_ok, "recover", concept["concept_norm"])
 
 
 def verify_one(client, concept, snippets, proposal, candidates):
@@ -986,23 +1408,57 @@ def resolve_one(client, catalog_block, catalog_by_prtnum, concept, snippets, ver
         })
         return base
 
-    if not candidates:
-        # nothing to check — the proposer already said "nothing fits"
-        base.update({
+    if candidates:
+        verdict = verify_one(client, concept, snippets, proposal, candidates)
+        if verdict is None:
+            print(f"  SKIP {label!r}: verification failed — left unresolved for the "
+                  f"next run (no unverified match written)", file=sys.stderr)
+            return None
+        applied = reconcile(proposal, verdict, candidates, matched)
+    else:
+        # the proposer offered nothing at all — nothing to review
+        applied = {
             "result_type": "none", "matched_prtnum": None,
             "recommended_prtnums": [], "recommended_item_names": [],
             "recommended_reasons": [], "rejected_prtnums": [], "rejected_reasons": [],
-            "match_confidence": 0.0,
-        })
-        return base
+            "confidence": 0.0, "canonical_label": base["canonical_label"],
+        }
 
-    verdict = verify_one(client, concept, snippets, proposal, candidates)
-    if verdict is None:
-        print(f"  SKIP {label!r}: verification failed — left unresolved for the "
-              f"next run (no unverified match written)", file=sys.stderr)
-        return None
+    # ── SECOND LOOK ──────────────────────────────────────────────────────────────
+    # A 'none' is the one answer worth paying to double-check: it reaches the board as
+    # "we don't carry this and have nothing like it" and sends someone to source a
+    # product we may already sell. The verify pass cannot rescue it — by design it only
+    # subtracts — so give the catalog to a fresh call, tell it what was already ruled
+    # out, and put anything it finds through the SAME verifier. Recall improves;
+    # precision is untouched, because nothing skips review.
+    if applied["result_type"] == "none":
+        ruled_out = list(zip(applied["rejected_prtnums"], applied["rejected_reasons"]))
+        second = recover_one(client, catalog_block, concept, snippets, ruled_out)
+        if second is not None:
+            already = {p for p, _ in ruled_out}
+            cands2, mismatch2, matched2 = build_candidates(second, catalog_by_prtnum)
+            # a verdict already stands on those part numbers; don't re-litigate it
+            cands2 = [c for c in cands2 if c["prtnum"] not in already]
+            if matched2 in already:
+                matched2 = None
+            if cands2:
+                verdict2 = verify_one(client, concept, snippets, second, cands2)
+                if verdict2 is not None:
+                    applied2 = reconcile(second, verdict2, cands2, matched2)
+                    if applied2["result_type"] != "none":
+                        n_found = (1 if applied2["matched_prtnum"] else 0) \
+                                  + len(applied2["recommended_prtnums"])
+                        print(f"  RECOVERED {label!r}: second look found "
+                              f"{applied2['result_type']} ({n_found} item(s)) where the "
+                              f"first pass said none")
+                        # keep the first pass's rejections in the audit trail alongside
+                        applied2["rejected_prtnums"] = (applied["rejected_prtnums"]
+                                                        + applied2["rejected_prtnums"])
+                        applied2["rejected_reasons"] = (applied["rejected_reasons"]
+                                                        + applied2["rejected_reasons"])
+                        applied = applied2
+                        base["name_mismatch_prtnums"] = mismatches + mismatch2
 
-    applied = reconcile(proposal, verdict, candidates, matched)
     base.update({
         "canonical_label": applied["canonical_label"] or base["canonical_label"],
         "result_type": applied["result_type"],
@@ -1035,84 +1491,16 @@ def resolve_batch(client, catalog_block, catalog_by_prtnum, concepts,
 
 
 def finalize_records(by_concept, resolved_at, model_version):
-    """Stamp the run metadata and fill the canonical key used for alias
-    harmonisation. Deglossed+folded so "Som Tam (green papaya salad)" and
-    "Som Tam (Green Papaya Salad)" land on the same key."""
+    """Stamp run metadata on each row."""
     records = []
     for r in by_concept.values():
         r = dict(r)
-        r["canonical_key"] = _concept_key(r.get("canonical_label") or r["concept_norm"])
-        r.setdefault("alias_of", None)
         r["resolved_at"] = resolved_at
         r["model_version"] = model_version
         records.append(_coerce_record(r))
     return records
 
 
-_RESULT_RANK = {"carried": 3, "substitute": 2, "basket": 2, "none": 1}
-
-
-def _alias_sort_key(r):
-    n_items = len(r.get("recommended_prtnums") or []) + (1 if r.get("matched_prtnum") else 0)
-    return (_RESULT_RANK.get(r.get("result_type"), 0),
-            float(r.get("match_confidence") or 0.0),
-            n_items,
-            str(r.get("concept_norm") or ""))
-
-
-_PAYLOAD_KEYS = ("canonical_label", "concept_type", "result_type", "matched_prtnum",
-                 "recommended_prtnums", "recommended_item_names",
-                 "recommended_reasons", "match_confidence")
-
-
-def _payload(r):
-    return tuple(tuple(r.get(k) or []) if isinstance(_RECORD_DEFAULTS[k], list)
-                 else r.get(k) for k in _PAYLOAD_KEYS)
-
-
-def harmonize_aliases(new_records, existing_records, resolved_at):
-    """One dish must not get two different answers.
-
-    fold_concept only merges Latin diacritic variants — cross-SCRIPT twins stay
-    separate concepts (som tam / ส้มตำ, boat noodles / ก๋วยเตี๋ยวเรือ), so the same dish is
-    resolved twice, independently, and the two answers disagree (2026-08: rank 1
-    "som tam" -> none, rank 13 "ส้มตำ" -> a jackfruit basket). Where the LLM's own
-    canonical label says two concepts are the same thing, the better-grounded
-    answer (real match > none, then higher verified confidence) is copied onto the
-    other and the loser is stamped alias_of, so the board can't contradict itself.
-
-    Includes rows resolved in EARLIER runs, and returns the rows to write: the new
-    ones plus any older row whose answer changed (append-only + staging's
-    latest-resolved_at-wins makes the rewrite an update).
-    """
-    existing = [_coerce_record(r) for r in existing_records]
-    new_ids = {r["concept_norm"] for r in new_records}
-    existing = [r for r in existing if r["concept_norm"] not in new_ids]
-
-    by_key = defaultdict(list)
-    for r in existing + list(new_records):
-        by_key[r.get("canonical_key") or r["concept_norm"]].append(r)
-
-    rewritten = []
-    for group in by_key.values():
-        if len(group) < 2:
-            continue
-        winner = max(group, key=_alias_sort_key)
-        for r in group:
-            if r["concept_norm"] == winner["concept_norm"]:
-                r["alias_of"] = None
-                continue
-            if _payload(r) == _payload(winner) and r.get("alias_of") == winner["concept_norm"]:
-                continue
-            for k in _PAYLOAD_KEYS:
-                r[k] = winner[k]
-            r["alias_of"] = winner["concept_norm"]
-            print(f"  alias: {r['concept_norm']!r} <- {winner['concept_norm']!r} "
-                  f"({winner['result_type']}, conf {winner['match_confidence']})")
-            if r["concept_norm"] not in new_ids:
-                r["resolved_at"] = resolved_at
-                rewritten.append(r)
-    return list(new_records) + rewritten
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1122,8 +1510,8 @@ def harmonize_aliases(new_records, existing_records, resolved_at):
 def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
          concurrency=CONCURRENCY, duckdb_path=LOCAL_DUCKDB_PATH, verify=True):
     model_version = _CURRENT_VERSION if verify else f"{_CURRENT_VERSION}-noverify"
-    concepts, snippets, catalog, existing = read_all(backend, top_n, duckdb_path,
-                                                     model_version)
+    concepts, snippets, catalog, existing, brand_keys = read_all(
+        backend, top_n, duckdb_path, model_version)
     if limit:
         concepts = concepts[:limit]
     print(f"{len(existing)} already resolved; {len(concepts)} new top-{top_n} "
@@ -1148,42 +1536,117 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
     catalog_by_prtnum = {str(c["prtnum"]): c for c in catalog}
 
     if dry_run:
+        # NB: compute the phrase FIRST. A conditional expression split across
+        # lines inside an f-string is Python 3.12+ only (PEP 701); CI runs 3.11.
+        mode = ('propose + verify, then a second look at any none'
+                if verify else 'propose only')
         print(f"[dry-run] would resolve {len(concepts)} concepts with {MODEL} "
-              f"({'propose + verify' if verify else 'propose only'}).")
+              f"({mode}).")
         print(f"catalog block: {len(catalog_block)} chars. First prompt:\n")
         c0 = concepts[0]
         print(build_user_prompt(c0, snippets.get(c0["concept_norm"], [])))
         return
 
     client = get_client(backend)
-    total = len(concepts)
     resolved_at = datetime.now(timezone.utc)
+
+    # ── GROUP FIRST ──────────────────────────────────────────────────────────────
+    # One call over the whole board, so "matcha" and "matcha powder" are known to be
+    # one trend BEFORE anything is resolved. Then each group is resolved ONCE and the
+    # answer is written for every member, which also cuts calls.
+    groups = group_concepts(client, concepts, brand_keys) if verify else              {c["concept_norm"]: (c["concept_norm"], None) for c in concepts}
+    # Seed each group's record from THE PRIMARY's own dict, never from whichever member
+    # happens to be iterated first. `setdefault(primary, dict(c))` did the latter, and
+    # when a member preceded its primary the group was resolved and stored under the
+    # MEMBER's concept_norm — so the write loop's all_records.get(primary) missed and
+    # `answer is None` silently dropped every row in that group. Observed on v9
+    # (2026-08-20): 'matcha' absorbs 'matcha powder', 42/42 resolved, 44 of 46 rows
+    # written, and the two lost were the whole matcha group — leaving rank 1 on the item
+    # board with its stale v5 answer, listed twice. It also mis-summed: the member's
+    # count was added to itself and the primary's own count never was.
+    by_norm = {c["concept_norm"]: c for c in concepts}
+    primaries = {}
+    for c in concepts:
+        primary, _ = groups[c["concept_norm"]]
+        if primary not in primaries:
+            # group_concepts guarantees the primary is itself one of the offered
+            # concepts, so by_norm[primary] always exists.
+            primaries[primary] = dict(by_norm[primary])
+            primaries[primary]["mention_count"] = 0
+            primaries[primary]["is_dish"] = 0
+            primaries[primary]["is_item"] = 0
+        # the group's volume is the sum over EVERY member including the primary — it is
+        # one trend, and the prompt shows this number as context. Class flags are OR'd
+        # for the same reason: a member seen as an item makes the group an item.
+        primaries[primary]["mention_count"] += (c.get("mention_count") or 0)
+        primaries[primary]["is_dish"] |= 1 if c.get("is_dish") else 0
+        primaries[primary]["is_item"] |= 1 if c.get("is_item") else 0
+    to_resolve = list(primaries.values())
+    total = len(to_resolve)
+
     all_records = {}
     for start in range(0, total, BATCH_SIZE):
-        chunk = concepts[start:start + BATCH_SIZE]
+        chunk = to_resolve[start:start + BATCH_SIZE]
         res = resolve_batch(client, catalog_block, catalog_by_prtnum, chunk,
                             snippets, concurrency, verify)
         recs = finalize_records(res, resolved_at, model_version)
-        # harmonisation needs every row for a canonical key at once, so batches
-        # accumulate and the write happens after the loop. Batches exist to bound
-        # concurrency, not to checkpoint — top-N is ~20 rows.
         all_records.update({r["concept_norm"]: r for r in recs})
         print(f"  batch {start // BATCH_SIZE + 1}: resolved {len(res)}/{len(chunk)} "
               f"(cumulative {len(all_records)}/{total})")
 
-    to_write = harmonize_aliases(list(all_records.values()), existing, resolved_at)
+    # every member of a resolved group gets the group's answer, tagged with the
+    # primary it came from so the SQL side can merge the mentions too
+    to_write = []
+    for c in concepts:
+        norm = c["concept_norm"]
+        primary, label = groups[norm]
+        answer = all_records.get(primary)
+        if answer is None:          # its group failed to resolve; retry next run
+            continue
+        row = dict(answer)
+        row["concept_norm"] = norm
+        row["group_primary"] = primary
+        row["group_label"] = label
+        to_write.append(_coerce_record(row))
     write_resolution(backend, to_write)
 
     written = len(all_records)
+    report_usage()
     failed = total - written
     kinds = defaultdict(int)
     for r in all_records.values():
         kinds[r["result_type"]] += 1
-    print(f"DONE. wrote {len(to_write)} rows ({written} newly resolved"
-          + (f", {len(to_write) - written} re-harmonised" if len(to_write) > written else "")
-          + f"): {dict(kinds)}"
+    print(f"DONE. wrote {len(to_write)} rows for {written} resolved group(s)"
+          + f": {dict(kinds)}"
           + (f"; {failed} unresolved (propose or verify failed) — re-run to "
              f"backfill (incremental)" if failed else ""))
+
+    # NAME the ones that got no row, loudest first. A count alone is not enough: the
+    # v9 run printed "44 rows / 2 unresolved" and looked healthy, but the two were
+    # 'matcha' (rank 1 on the item board, 22 mentions) and 'matcha powder' — so the
+    # #1 trending item kept its stale v5 answer and stayed on the board twice, which
+    # is the very duplicate this version was written to remove. Worse, the failure is
+    # deterministic, so it repeated silently through v6, v7, v8 and v9.
+    #
+    # Members are listed with their primary because ONE failed primary takes its whole
+    # group down (`if answer is None: continue` above) — two missing rows can be one
+    # failed call, and that is not obvious from a tally.
+    if failed:
+        dragged = defaultdict(list)
+        for c in concepts:
+            primary, _ = groups[c["concept_norm"]]
+            if primary not in all_records and c["concept_norm"] != primary:
+                dragged[primary].append(c["concept_norm"])
+        missing = sorted((p for p in primaries if p not in all_records),
+                         key=lambda p: -(primaries[p].get("mention_count") or 0))
+        print(f"UNRESOLVED ({len(missing)}) — each keeps whatever it was last "
+              f"resolved at, which can be an OLD prompt version:", file=sys.stderr)
+        for p in missing:
+            n = primaries[p].get("mention_count")
+            with_members = (f"  + members {dragged[p]} lost with it"
+                            if dragged[p] else "")
+            print(f"  {p!r} ({n if n else 'n/a'} mentions){with_members}",
+                  file=sys.stderr)
 
 
 if __name__ == "__main__":

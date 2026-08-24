@@ -92,34 +92,31 @@ vars:
   # least this confident, so a shaky spam call doesn't silently hide a real mention
   social_spam_confidence_min: 0.7
 
-  # int_social_concept_trends / mart_social_trending_items — the weekly trending
-  # board. The UNIT IS THE CALENDAR WEEK (Monday-anchored): the report runs weekly,
-  # and each row aggregates and ranks exactly one week's mentions, so week-over-week
-  # movement compares equal, non-overlapping periods. Known cost: a spike that
-  # straddles a Sunday splits across two weeks and ranks lower in both (an earlier
-  # design used a trailing multi-week window to avoid that, at the price of
-  # overlapping periods that can't be compared week to week — this grain takes the
-  # other side of that trade). NOTE: a mid-week run leaves the newest week partial
-  # (is_partial_week / days_observed) — read mention_share, not raw counts, across
-  # such a week. Ranking is deterministic (pure social signal) and author-diversity
-  # based (see the v2 block below); the LLM only resolves the top-N concepts to WMS
-  # SKUs, offline (scripts/resolve_trending_concepts.py).
-  social_trend_history_weeks: 13     # calendar weeks of board history kept = ~3 months, ROLLING.
-                                     # The model is a full rebuild each run, so week 14 pushing in
-                                     # means week 1 is gone — nothing archives it. Raise this to keep
-                                     # more (cost is linear and tiny); permanent history would need a
-                                     # snapshot or incremental table, which is a different design.
-  social_trend_top_n: 20             # how many trending items the mart shows PER CLASS PER WEEK
-  social_trend_min_mentions: 2       # ignore concepts below this IN A WEEK (noise floor). Bites harder at a
-                                     # 7-day grain than over a multi-week window: expect gaps in trajectories.
-  social_trend_link_count: 5         # source_links per concept-week — the top links by reach then engagement
-  # trend_score = mentions x (1 + ln(1+engagement)/eng_weight + ln(1+views)/views_weight).
-  # engagement = active reactions (likes+comments+shares); views tracked separately.
-  # Both log-dampened so one viral post can't dominate; a BIGGER weight = that signal
-  # matters LESS. Views weight > engagement weight: a view (passive) is worth less
-  # than a like/comment/share (active).
-  social_trend_engagement_weight: 10
-  social_trend_views_weight: 20
+  # ── SOCIAL TRENDING BOARD ─────────────────────────────────────────────────────
+  # int_social_concept_trends / mart_social_trending_items. Ranking is deterministic
+  # (pure social signal, author-diversity based — see the v2 block below); the LLM only
+  # labels mentions and resolves the top-N concepts to WMS SKUs, both offline.
+  #
+  # FIVE TIME WINDOWS govern this feature and they are INDEPENDENT. Three of them are
+  # set here, one in resolve_trending_concepts.py, one is fixed by the grain. All five
+  # are defined together, with their trade-offs, in models/docs/_social_windows.md —
+  # read that before changing any of them:
+  #   1 ranking     1 calendar week, complete weeks only   (fixed)
+  #   2 comparison  strictly the preceding week            (fixed)
+  #   3 retention   social_trend_history_weeks             <- below
+  #   4 re-label    social_enrich_backfill_weeks           <- below
+  #   5 snippets    SNIPPET_WINDOW_DAYS (resolver script)
+  # The one thing to internalise: only #1 and #2 affect a published number. #3 is
+  # chart length (proven not to move any rank), #4 and #5 are cost/quality controls on
+  # the offline LLM steps.
+  social_trend_history_weeks: 13     # (3) weeks of board history kept, ~3 months, ROLLING and
+                                     # unarchived: week 14 arriving means week 1 is gone
+  social_enrich_backfill_weeks: 4    # (4) weeks a PROMPT_VERSION bump re-labels. Week-aligned;
+                                     # 0 = all history. Never re-label a PARTIAL week
+  social_trend_top_n: 20             # trending items the mart shows PER CLASS PER WEEK
+  social_trend_min_mentions: 2       # noise floor, per concept per WEEK. Bites harder at a 7-day
+                                     # grain than a multi-week one: expect gaps in trajectories
+  social_trend_link_count: 5         # source_links per concept-week, top links by reach then engagement
   social_resolve_min_confidence: 0.7 # below this, ANY match (carried/substitute/basket) is suppressed
                                      # (shown as none/source_new). Inventory wins only when confident — a
                                      # 0.45 carried guess (sushi -> corn oil) is dropped like a shaky basket.
