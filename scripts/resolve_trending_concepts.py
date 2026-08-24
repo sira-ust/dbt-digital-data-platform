@@ -1536,9 +1536,12 @@ def main(backend="local", limit=None, top_n=TOP_N, dry_run=False,
     catalog_by_prtnum = {str(c["prtnum"]): c for c in catalog}
 
     if dry_run:
+        # NB: compute the phrase FIRST. A conditional expression split across
+        # lines inside an f-string is Python 3.12+ only (PEP 701); CI runs 3.11.
+        mode = ('propose + verify, then a second look at any none'
+                if verify else 'propose only')
         print(f"[dry-run] would resolve {len(concepts)} concepts with {MODEL} "
-              f"({'propose + verify, then a second look at any none'
-                 if verify else 'propose only'}).")
+              f"({mode}).")
         print(f"catalog block: {len(catalog_block)} chars. First prompt:\n")
         c0 = concepts[0]
         print(build_user_prompt(c0, snippets.get(c0["concept_norm"], [])))
