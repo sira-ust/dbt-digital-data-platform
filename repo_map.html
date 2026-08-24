@@ -150,6 +150,7 @@
   .tag.table { color: var(--l-fact); border: 1px solid color-mix(in srgb, var(--l-fact) 40%, transparent); }
   .tag.src { color: var(--muted); border: 1px solid var(--line); }
   .tag.csv { color: var(--l-seed); border: 1px solid color-mix(in srgb, var(--l-seed) 40%, transparent); }
+  .tag.ext { color: var(--l-seed); border: 1px solid color-mix(in srgb, var(--l-seed) 45%, transparent); background: color-mix(in srgb, var(--l-seed) 10%, transparent); font-weight: 700; }
   .tag.ai { color: var(--l-llm); border: 1px solid color-mix(in srgb, var(--l-llm) 45%, transparent); background: color-mix(in srgb, var(--l-llm) 10%, transparent); font-weight: 700; }
   .aisrc { font-family: var(--mono); font-size: 10px; color: var(--l-llm); opacity: .85; margin-top: 6px; word-break: break-word; }
   .node .badge {
@@ -258,10 +259,10 @@
   </header>
 
   <div class="stats">
-    <div class="stat" style="--c:var(--l-source)"><div class="n">3</div><div class="k">data sources</div></div>
-    <div class="stat" style="--c:var(--l-int)"><div class="n">41</div><div class="k">data models <b>(source → report)</b></div></div>
-    <div class="stat" style="--c:var(--l-mart)"><div class="n">6</div><div class="k">business reports <b>(marts)</b></div></div>
-    <div class="stat" style="--c:var(--l-dq)"><div class="n">4</div><div class="k">data-quality checks</div></div>
+    <div class="stat" style="--c:var(--l-source)"><div class="n">4</div><div class="k">data sources</div></div>
+    <div class="stat" style="--c:var(--l-int)"><div class="n">47</div><div class="k">data models <b>(source → report)</b></div></div>
+    <div class="stat" style="--c:var(--l-mart)"><div class="n">8</div><div class="k">business reports <b>(marts)</b></div></div>
+    <div class="stat" style="--c:var(--l-dq)"><div class="n">5</div><div class="k">data-quality checks</div></div>
   </div>
 
   <div class="legend" id="legend"></div>
@@ -416,6 +417,14 @@
 
   <div class="dq-grid">
     <div class="dqc">
+      <div class="type">audit · view</div>
+      <h4>dq_social_generic_term_hits</h4>
+      <div class="taps">fct_social_mentions · seed_social_generic_terms</div>
+      <p>What the generic-commodity stoplist <b>suppressed</b>, per week. <code>int_social_concept_trends</code> anti-joins the stoplist BEFORE ranking — it has to, or the suppressed rows dilute <code>mention_share</code> and inflate the shared-post divisor — which means a stoplist quietly eating a real signal leaves no trace in the trends table. This is that trace. A term with a large and RISING hit count is the one to re-check; a term with zero hits ever is misspelled or no longer needed. One row per week × class × term that actually matched.</p>
+      <div class="sev"><span class="quar">drift table</span></div>
+    </div>
+
+    <div class="dqc">
       <div class="type">quarantine · view</div>
       <h4>dq_quarantine_invalid_source</h4>
       <div class="taps">stg_mysql__system_event_log · seed_app_sources</div>
@@ -456,6 +465,11 @@
       <div class="desc">App-activity + WMS pipelines end to end — staging → intermediate → facts → demand-vs-supply marts — with all gate tests and DQ tables.</div>
     </div>
     <div class="cad weekly">
+      <div class="when">weekly · before the daily build</div>
+      <div class="cmd">scripts/geocode_customers.py</div>
+      <div class="desc">Resolves any NEW customer address to a coordinate via the Google API and appends to <code>ust_external.nav_customer_geocode</code>. Runs outside dbt (own Databricks job, <code>geocode_weekly_job.yml</code>); a failure here cannot block the dbt build. Without it a new customer has no geofence, so their store visits read as <b>unknown</b> — never as "did not visit".</div>
+    </div>
+    <div class="cad weekly">
       <div class="when">weekly · after parse + enrich</div>
       <div class="cmd">dbt build <span class="flag">--select tag:social</span></div>
       <div class="desc">Social branch only, once the offline scripts have populated <code>social.*</code>: dedupe mentions, join enrichment, rank the weekly dish and item boards, resolve SKUs, refresh the trending board.</div>
@@ -463,7 +477,7 @@
   </div>
 
   <footer>
-    <span>Generated from the ref() / source() graph · models/</span>
+    <span>HAND-MAINTAINED from the ref() / source() graph · models/ — update it when you add a model</span>
     <span>staging = view · intermediate / facts / marts = table · dq = view</span>
   </footer>
 </div>
@@ -480,18 +494,22 @@ const LAYERS = {
 const COLS = ['Sources', 'Staging', 'Intermediate', 'Intermediate + Facts', 'Facts + Intermediate', 'Marts'];
 const PIPE = {
   'event-log': 'app-log', 'wms': 'wms', 'social': 'social',
-  'cross-pipeline': 'cross', 'reference': 'ref',
+  'cross-pipeline': 'cross', 'reference': 'ref', 'nav': 'nav',
 };
 
 const NODES = [
   { id:'src_mysql', label:'mysql', desc:'App system-event log (MySQL)', col:0, layer:'source', pipe:'event-log', mat:'src', sub:'3 tbl', color:'#2563eb' },
   { id:'src_jdawms', label:'jdawms (WMS)', desc:'Blue Yonder WMS (SQL Server)', col:0, layer:'source', pipe:'wms', mat:'src', sub:'16 tbl', color:'#dc2626' },
   { id:'src_mnt', label:'Social Listening (mentionlytics)', desc:'Weekly raw export — 1 row = 1 post', col:0, layer:'source', pipe:'social', mat:'src', sub:'3 tbl', color:'#9333ea' },
+  { id:'src_nav', label:'nav (ERP)', desc:'NAV ERP. 16 tables replicated; only the customer master is modelled so far — one address per customer, which doubles as the delivery point', col:0, layer:'source', pipe:'nav', mat:'src', sub:'16 tbl · 1 used', color:'#0891b2' },
   { id:'seeds', label:'seeds', desc:'Dictionaries & code maps', col:0, layer:'seed', pipe:'reference', mat:'csv', color:'#d97706' },
 
   { id:'stg_sel', label:'stg_mysql__system_event_log', desc:'Cleaned app events', col:1, layer:'staging', pipe:'event-log', mat:'view' },
   { id:'stg_admin', label:'stg_mysql__admin_users', desc:'Sales reps / users', col:1, layer:'staging', pipe:'event-log', mat:'view' },
   { id:'stg_jdawms', label:'stg_jdawms__*', desc:'16 WMS tables, cleaned 1:1', col:1, layer:'staging', pipe:'wms', mat:'view', sub:'16' },
+  // leaf: cleaned and available, but nothing refs it yet — drawn so the map does
+  // not imply it is missing. seed_categories is the decode most consumers reach for.
+  { id:'stg_cat', label:'stg_mysql__category', desc:'Product category master — cleaned, no consumers yet', col:1, layer:'staging', pipe:'event-log', mat:'view' },
   { id:'stg_mnt_m', label:'stg_mentionlytics__mentions', desc:'Posts, deduped — still 1 row = 1 post', col:1, layer:'staging', pipe:'social', mat:'view' },
   { id:'stg_mnt_e', label:'stg_mentionlytics__mention_enrichment', desc:"AI's read on each post: spam? dishes? products?", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/enrich_mentions.py' },
   // col 1, same as the other staging views: in dbt's actual graph this model
@@ -500,6 +518,12 @@ const NODES = [
   // run earlier, inside the offline Python script — not a dbt dependency, so
   // it does not belong in this acyclic graph. See the walkthrough below.
   { id:'stg_mnt_r', label:'stg_mentionlytics__concept_resolution', desc:"AI's dish→product match — 1 row = 1 dish", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/resolve_trending_concepts.py' },
+
+  // The coordinate is NOT in NAV. geocode_customers.py resolves each address via
+  // the Google API out-of-band and writes ust_external.nav_customer_geocode, which
+  // this view joins to the customer master. Same shape as the social scripts: a
+  // dbt model reads a table a script wrote, so the script is annotated, not drawn.
+  { id:'stg_nav_loc', label:'stg_nav__customer_locations', desc:'Customer address + its coordinate — the geofence every store visit is measured against', col:1, layer:'staging', pipe:'nav', mat:'view', script:'scripts/geocode_customers.py' },
 
   { id:'int_dec', label:'int_events_decoded', desc:'8-digit code + UTC decoded', col:2, layer:'int', pipe:'event-log', mat:'table' },
   { id:'int_items', label:'int_jdawms_items', desc:'WMS item master + names', col:2, layer:'int', pipe:'wms', mat:'table' },
@@ -516,17 +540,21 @@ const NODES = [
   { id:'fct_orders', label:'fct_orders', desc:'One row per submitted order', col:4, layer:'fact', pipe:'event-log', mat:'table' },
   { id:'fct_cycles', label:'fct_order_cycles', desc:'One row per order cycle', col:4, layer:'fact', pipe:'event-log', mat:'table' },
   { id:'int_trend', label:'int_social_concept_trends', desc:'Weekly ranked boards — dishes and stockable items, ranked separately', col:4, layer:'int', pipe:'social', mat:'table' },
+  { id:'int_act', label:'int_rep_customer_activity', desc:'What a rep did per customer per day — sessions, devices, and which customer each tap belongs to', col:4, layer:'int', pipe:'event-log', mat:'table' },
+  { id:'int_pres', label:'int_rep_customer_presence', desc:'Where the rep physically WAS, from GPS — one row per store visit', col:4, layer:'int', pipe:'nav', mat:'table' },
   { id:'mart_feat', label:'mart_feature_pairing', desc:'Weekly feature co-occurrence', col:4, layer:'mart', pipe:'event-log', mat:'table' },
 
   { id:'mart_rep', label:'mart_rep_weekly', desc:'Weekly sales-rep scorecard', col:5, layer:'mart', pipe:'event-log', mat:'table' },
   { id:'mart_cust', label:'mart_customer_weekly', desc:'Customer activity + churn', col:5, layer:'mart', pipe:'event-log', mat:'table' },
   { id:'mart_journey', label:'mart_rep_order_journey', desc:'Rep order-journey detail', col:5, layer:'mart', pipe:'event-log', mat:'table' },
+  { id:'mart_act', label:'mart_rep_customer_activity', desc:'Was the rep in the store, and what did they do there? One row per rep × customer × day × scenario', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
+  { id:'mart_act_ev', label:'mart_rep_customer_activity_events', desc:'The same work event by event — replay a visit tap by tap', col:5, layer:'mart', pipe:'event-log', mat:'table' },
   { id:'mart_ds', label:'mart_item_demand_supply', desc:'Weekly demand × WMS supply', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
   { id:'mart_soc', label:'mart_social_trending_items', desc:'Weekly trending board: do we stock it? is it climbing?', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
 ];
 
 const EDGES = [
-  ['src_mysql','stg_sel'],['src_mysql','stg_admin'],
+  ['src_mysql','stg_sel'],['src_mysql','stg_admin'],['src_mysql','stg_cat'],
   ['src_jdawms','stg_jdawms'],
   ['src_mnt','stg_mnt_m'],['src_mnt','stg_mnt_e'],['src_mnt','stg_mnt_r'],
   ['stg_sel','int_dec'],['seeds','int_dec'],
@@ -540,6 +568,11 @@ const EDGES = [
   ['fct_cycles','mart_rep'],['fct_orders','mart_rep'],['stg_admin','mart_rep'],
   ['fct_cycles','mart_cust'],['fct_orders','mart_cust'],
   ['int_cycle','mart_journey'],['fct_events','mart_journey'],
+  ['src_nav','stg_nav_loc'],
+  ['int_enr','int_act'],
+  ['int_enr','int_pres'],['stg_nav_loc','int_pres'],
+  ['int_act','mart_act'],['int_pres','mart_act'],['fct_orders','mart_act'],['stg_admin','mart_act'],
+  ['int_act','mart_act_ev'],['fct_orders','mart_act_ev'],
   ['int_dem','mart_ds'],['int_inv','mart_ds'],['int_items','mart_ds'],
   ['int_items','mart_soc'],['int_trend','mart_soc'],['stg_mnt_r','mart_soc'],['int_stock','mart_soc'],
 ];
@@ -558,6 +591,7 @@ const LEGEND = [
   { c:'#2563eb', label:'MySQL logs', gloss:'source' },
   { c:'#dc2626', label:'WMS · SQL Server', gloss:'source' },
   { c:'#9333ea', label:'Social Listening (mentionlytics)', gloss:'source' },
+  { c:'#0891b2', label:'NAV ERP', gloss:'source · customer master' },
   { c:'#d97706', label:'Seeds', gloss:'source · reference CSVs' },
   { c:'var(--l-staging)', label:'Staging', gloss:'1:1 cleaned views' },
   { c:'var(--l-int)', label:'Intermediate', gloss:'prepared tables' },
@@ -583,6 +617,7 @@ const SOURCES = {
   src_mysql:  { c:'#2563eb', abbr:'MySQL', title:'MySQL logs' },
   src_jdawms: { c:'#dc2626', abbr:'WMS',   title:'WMS · SQL Server' },
   src_mnt:    { c:'#9333ea', abbr:'SL',    title:'Social Listening (mentionlytics)' },
+  src_nav:    { c:'#0891b2', abbr:'NAV',   title:'NAV ERP' },
   seeds:      { c:'#d97706', abbr:'Seed',  title:'Seeds' },
 };
 const SRC_IDS = Object.keys(SOURCES);
@@ -617,8 +652,10 @@ Object.keys(byCol).sort((a,b)=>a-b).forEach(ci => {
       <div class="desc">${n.desc}</div>
       <div class="mt"><span class="tag ${n.mat}">${n.mat}</span>
       ${n.ai ? `<span class="tag ai" title="Built offline by an LLM script, not dbt">AI</span>` : ''}
+      ${n.script ? `<span class="tag ext" title="Built offline by a script, not dbt — no LLM">SCRIPT</span>` : ''}
       ${n.sub ? `<span class="badge">${n.sub}</span>` : ''}</div>
       ${n.ai ? `<div class="aisrc">via ${n.ai}</div>` : ''}
+      ${n.script ? `<div class="aisrc">via ${n.script}</div>` : ''}
       ${flags}`;
     col.appendChild(el);
     nodeEls[n.id] = el;
