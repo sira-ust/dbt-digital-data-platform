@@ -29,6 +29,50 @@ valid_sources as (
     -- excluded here so the analytics spine only contains real app events.
     select source_code from {{ ref('seed_app_sources') }}
 
+),
+
+-- ── DEDUPE the batch re-upload ──────────────────────────────────────────
+-- The PDA re-sends a batch it has already sent, and every pass INSERTS with
+-- fresh entity_ids, so staging's dedupe (keyed on entity_id, the source PK)
+-- cannot see it. Left alone this inflates every event count downstream.
+--
+-- Measured 2026-08-24 on the whole event fact: 331,844 surplus cart rows of
+-- 1,382,243 (24%), and it is not cart-specific -- L1 11 Filtering is 70%
+-- duplicated, 19 Catalog View 54%, 10 Order Operations 23%. Worst single action
+-- was stored 36 times. A concrete example: SAI023 / 2026-04-13 / SKU '37343, 1'
+-- stored 3x as entity_id 1727897 / 1728112 / 1728282, identical event_time and
+-- payload, uploaded 20 and 26 seconds apart.
+--
+-- BOTH duplicate shapes are the same artifact, so both are deduped:
+--   separate uploads   copies carry different created_at_utc (200,289 groups)
+--   one upload         one pass wrote the batch twice, appearing as TWO
+--                      contiguous entity_id runs holding the same sequence
+--                      (71,045 groups; verified 018 / ASI163 / 2026-02-03,
+--                      entity_ids 44059-44064 and 44330-44335 -- six distinct
+--                      SKUs, each stored exactly twice)
+--
+-- The business key is what the app actually did: one actor, one customer, one
+-- instant, one code, one payload. Lowest entity_id wins so the surviving row is
+-- the first-landed one and the choice is stable across rebuilds.
+--
+-- NOT deduped on event_at_utc-only or without response: two different SKUs added
+-- in the same second are two real adds, and collapsing them would delete work.
+deduped as (
+
+    select *
+    from (
+        select
+            *,
+            row_number() over (
+                partition by
+                    sales_code, ust_customer_no, source, event_time,
+                    description_code, response
+                order by entity_id
+            ) as _dup_rn
+        from events
+    ) as d
+    where _dup_rn = 1
+
 )
 
 select
@@ -82,5 +126,5 @@ select
     -- ── payload (parsed per-family downstream) ──────────────────────────
     response
 
-from events
+from deduped
 where source in (select source_code from valid_sources)
