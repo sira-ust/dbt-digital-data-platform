@@ -46,7 +46,6 @@
 --   70-280x every other channel's, so a raw sum is a TikTok-only ranking — and (b) how
 --   many OTHER same-class concepts that mention also names, so a post listing 26 dishes
 --   doesn't give each one full credit. Summed, then log-dampened ONCE at the end.
--- trend_score_legacy: the superseded volume-led formula, kept for comparison.
 -- mention_share: this concept's (concept, mention) pairs / all pairs that week in that
 --   class. Shares sum to ~1, which is what makes it comparable across weeks of
 --   different size — the measure to trust for movement.
@@ -560,10 +559,6 @@ scored as (
     select
         f.*,
         f.mention_count * 1.0 / wt.week_mentions                       as mention_share,
-        -- legacy score, kept (not deleted) so rankings can be compared over the next few weeks
-        f.mention_count
-            * (1 + ln(1 + coalesce(f.total_engagement, 0)) / {{ var('social_trend_engagement_weight') }}
-                 + ln(1 + coalesce(f.total_views, 0))      / {{ var('social_trend_views_weight') }})  as trend_score_legacy,
         -- current score (author-diversity based)
         f.distinct_authors_adj
             * (1 + ln(1 + f.engagement_norm) / {{ var('social_trend_v2_engagement_weight') }}
@@ -661,7 +656,6 @@ with_rank as (
         s.channel_count,
         s.author_quality,
         s.is_single_channel,
-        s.trend_score_legacy,
         s.trend_score,
         la.source_links,
         -- excluded (repeat_poster) concepts get NO rank — still inspectable in the

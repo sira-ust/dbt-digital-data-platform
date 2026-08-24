@@ -377,9 +377,9 @@ models:
 
       trend_score is AUTHOR-DIVERSITY based (distinct_authors_adj x log-dampened,
       per-channel-normalised engagement/views), replacing a pure mention-volume
-      score that correlated ~0.86 with raw mention_count — see trend_score_legacy,
-      kept alongside for comparison, and author_quality below for why the
-      exclusion rule runs on named (non-anonymised) authors, not the raw count.
+      score that correlated ~0.86 with raw mention_count. See author_quality below
+      for why the exclusion rule runs on named (non-anonymised) authors, not the
+      raw count.
       Channel medians are per (week, channel) with an all-history fallback for thin
       windows; the shared-post divisor is per mention within class. For rise, use
       mention_share / mention_share_change (volume-neutral) over is_rising.
@@ -438,9 +438,9 @@ models:
           collection volume doubles — or a week is partial — every share is still
           comparable. Guarded by assert_social_concept_trends_mention_share_sums.
       - name: total_engagement
-        description: Summed ACTIVE engagement (likes + comments + shares) across those mentions (deduped per mention). Feeds trend_score_legacy only.
+        description: Summed ACTIVE engagement (likes + comments + shares) across those mentions (deduped per mention). Published by mart_social_trending_items; the ranking itself uses the per-channel-normalised engagement_norm, not this raw sum.
       - name: total_views
-        description: Summed views across those mentions (video/post view counts). Feeds trend_score_legacy only.
+        description: Summed views across those mentions (video/post view counts). Published by mart_social_trending_items; the ranking uses views_norm, not this raw sum.
       - name: is_rising
         description: >
           mention_share went UP versus the previous week with a row. REDEFINED at this
@@ -488,11 +488,6 @@ models:
           exclusion — measured at ~5% of the actual top-20 vs ~38% of the full long tail, and a
           single-platform trend (TikTok-only food virality is common and legitimate) isn't
           evidence of anything wrong.
-      - name: trend_score_legacy
-        description: >
-          The original mention-count-led score: mention_count x (1 + ln(1+total_engagement)/eng_weight
-          + ln(1+total_views)/views_weight). Kept (not deleted) so rankings can be compared over
-          the next few weeks, not recomputed retroactively.
       - name: trend_score
         description: >
           distinct_authors_adj x (1 + ln(1+engagement_norm)/eng_weight + ln(1+views_norm)/views_weight)

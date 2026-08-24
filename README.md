@@ -184,6 +184,16 @@ singular-test-vs-DQ-model distinction live in [TESTING.md](TESTING.md).
 - Ongoing source drift to monitor / quarantine → a model in `models/dq/`
 - One-off investigation → `analyses/`
 
+## Social pipeline run order
+
+    parse_mentions.py (Databricks)  or  convert_mentionlytics.py (local)
+      -> enrich_mentions.py
+      -> resolve_trending_concepts.py
+      -> dbt build --select tag:social
+
+`parse_mentions.py` is append-only; `stg_mentionlytics__mentions` dedupes on
+mention_id by latest loaded_at, so overlapping weekly drops self-reconcile.
+
 ## Repo structure
 
 ```
@@ -197,7 +207,22 @@ singular-test-vs-DQ-model distinction live in [TESTING.md](TESTING.md).
 │   ├── generate_jdawms_glossary.py     # WMS column glossary (from seed dictionary)
 │   ├── generate_seed_value_glossaries.py
 │   ├── snapshot_uc_schema.py           # one-time UC schema pull (git-tracked CSV)
-│   └── generate_jdawms_mock.py         # mock parquet for local dev (no UC cost)
+│   ├── generate_jdawms_mock.py         # mock parquet for local dev (no UC cost)
+│   ├── geocode_customers.py            # NAV addresses -> coordinates via the Google API
+│   ├── convert_mentionlytics.py        # social step 1, LOCAL: xlsx -> DuckDB
+│   ├── enrich_mentions.py              # social step 2: LLM labels the mentions
+│   ├── resolve_trending_concepts.py    # social step 3: resolve top concepts to WMS SKUs
+│   ├── check_batch_bleed.py            # ad hoc: does batching the enrichment leak labels
+│   │                                   #   between mentions in one call? run after prompt
+│   │                                   #   or batch-size changes, not on a schedule
+│   ├── check_fold_consistency.py       # ad hoc: concept-folding sanity check
+│   └── databricks/
+│       ├── parse_mentions.py           # social step 1, DATABRICKS: xlsx in a Volume ->
+│       │                               #   social.mentions. Wired as a spark_python_task
+│       │                               #   (Source: Git) in the workspace job, NOT called
+│       │                               #   from this repo — so nothing here references it
+│       ├── job.yml                     # daily dbt job bundle
+│       └── geocode_weekly_job.yml      # weekly geocode job bundle
 ├── analyses/                           # demand_missed_opportunity · demand_promote_candidates · demand_restock_risk
 ├── seeds/
 ├── macros/

@@ -102,13 +102,6 @@ vars:
   social_trend_min_mentions: 2       # noise floor, per concept per WEEK. Bites harder at a 7-day
                                      # grain than a multi-week one: expect gaps in trajectories
   social_trend_link_count: 5         # source_links per concept-week, top links by reach then engagement
-  # trend_score = mentions x (1 + ln(1+engagement)/eng_weight + ln(1+views)/views_weight).
-  # engagement = active reactions (likes+comments+shares); views tracked separately.
-  # Both log-dampened so one viral post can't dominate; a BIGGER weight = that signal
-  # matters LESS. Views weight > engagement weight: a view (passive) is worth less
-  # than a like/comment/share (active).
-  social_trend_engagement_weight: 10
-  social_trend_views_weight: 20
   social_resolve_min_confidence: 0.7 # below this, ANY match (carried/substitute/basket) is suppressed
                                      # (shown as none/source_new). Inventory wins only when confident — a
                                      # 0.45 carried guess (sushi -> corn oil) is dropped like a shaky basket.
