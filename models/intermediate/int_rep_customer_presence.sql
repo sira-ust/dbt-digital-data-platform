@@ -48,8 +48,17 @@ with fixes as (
         e.latitude,
         e.longitude,
         e.customer_key                                                   as app_customer_key,
-        cast(e.event_at_utc as date)                                     as utc_date,
-        coalesce({{ tz_offset_hours('e.device_timezone') }}, 0)          as row_offset_hours
+        e.rep_local_date,
+        -- shared clock from int_events_enriched. This model and
+        -- int_rep_customer_activity MUST read a visit and the session inside it
+        -- against the SAME offset. They used to each take their own modal vote
+        -- over different event populations — this one over 01040100 pings, which
+        -- the PDAs emit constantly, that one over work events, which the iPad
+        -- dominates — and disagreed on 33% of rep-days in August 2026. Rep 026's
+        -- JUN003 visit on 2026-08-17 read as ending 11:15 on -5 while his app
+        -- session ran to 12:09 on -4, so a two-hour on-site stretch reported as
+        -- three minutes. The comment here used to CLAIM the two matched.
+        e.event_at_local
     from {{ ref('int_events_enriched') }} as e
     where e.description_code = '01040100'
       and e.actor_type = 'sales'
@@ -59,24 +68,18 @@ with fixes as (
 
 ),
 
--- ONE timezone offset per rep-day, matching int_rep_customer_activity, so a
--- visit and the app session inside it are read against the same clock.
--- device_timezone is a device setting, not a location: only 43% of rep-days
--- carry a single value.
-rep_day_offset as (
+-- one row per rep-day carrying the SHARED clock, joined back at the end rather
+-- than threaded through six intermediate CTEs that do not otherwise need it
+rep_clock as (
 
-    select sales_code, utc_date, row_offset_hours as offset_hours
-    from (
-        select
-            sales_code, utc_date, row_offset_hours,
-            row_number() over (
-                partition by sales_code, utc_date
-                order by count(*) desc, abs(row_offset_hours)
-            ) as rn
-        from fixes
-        group by sales_code, utc_date, row_offset_hours
-    ) as ranked
-    where rn = 1
+    select distinct
+        sales_code,
+        rep_local_date                                                   as local_date,
+        rep_day_offset_hours
+    from {{ ref('int_events_enriched') }}
+    where sales_code           is not null
+      and rep_day_offset_hours is not null
+      and event_at_local       is not null
 
 ),
 
@@ -90,11 +93,10 @@ local_fixes as (
         f.latitude,
         f.longitude,
         f.app_customer_key,
-        {{ add_hours('f.event_at_utc', 'o.offset_hours') }}              as event_at_local
+        f.rep_local_date,
+        f.event_at_local
     from fixes as f
-    join rep_day_offset as o
-        on o.sales_code = f.sales_code
-       and o.utc_date   = f.utc_date
+    where f.event_at_local is not null
 
 ),
 
@@ -138,7 +140,7 @@ speed_checked as (
 -- ── step 3 + 4: match each fix to the nearest customer inside the geofence ──
 stores as (
 
-    select customer_key, latitude as store_lat, longitude as store_lon
+    select customer_key, latitude as store_lat, longitude as store_lon, is_active
     from {{ ref('stg_nav__customer_locations') }}
 
 ),
@@ -155,8 +157,10 @@ candidates as (
         f.device_name,
         f.event_at_utc,
         f.event_at_local,
+        f.rep_local_date,
         f.app_customer_key,
         s.customer_key,
+        s.is_active,
         {{ haversine_metres('f.latitude', 'f.longitude', 's.store_lat', 's.store_lon') }} as metres
     from speed_checked as f
     join stores as s
@@ -172,17 +176,35 @@ candidates as (
 ),
 
 -- tie-break when several customers share one geofence: prefer the customer the
--- rep actually had open in the app, then the nearest. Same order Annie's
--- process uses. candidate_count is carried so ambiguity stays visible.
+-- rep actually had open in the app, then an ACTIVE account over a dead one, then
+-- the nearest. Same order Annie's process uses, plus the active check.
+--
+-- Distance alone cannot separate accounts at the SAME address, and 725 geocoded
+-- points hold more than one customer. 1085 Reading Rd, Mason OH holds three:
+-- HZJ001 and YMA001 (both inactive, rep 901) and YMA002 (active, rep 026). With
+-- only app-then-metres, an identical distance fell through to row order and
+-- picked the dead account — rep 026 got a 94-minute "visit only, no app" against
+-- HZJ001 on 2026-08-17 while the app showed him working YMA002 all along.
+--
+-- Inactive customers are NOT excluded outright: a rep can legitimately call on a
+-- lapsed account, and dropping them would silently move that visit to a
+-- neighbour. They just lose every tie.
+--
+-- candidate_count counts ACTIVE candidates only, so is_ambiguous downstream
+-- means "two live customers here", not "one live customer and three dead ones".
+-- Filtering to active cuts shared points from 725 to 123 and colliding customers
+-- from 1,662 to 308. Measured 2026-08-21.
 ranked_candidates as (
 
     select
         *,
-        count(*) over (partition by entity_id)                           as candidate_count,
+        sum(case when is_active then 1 else 0 end)
+            over (partition by entity_id)                                as candidate_count,
         row_number() over (
             partition by entity_id
             order by
                 case when customer_key = app_customer_key then 0 else 1 end,
+                case when is_active then 0 else 1 end,
                 metres
         )                                                                as pick
     from candidates
@@ -193,7 +215,7 @@ matched as (
 
     select
         sales_code, device_name, customer_key, event_at_utc, event_at_local,
-        metres, candidate_count
+        rep_local_date, metres, candidate_count
     from ranked_candidates
     where pick = 1
 
@@ -238,7 +260,7 @@ device_visits as (
         sales_code,
         customer_key,
         device_name,
-        cast(min(event_at_local) as date)                                as activity_date,
+        min(rep_local_date)                                             as activity_date,
         min(event_at_local)                                              as arrived_at,
         max(event_at_local)                                              as departed_at,
         count(*)                                                         as fix_count,
@@ -286,22 +308,30 @@ merge_numbered as (
 )
 
 select
-    sales_code || '-' || customer_key || '-'
-        || cast(activity_date as {{ dbt.type_string() }})                as customer_day_key,
-    sales_code,
-    customer_key,
-    activity_date,
-    visit_seq,
+    v.sales_code || '-' || v.customer_key || '-'
+        || cast(v.activity_date as {{ dbt.type_string() }})                as customer_day_key,
+    v.sales_code,
+    v.customer_key,
+    v.activity_date,
+    v.visit_seq,
 
-    min(arrived_at)                                                      as arrived_at,
-    max(departed_at)                                                     as departed_at,
-    {{ dbt.datediff('min(arrived_at)', 'max(departed_at)', 'minute') }}  as on_site_minutes,
+    min(v.arrived_at)                                                      as arrived_at,
+    max(v.departed_at)                                                     as departed_at,
+    {{ dbt.datediff('min(v.arrived_at)', 'max(v.departed_at)', 'minute') }}  as on_site_minutes,
 
     sum(fix_count)                                                       as fix_count,
     min(closest_metres)                                                  as closest_metres,
     -- true when another customer also sat inside the geofence for any fix in
     -- this visit: the match is plausible but not proven
-    max(candidate_count) > 1                                             as is_ambiguous,
-    {{ sort_array('array_agg(distinct device_name)') }}                  as devices
-from merge_numbered
-group by sales_code, customer_key, activity_date, visit_seq
+    max(v.candidate_count) > 1                                           as is_ambiguous,
+    {{ sort_array('array_agg(distinct v.device_name)') }}                as devices,
+    -- published so the shared-clock invariant is TESTABLE rather than merely
+    -- asserted in a comment, which is how an hour-wide disagreement with
+    -- int_rep_customer_activity went unnoticed. See
+    -- tests/assert_presence_and_activity_share_one_clock.sql
+    max(c.rep_day_offset_hours)                                          as rep_day_offset_hours
+from merge_numbered as v
+left join rep_clock as c
+    on c.sales_code = v.sales_code
+   and c.local_date = v.activity_date
+group by v.sales_code, v.customer_key, v.activity_date, v.visit_seq

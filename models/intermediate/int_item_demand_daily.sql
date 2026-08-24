@@ -6,8 +6,12 @@
 -- Two payload shapes carry a SKU (seed_event_codes.payload_format):
 --   positional  cart events (add/remove/qty-change): "sku,qty[,category]"
 --               -> sku = part 1, qty = part 2
---   sku         item-detail / image-enlarge (and BLE) events: response IS
---               the sku
+--   sku         item-detail / image-enlarge events: response IS the sku
+--
+-- The 11 BLE ops (17050801, 170513xx, 170514xx) share that `sku` payload shape
+-- but do NOT feed this model: they carry no feature_name, so the filter below
+-- never admits them. The shape is listed above; the counting is not. Said
+-- "(and BLE)" until 2026-08-21, which read as though they were included.
 --
 -- Only payload skus matching the WMS item-number shape (3-8 digits) are
 -- kept — the rest is scanner junk / app-version drift, visible in

@@ -40,6 +40,14 @@ select
     e.seconds_since_prev_event,
 
     e.device,
+    -- 'PDA + iPad (paired)' while BLE-paired: the rep is driving the iPad from
+    -- the PDA, so a replay should read the two as one workstation, not a handoff.
+    e.device_group,
+    e.is_ble_paired,
+    e.ble_pda_device,
+    -- 'event' = the app named the customer. 'ble_session' / 'paired_pda' = the
+    -- pairing had moved the cart to the PDA and we inherited the customer.
+    e.customer_key_source,
     e.description_code,
     e.function_name,
     e.feature_name,

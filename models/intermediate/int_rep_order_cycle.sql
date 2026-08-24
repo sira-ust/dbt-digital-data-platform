@@ -14,6 +14,14 @@
 -- only 1:1 pairs via dual ROW_NUMBER.
 --
 -- Excludes 09060000 (BLE use-existing) and 09070000 (BLE merge).
+--
+-- PAYLOAD CHANGE, July 2026. Create Order used to send 'customer, local_id' and
+-- this model read the local_id from position 2. The app team then added a
+-- dedicated ust_customer_no field and dropped the prefix, so the payload is now
+-- a bare local_id. Position 2 became empty, `where local_id is not null` threw
+-- every row away, and the model produced NOTHING from 2026-07-20 onward — no
+-- error, just an empty table, and mart_rep_order_journey with it. Fixed by
+-- accepting either shape and taking the customer from the column.
 
 with events as (
 
@@ -29,10 +37,39 @@ create_events as (
         source_code,
         app_version,
         event_at_utc,
-        {{ response_part('response', 1) }}                             as order_customer_no,
-        {{ response_part('response', 2) }}                             as local_id
+        -- TWO PAYLOAD ERAS, both live, so the parse branches on the SHAPE of the
+        -- row rather than on a date — July 2026 is genuinely mixed (1,677 comma
+        -- vs 1,560 bare), so no cutover date can separate them.
+        --
+        --   legacy  'AAA002, 019-260504-001'  customer, then the order id
+        --   current '019-260504-001'          order id only
+        --
+        -- The app team added a dedicated ust_customer_no field in July 2026 and
+        -- dropped the payload prefix (confirmed with the app dev, 2026-08-21), so
+        -- for current rows the customer comes from that column via customer_key.
+        -- Reading position 1 on a bare row returns the ORDER ID, and position 2
+        -- returns nothing, which is why every row was discarded and this model
+        -- produced NOTHING from 2026-07-20 on.
+        --
+        -- Branching (rather than coalescing) keeps legacy rows bit-identical to
+        -- the previous behaviour: verified 2026-08-21, May 1,601 and June 1,926
+        -- cycles before and after. Coalescing did NOT — it shifted opens into the
+        -- dual-rank 1:1 match below and silently cost ~40 real cycles in June.
+        case
+            when response like '%,%' then {{ response_part('response', 1) }}
+            else customer_key
+        end                                                            as order_customer_no,
+        case
+            when response like '%,%' then {{ response_part('response', 2) }}
+            -- shape-checked: rep-date-seq, e.g. 031-260803-001
+            else nullif(regexp_extract(trim(response),
+                                       '^[0-9]{3}-[0-9]{6}-[0-9]{3}$', 0), '')
+        end                                                            as local_id
     from events
     where l1_category_name = 'Create Order'
+      -- 09060000 (use existing order on catalog) and 09070000 (merge orders)
+      -- reference an order that already exists, so they must not OPEN a cycle.
+      -- 09050000 (BLE-only create) is a genuine new order and is kept.
       and description_code not in ('09060000', '09070000')
       and actor_type = 'sales'
 

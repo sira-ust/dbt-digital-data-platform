@@ -41,6 +41,13 @@ models:
         description: >
           The rep NAV says owns this account. Note this is the ASSIGNED rep,
           which is not necessarily the rep whose GPS matched the location.
+      - name: is_active
+        description: >
+          Flipped from NAV's in_active (1 = inactive) so it reads correctly in a
+          filter. 48% of customers are inactive (3,485 of 7,198) and all of them
+          were live geofence candidates, taking 975 of 8,048 visits and 31,948
+          on-site minutes. Used as a TIE-BREAK in int_rep_customer_presence, not
+          a filter — a rep can legitimately call on a lapsed account.
       - name: geocoded_address
         description: >
           The exact address string sent to Google, after the team's cleaning

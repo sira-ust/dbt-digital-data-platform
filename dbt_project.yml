@@ -42,6 +42,21 @@ vars:
   # time to the next stop always splits the visit.
   activity_gap_minutes: 30
 
+  # int_rep_customer_activity — BLE pairing moves the open cart from the iPad to
+  # the PDA, so the iPad's own events arrive with no customer. Pairing has no
+  # reliable end event (ZERO Unpair / Forget Device logged in August 2026), so
+  # the window has to expire on its own; without this a single connect stayed
+  # "paired" for 4,149 minutes. 60 min comfortably covers a store visit.
+  ble_pairing_expiry_minutes: 60
+  # how stale the paired PDA's open customer may be before we stop inheriting
+  # it. 15 min already covers 96.7% of the affected cart edits; 60 matches the
+  # pairing window so the two rules cannot disagree.
+  ble_inherit_max_stale_minutes: 60
+  # scope for tests/assert_no_cart_edit_loses_its_customer: 2026-05 is the first
+  # month PDA cart edits carried the customer 100% of the time, so before it the
+  # gaps are app-side history we cannot repair, not an attribution regression.
+  ble_attribution_guard_from: '2026-05-01'
+
   # int_rep_customer_presence — matching rep GPS to a customer's address.
   # 100m matches the geofence Annie's sales-geo process already uses; keeping
   # them equal matters more than the exact number, so the two never disagree on

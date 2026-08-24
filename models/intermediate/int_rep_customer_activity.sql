@@ -35,16 +35,36 @@
 -- so it can't inflate a duration. Note that 01040100 Location-Success does
 -- carry customer_key AND lat/lon and would make a good physical check-in
 -- signal, but its cadence is unprofiled, so it stays out.
+--
+-- BLE PAIRING. An iPad paired to a PDA over BLE hands its open cart to the PDA,
+-- so its own events arrive with no customer. That is REPAIRED UPSTREAM in
+-- int_events_enriched (see its header for the mechanism and the measurements) —
+-- four models filter on customer_key and all four were losing the same events,
+-- so the fix belongs there, not here. This model just consumes the result:
+-- customer_key is already resolved, customer_key_source says whether it was
+-- declared by the app or inherited, and device_group treats a paired PDA + iPad
+-- as the ONE workstation it is, which is what keeps stint timing honest.
 
 with raw_events as (
 
     select
         entity_id,
         sales_code,
+        -- already BLE-resolved upstream: int_events_enriched fills a customer in
+        -- when a pairing had moved the open cart to the PDA and the iPad's own
+        -- events arrived without one. customer_key_source says which.
         customer_key,
+        customer_key_source,
+        is_ble_paired,
+        ble_pda_device,
         event_at_utc,
-        cast(event_at_utc as date)                                       as utc_date,
-        coalesce({{ tz_offset_hours('device_timezone') }}, 0)            as row_offset_hours,
+        -- the rep's wall clock, computed ONCE in int_events_enriched so this
+        -- model and int_rep_customer_presence can never read a visit and the
+        -- session inside it against different offsets. They each used to take
+        -- their own modal vote and disagreed on 33% of rep-days.
+        event_at_local,
+        rep_day_offset_hours,
+        rep_local_date,
 
         -- the three sales-facing sources, named the way a sales manager says
         -- them. actor_type = 'sales' already limits us to exactly these.
@@ -53,6 +73,20 @@ with raw_events as (
             when app_name = 'CatalogFS' and app_platform = 'iOS'     then 'iPad'
             when app_name = 'CatalogFS' and app_platform = 'Android' then 'Android tablet'
         end                                                              as device,
+
+        -- while paired the two devices are ONE workstation: the rep drives the
+        -- iPad from the PDA, so events alternate every few seconds. Splitting a
+        -- stint on every flip bills the gap between them to neither device —
+        -- rep 026 / JUN003 / 2026-08-17 reported pda_minutes = 0 on a session
+        -- holding 5 PDA events, because each stint collapsed to 0 seconds.
+        case
+            when is_ble_paired                        then 'PDA + iPad (paired)'
+            when app_name = 'PDA'                     then 'PDA'
+            when app_name = 'CatalogFS'
+                 and app_platform = 'iOS'             then 'iPad'
+            when app_name = 'CatalogFS'
+                 and app_platform = 'Android'         then 'Android tablet'
+        end                                                              as device_group,
 
         description_code,
         function_name,
@@ -82,38 +116,6 @@ with raw_events as (
 
 ),
 
--- ONE timezone offset per rep-day, not per event.
---
--- device_timezone is a device setting, not a location: only 43% of rep-days
--- carry a single value on the real mirror (2026-08-13) — rep 007 logged GMT-8,
--- GMT-7 AND GMT-6 on one day. Converting each event with its own row's offset
--- makes local time non-monotonic with UTC, which scrambles the order of a
--- customer-day's events and made the summary and drill-down disagree on when
--- the work started.
---
--- So: take the MODAL offset for the rep's day and apply it to every event that
--- day. Ties break toward the offset closest to UTC for determinism. Session
--- boundaries are computed in UTC and are unaffected by this — the offset only
--- decides what wall clock the work is displayed against.
-rep_day_offset as (
-
-    select sales_code, utc_date, row_offset_hours as offset_hours
-    from (
-        select
-            sales_code,
-            utc_date,
-            row_offset_hours,
-            row_number() over (
-                partition by sales_code, utc_date
-                order by count(*) desc, abs(row_offset_hours)
-            )                                                            as rn
-        from raw_events
-        group by sales_code, utc_date, row_offset_hours
-    ) as ranked
-    where rn = 1
-
-),
-
 events as (
 
     -- columns listed explicitly: `* except`/`* exclude` spelling differs
@@ -122,8 +124,12 @@ events as (
         e.entity_id,
         e.sales_code,
         e.customer_key,
+        e.customer_key_source,
+        e.is_ble_paired,
+        e.ble_pda_device,
         e.event_at_utc,
         e.device,
+        e.device_group,
         e.description_code,
         e.function_name,
         e.feature_name,
@@ -133,12 +139,13 @@ events as (
         e.is_qty_change,
         e.is_submit,
         e.increment_id,
-        -- the rep's wall clock, so "Monday" and "10:40am" are the rep's
-        {{ add_hours('e.event_at_utc', 'o.offset_hours') }}               as event_at_local
+        e.event_at_local,
+        e.rep_day_offset_hours,
+        e.rep_local_date
     from raw_events as e
-    join rep_day_offset as o
-        on o.sales_code = e.sales_code
-       and o.utc_date   = e.utc_date
+    -- no shared clock means no rep-local time; such an event cannot be placed
+    -- on a day or inside a visit, so it is dropped rather than guessed at
+    where e.event_at_local is not null
 
 ),
 
@@ -151,9 +158,9 @@ sequenced as (
         lag(event_at_utc) over (
             partition by sales_code, customer_key order by event_at_utc, entity_id
         )                                                                as prev_at,
-        lag(device) over (
+        lag(device_group) over (
             partition by sales_code, customer_key order by event_at_utc, entity_id
-        )                                                                as prev_device
+        )                                                                as prev_device_group
     from events
 
 ),
@@ -187,7 +194,8 @@ numbered as (
         sum(
             case
                 when is_new_session = 1                                   then 1
-                when coalesce(device, '?') <> coalesce(prev_device, '?')   then 1
+                when coalesce(device_group, '?')
+                     <> coalesce(prev_device_group, '?')                  then 1
                 else 0
             end
         ) over (
@@ -204,19 +212,24 @@ select
 
     -- The grain both marts report on: one rep, one customer, one day.
     sales_code || '-' || customer_key || '-'
-        || cast(cast(event_at_local as date) as {{ dbt.type_string() }})  as customer_day_key,
+        || cast(rep_local_date as {{ dbt.type_string() }})                as customer_day_key,
 
     sales_code,
     customer_key,
-    cast(event_at_local as date)                                         as activity_date,
+    rep_local_date                                                       as activity_date,
     session_seq,
     stint_seq,
 
     event_at_utc,
     event_at_local,
+    -- published so the shared-clock invariant with int_rep_customer_presence is
+    -- TESTABLE, not merely asserted in a comment. Both take this from
+    -- int_events_enriched; they must never differ. See
+    -- tests/assert_presence_and_activity_share_one_clock.sql
+    rep_day_offset_hours,
 
     row_number() over (
-        partition by sales_code, customer_key, cast(event_at_local as date)
+        partition by sales_code, customer_key, rep_local_date
         order by event_at_utc, entity_id
     )                                                                    as event_seq,
 
@@ -228,6 +241,14 @@ select
     end                                                                  as seconds_since_prev_event,
 
     device,
+    -- 'PDA + iPad (paired)' while BLE-paired: one workstation, not two devices
+    device_group,
+    is_ble_paired,
+    ble_pda_device,
+    -- 'event' = the app named the customer; 'ble_session' / 'paired_pda' = we
+    -- inherited it because a BLE pairing had moved the cart to the PDA. Anything
+    -- that must be exact should filter to 'event'.
+    customer_key_source,
     description_code,
     function_name,
     feature_name,
