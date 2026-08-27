@@ -63,7 +63,16 @@ vars:
   # how many visits a rep made.
   presence_geofence_metres: 100
   presence_visit_gap_minutes: 20   # away from the store this long = a new visit
-  presence_min_dwell_minutes: 3    # below this it is driving past, not a visit
+  # 0 = dwell no longer gates a visit; proximity alone decides. The 3-minute rule
+  # assumed dense GPS sampling, but the PDA reports every 15-30 MINUTES, so a real
+  # visit routinely lands ONE fix inside the geofence and can never span 3
+  # contiguous minutes. Confirmed against rep 032's own account of his week: it
+  # was discarding PHA001 (1 fix, 3 m), HOR006 (1 fix, 12 m), VAK002 (1 fix,
+  # 30 m), JAY001 (2 fixes, 64 m) and PAN015 (3 fixes, 11 m) -- all real calls.
+  # Restores ~14,800 visits over 6 months, of which ~79% show the rep stationary
+  # (<5 mph through the geofence) and ~4% at 20 mph+, i.e. genuine drive-pasts
+  # that this now admits. See presence_max_drive_through_mph below to gate those.
+  presence_min_dwell_minutes: 0
   presence_max_mph: 80             # a faster hop is bad data, not travel
   # the company address, marked OFF001 in Annie's process. It is a row in the
   # customer table, so without this it becomes every rep's most-visited store.

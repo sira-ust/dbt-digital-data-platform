@@ -23,7 +23,12 @@
 --  5. GROUP consecutive fixes into visits, ending on var presence_visit_gap_minutes.
 --     NOT first-to-last across the day: min->max lumped two separate stops plus
 --     lunch into one 187-minute "visit" during prototyping.
---  6. DROP visits under var presence_min_dwell_minutes — driving past is not a visit.
+--  6. DROP visits under var presence_min_dwell_minutes. NOW 0 — dwell no longer
+--     gates anything. The device reports every 15-30 minutes, so a genuine call
+--     often leaves a SINGLE fix inside the geofence and cannot span 3 contiguous
+--     minutes; the old threshold was discarding real visits the rep confirmed by
+--     name. Proximity decides instead. Trade-off: a drive-past whose one fix
+--     happens to land inside now counts too (~4% of what this restores).
 --  7. MERGE overlapping visits ACROSS devices. Step 1 stops the teleporting but
 --     then logs the same visit once per device (DAI003 appeared twice).
 --
@@ -268,7 +273,10 @@ device_visits as (
         max(candidate_count)                                             as candidate_count
     from numbered
     group by sales_code, customer_key, device_name, raw_visit_seq
-    -- step 6: a single ping, or a few seconds in passing, is not a visit
+    -- step 6: dwell gate. presence_min_dwell_minutes is 0, so this passes
+    -- everything -- see the var's comment in dbt_project.yml for why. Kept as a
+    -- filter rather than deleted so the threshold can be raised again in one
+    -- place if the device ever reports at a useful cadence.
     having {{ dbt.datediff('min(event_at_local)', 'max(event_at_local)', 'minute') }}
            >= {{ var('presence_min_dwell_minutes') }}
 
