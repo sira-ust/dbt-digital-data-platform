@@ -68,11 +68,23 @@ models:
           that rep-day, or the customer has no coordinates (12% of customers) —
           it is NOT the same as `remote`, and must never be read as "did not
           visit".
+
+
+          Every value is EVIDENCE — a GPS fix, or the channel off the order
+          payload — except `text/email order`, which is INFERRED from
+          behaviour. That one is a strict subset of `remote`: GPS exists and puts
+          the rep away from the store, yet he keyed a substantial order in one
+          unbroken sitting, fast, browsed almost nothing, and typed every line
+          instead of tapping it off purchase history — so the order reached him
+          from outside the app. It does NOT identify the channel: a phone call,
+          or a list handed over on an earlier visit, looks identical. Add it back
+          to `remote` to recover the original split.
         tests:
           - accepted_values:
               arguments:
-                values: ["remote", "on-site", "visited, keyed elsewhere",
-                         "customer ordered online", "visit only, no app", "unknown"]
+                values: ["remote", "text/email order", "on-site",
+                         "visited, keyed elsewhere", "customer ordered online",
+                         "visit only, no app", "unknown"]
       - name: sessions
         description: Separate sittings on this customer in this scenario. 0 for visit-only rows.
       - name: pda_minutes
