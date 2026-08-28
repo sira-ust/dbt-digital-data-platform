@@ -16,6 +16,13 @@
 --   visited, keyed elsewhere  visited that day, but this session was not there
 --   customer ordered online   arrived already placed (order_channel WEB/APP)
 --   visit only, no app        on-site with NO app activity at all
+--   text/email order INFERRED, not measured -- a strict subset of
+--                             `remote` where he keyed it in one sitting, fast,
+--                             browsed almost nothing and typed every line
+--                             instead of tapping it off history: the customer
+--                             sent the order and he transcribed it. Cannot name
+--                             the channel -- a phone call looks identical. See
+--                             the case expression for thresholds.
 --
 -- The last one is why this is a FULL OUTER JOIN of activity and presence: a
 -- visit that produced no typing has no activity row, so an inner join would
@@ -76,6 +83,11 @@ event_placement as (
         e.session_seq,
         e.event_at_local,
         e.customer_key_source,
+        -- carried for the 'texted/emailed order' test in `labelled` below
+        e.is_add,
+        e.feature_name,
+        e.description_code,
+        e.seconds_since_prev_event,
         max(case
                 when v.arrived_at <= e.event_at_local
                  and e.event_at_local <= v.departed_at then 1
@@ -86,7 +98,8 @@ event_placement as (
         on v.customer_day_key = e.customer_day_key
     group by
         e.entity_id, e.customer_day_key, e.sales_code, e.customer_key,
-        e.activity_date, e.session_seq, e.event_at_local, e.customer_key_source
+        e.activity_date, e.session_seq, e.event_at_local, e.customer_key_source,
+        e.is_add, e.feature_name, e.description_code, e.seconds_since_prev_event
 
 ),
 
@@ -103,7 +116,12 @@ session_bounds as (
         min(e.event_at_local)                                            as session_start,
         max(e.event_at_local)                                            as session_end,
         count(*)                                                         as event_count,
-        sum(case when e.customer_key_source <> 'event' then 1 else 0 end) as inherited_event_count
+        sum(case when e.customer_key_source <> 'event' then 1 else 0 end) as inherited_event_count,
+        -- behavioural shape of this session portion, for the scenario test below
+        sum(case when e.is_add then 1 else 0 end)                        as item_count,
+        sum(case when e.feature_name is not null then 1 else 0 end)      as browse_count,
+        sum(case when e.description_code = '10050900' then 1 else 0 end) as typed_count,
+        {{ median('case when e.is_add then e.seconds_since_prev_event end') }} as median_sec_per_item
     from event_placement as e
     group by
         e.customer_day_key, e.sales_code, e.customer_key, e.activity_date,
@@ -177,15 +195,61 @@ session_scenario as (
         b.customer_day_key, b.sales_code, b.customer_key, b.activity_date,
         b.session_seq, b.was_on_site, b.session_start, b.session_end,
         b.event_count, b.inherited_event_count,
+        b.item_count, b.browse_count, b.typed_count, b.median_sec_per_item,
         so.increment_ids, so.order_channel
 
 ),
 
--- a rep-day with no GPS at all cannot be classified: `unknown`, not `remote`
+-- how many separate sittings did this customer-day hold? `one shot` in the
+-- scenario test below means exactly one -- he opened it, keyed it, sent it, and
+-- never came back. Counted per DAY because each session_bounds row is a single
+-- stretch by construction, so a session-level test would always be true.
+day_sessions as (
+
+    select customer_day_key, count(distinct session_seq) as sessions_that_day
+    from activity_events
+    group by customer_day_key
+
+),
+
+-- ── can this rep-day be classified at all? ────────────────────────────────
+-- `unknown` exists for two honest reasons, both about MISSING EVIDENCE: the rep
+-- logged no usable GPS that day, or the customer has no coordinates so no
+-- geofence can be drawn. It must never mean "he had GPS and was elsewhere" --
+-- that is `remote`.
+--
+-- This used to read `select distinct sales_code, activity_date from presence`,
+-- and presence holds MATCHED VISITS, not fixes. So a rep-day only counted as
+-- "has GPS" if he actually stopped at somebody. A rep who worked from home all
+-- day with his PDA pinging 84 times was labelled "we do not know where he was",
+-- when we knew precisely: not at any customer.
+--
+-- Measured 2026-08-27: of 6,599 `unknown` rows, 6,596 had usable GPS AND a
+-- geocoded customer -- 100% mislabelled, since the remaining 3 were the genuine
+-- ungeocoded case. Rep 032 had 79 such order-days, every one with GPS present
+-- (84 fixes a day on average).
 gps_days as (
 
-    select distinct sales_code, activity_date
-    from presence
+    select distinct
+        sales_code,
+        rep_local_date                                                   as activity_date
+    from {{ ref('int_events_enriched') }}
+    where description_code = '01040100'
+      and actor_type       = 'sales'
+      and sales_code       is not null
+      and latitude         is not null
+      and longitude        is not null
+
+),
+
+-- a customer with no coordinate cannot be geofenced, so his absence from a
+-- visit list is not evidence. Excluded rows are a left-join miss, which is the
+-- honest shape -- see stg_nav__customer_locations.
+geocoded_customers as (
+
+    select customer_key
+    from {{ ref('stg_nav__customer_locations') }}
+    where latitude is not null and longitude is not null
 
 ),
 
@@ -197,12 +261,67 @@ labelled as (
             when s.order_channel in ('WEB', 'APP')       then 'customer ordered online'
             when s.during_visit = 1                      then 'on-site'
             when s.visited_that_day = 1                  then 'visited, keyed elsewhere'
-            when g.sales_code is null                    then 'unknown'
+            -- no usable GPS that rep-day, OR this customer cannot be geofenced
+            when g.sales_code is null
+              or gc.customer_key is null                  then 'unknown'
+            -- ── the customer sent the order in; he only typed it ──────────
+            -- INFERRED, unlike every label above it. The rest of this column is
+            -- evidence -- a GPS fix, or the channel off the order payload. This
+            -- one is a behavioural read, so it sits LAST and can only ever split
+            -- `remote`: add the two together to recover the original figure.
+            --
+            -- It can only ever split `remote`; add the two together to recover
+            -- the original figure. It sits LAST for that reason, and the
+            -- position also enforces the first two conditions for free.
+            --
+            -- It does NOT overlap `visited, keyed elsewhere`, and must not: the
+            -- defining condition is that no GPS fix placed him at that store
+            -- THAT DAY, which is exactly the negation of having visited. By the
+            -- time execution reaches here `visited_that_day = 0` is already
+            -- true, so on_site_min = 0 at day level needs no restating. A day he
+            -- visited belongs to `on-site` or `visited, keyed elsewhere` however
+            -- the keying looked.
+            --
+            -- `unknown` has likewise already taken the no-GPS days, so GPS
+            -- demonstrably exists and demonstrably puts him elsewhere. Ordering
+            -- the branch below `unknown` is what keeps absence of evidence from
+            -- being read as evidence of absence.
+            --
+            -- The remaining three are behavioural, and this is the shape: he
+            -- keyed a substantial order in ONE unbroken sitting, fast, looked
+            -- almost nothing up, and typed every line rather than tapping it off
+            -- purchase history. He was reading from something we cannot see.
+            -- Calibrated on rep 028 over 6 months: remote days average 0.24
+            -- browse per item and 94% typed, against 0.57 and 64% on-site.
+            --
+            -- IT DOES NOT NAME THE CHANNEL. A phone call, or a list handed over
+            -- on an earlier visit, leaves the same trace. It says the order
+            -- reached him from outside the app, not that it arrived by text.
+            --
+            -- browse_count is the weakest of the three and partly a device
+            -- proxy: the PDA has no catalog_view or filter instrumentation, so
+            -- it browses ~0.13 per add against the iPad's 0.46. typed_count is
+            -- the strongest -- it is a choice made WITHIN one device.
+            --
+            -- DEPENDS ON THE DEDUPE in int_events_decoded. With the duplicate
+            -- batch rows present, two of every three add-gaps are 0,
+            -- median_sec_per_item collapses to 0, and the <= 10 test fires on
+            -- everything.
+            when d.sessions_that_day = 1
+             and s.item_count          >= 10
+             and s.median_sec_per_item <= 10
+             and s.browse_count * 1.0 / s.item_count <  0.25
+             and s.typed_count  * 1.0 / s.item_count >= 0.90
+                                                         then 'text/email order'
             else 'remote'
         end                                                              as scenario
     from session_scenario as s
     left join gps_days as g
         on g.sales_code = s.sales_code and g.activity_date = s.activity_date
+    left join geocoded_customers as gc
+        on gc.customer_key = s.customer_key
+    left join day_sessions as d
+        on d.customer_day_key = s.customer_day_key
 
 ),
 

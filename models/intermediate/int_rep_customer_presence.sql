@@ -19,11 +19,20 @@
 --  3. EXCLUDE THE OFFICE. The company address is in the customer table and
 --     would otherwise be every rep's most-visited "customer" — rep 025 spent
 --     236 minutes there on 2026-08-11.
---  4. MATCH each fix to the nearest customer within var presence_geofence_metres.
+--  4. MATCH each fix to EVERY customer within var presence_geofence_metres, not
+--     just the nearest. Stores share buildings, and nearest-wins was handing the
+--     whole visit to one of them -- rep 032 visited PAR017 on 2026-08-26 and it
+--     never appeared, because TAI012 (121 m away) was nearer on all twelve
+--     fixes. `pick = 1` still marks the old single winner.
 --  5. GROUP consecutive fixes into visits, ending on var presence_visit_gap_minutes.
 --     NOT first-to-last across the day: min->max lumped two separate stops plus
 --     lunch into one 187-minute "visit" during prototyping.
---  6. DROP visits under var presence_min_dwell_minutes — driving past is not a visit.
+--  6. DROP visits under var presence_min_dwell_minutes. NOW 0 — dwell no longer
+--     gates anything. The device reports every 15-30 minutes, so a genuine call
+--     often leaves a SINGLE fix inside the geofence and cannot span 3 contiguous
+--     minutes; the old threshold was discarding real visits the rep confirmed by
+--     name. Proximity decides instead. Trade-off: a drive-past whose one fix
+--     happens to land inside now counts too (~4% of what this restores).
 --  7. MERGE overlapping visits ACROSS devices. Step 1 stops the teleporting but
 --     then logs the same visit once per device (DAI003 appeared twice).
 --
@@ -211,28 +220,50 @@ ranked_candidates as (
 
 ),
 
+-- EVERY candidate inside the geofence, not just the nearest. Two customers can
+-- share a building, and nearest-wins silently gave the visit to one of them.
+-- Measured on rep 032 / 2026-08-26: TAI012, PAR017 and HOA003 sit 121-232 m
+-- apart. He parked once for 90 minutes; GPS wobbled +-50 m, so PAR017 fell
+-- inside the fence on two fixes (89 m, 90 m) and HOA003 on one (83 m) -- but
+-- TAI012 was nearer EVERY time (43/36/81 m), so it took all twelve fixes and
+-- PAR017 was never recorded. The rep confirmed he visited PAR017.
+--
+-- `pick` is kept as a column rather than dropped: pick = 1 still identifies the
+-- nearest / app-open / active winner, so a consumer wanting the old one-row
+-- behaviour filters on it, and is_ambiguous still means what it meant.
+--
+-- COST, measured over 6 months with the office already excluded: visit-days go
+-- from 8,395 to 20,410 (2.43x) and 1,625 more customers appear. Some of those
+-- are real -- a plaza where the rep genuinely called on two accounts -- and some
+-- are the neighbour of a place he actually stopped. Distance cannot separate the
+-- two when the stores are closer together than GPS error, so this deliberately
+-- errs toward recording the possibility rather than silently choosing.
 matched as (
 
     select
         sales_code, device_name, customer_key, event_at_utc, event_at_local,
-        rep_local_date, metres, candidate_count
+        rep_local_date, metres, candidate_count, pick
     from ranked_candidates
-    where pick = 1
 
 ),
 
 -- ── step 5: group consecutive fixes at one store into visits ───────────────
+-- Partitioned BY CUSTOMER now. One fix can belong to several customers, so a
+-- single timeline ordered by time alone interleaves them and the old
+-- "customer changed => new visit" test would start a fresh visit on every row.
+-- Partitioning by customer_key makes each customer's fixes their own sequence,
+-- and the gap test is then the only thing that opens a visit.
 gapped as (
 
     select
         *,
         case
-            when lag(customer_key) over (
-                     partition by sales_code, device_name
+            when lag(event_at_utc) over (
+                     partition by sales_code, device_name, customer_key
                      order by event_at_utc
-                 ) is distinct from customer_key then 1
+                 ) is null then 1
             when {{ dbt.datediff(
-                    'lag(event_at_utc) over (partition by sales_code, device_name order by event_at_utc)',
+                    'lag(event_at_utc) over (partition by sales_code, device_name, customer_key order by event_at_utc)',
                     'event_at_utc', 'minute') }}
                  >= {{ var('presence_visit_gap_minutes') }} then 1
             else 0
@@ -246,7 +277,7 @@ numbered as (
     select
         *,
         sum(is_new_visit) over (
-            partition by sales_code, device_name
+            partition by sales_code, device_name, customer_key
             order by event_at_utc
             rows between unbounded preceding and current row
         )                                                                as raw_visit_seq
@@ -268,7 +299,10 @@ device_visits as (
         max(candidate_count)                                             as candidate_count
     from numbered
     group by sales_code, customer_key, device_name, raw_visit_seq
-    -- step 6: a single ping, or a few seconds in passing, is not a visit
+    -- step 6: dwell gate. presence_min_dwell_minutes is 0, so this passes
+    -- everything -- see the var's comment in dbt_project.yml for why. Kept as a
+    -- filter rather than deleted so the threshold can be raised again in one
+    -- place if the device ever reports at a useful cadence.
     having {{ dbt.datediff('min(event_at_local)', 'max(event_at_local)', 'minute') }}
            >= {{ var('presence_min_dwell_minutes') }}
 
