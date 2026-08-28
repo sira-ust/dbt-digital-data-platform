@@ -212,11 +212,44 @@ day_sessions as (
 
 ),
 
--- a rep-day with no GPS at all cannot be classified: `unknown`, not `remote`
+-- ── can this rep-day be classified at all? ────────────────────────────────
+-- `unknown` exists for two honest reasons, both about MISSING EVIDENCE: the rep
+-- logged no usable GPS that day, or the customer has no coordinates so no
+-- geofence can be drawn. It must never mean "he had GPS and was elsewhere" --
+-- that is `remote`.
+--
+-- This used to read `select distinct sales_code, activity_date from presence`,
+-- and presence holds MATCHED VISITS, not fixes. So a rep-day only counted as
+-- "has GPS" if he actually stopped at somebody. A rep who worked from home all
+-- day with his PDA pinging 84 times was labelled "we do not know where he was",
+-- when we knew precisely: not at any customer.
+--
+-- Measured 2026-08-27: of 6,599 `unknown` rows, 6,596 had usable GPS AND a
+-- geocoded customer -- 100% mislabelled, since the remaining 3 were the genuine
+-- ungeocoded case. Rep 032 had 79 such order-days, every one with GPS present
+-- (84 fixes a day on average).
 gps_days as (
 
-    select distinct sales_code, activity_date
-    from presence
+    select distinct
+        sales_code,
+        rep_local_date                                                   as activity_date
+    from {{ ref('int_events_enriched') }}
+    where description_code = '01040100'
+      and actor_type       = 'sales'
+      and sales_code       is not null
+      and latitude         is not null
+      and longitude        is not null
+
+),
+
+-- a customer with no coordinate cannot be geofenced, so his absence from a
+-- visit list is not evidence. Excluded rows are a left-join miss, which is the
+-- honest shape -- see stg_nav__customer_locations.
+geocoded_customers as (
+
+    select customer_key
+    from {{ ref('stg_nav__customer_locations') }}
+    where latitude is not null and longitude is not null
 
 ),
 
@@ -228,7 +261,9 @@ labelled as (
             when s.order_channel in ('WEB', 'APP')       then 'customer ordered online'
             when s.during_visit = 1                      then 'on-site'
             when s.visited_that_day = 1                  then 'visited, keyed elsewhere'
-            when g.sales_code is null                    then 'unknown'
+            -- no usable GPS that rep-day, OR this customer cannot be geofenced
+            when g.sales_code is null
+              or gc.customer_key is null                  then 'unknown'
             -- ── the customer sent the order in; he only typed it ──────────
             -- INFERRED, unlike every label above it. The rest of this column is
             -- evidence -- a GPS fix, or the channel off the order payload. This
@@ -283,6 +318,8 @@ labelled as (
     from session_scenario as s
     left join gps_days as g
         on g.sales_code = s.sales_code and g.activity_date = s.activity_date
+    left join geocoded_customers as gc
+        on gc.customer_key = s.customer_key
     left join day_sessions as d
         on d.customer_day_key = s.customer_day_key
 
