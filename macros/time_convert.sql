@@ -191,3 +191,54 @@
         * pow(sin(radians(({{ lon_b }}) - ({{ lon_a }})) / 2), 2)
     )))
 {%- endmacro %}
+
+
+{# Do two arrays share at least one element? Used to tell a visit's arrival leg
+   from a stop of its own: if a no-activity visit shares a GPS fix with a visit
+   that HAS activity, it is the same moment seen through a neighbour's fence.
+   duckdb spells it list_has_any, databricks arrays_overlap. #}
+{% macro arrays_overlap(a, b) -%}
+    {{ return(adapter.dispatch('arrays_overlap', 'ust_digital_platform')(a, b)) }}
+{%- endmacro %}
+
+{% macro default__arrays_overlap(a, b) -%}
+    list_has_any({{ a }}, {{ b }})
+{%- endmacro %}
+
+{% macro databricks__arrays_overlap(a, b) -%}
+    arrays_overlap({{ a }}, {{ b }})
+{%- endmacro %}
+
+
+{# Regex match. databricks spells it `rlike`, duckdb `regexp_matches`; neither
+   parses the other, and duckdb cannot surface a databricks-only parse failure
+   at dev time. #}
+{% macro regex_matches(col, pattern) -%}
+    {{ return(adapter.dispatch('regex_matches', 'ust_digital_platform')(col, pattern)) }}
+{%- endmacro %}
+
+{% macro default__regex_matches(col, pattern) -%}
+    (regexp_matches({{ col }}, '{{ pattern }}'))
+{%- endmacro %}
+
+{# parenthesised: `not a rlike b` is precedence-fragile, `not (a rlike b)` is not #}
+{% macro databricks__regex_matches(col, pattern) -%}
+    ({{ col }} rlike '{{ pattern }}')
+{%- endmacro %}
+
+
+{# Distinct elements of an array. A customer with two scenario rows joins to its
+   presence rows twice, so any array_agg over that join double-counts unless the
+   duplicates are removed -- which silently broke fix-set equality.
+   duckdb list_distinct, databricks array_distinct. #}
+{% macro array_distinct(arr) -%}
+    {{ return(adapter.dispatch('array_distinct', 'ust_digital_platform')(arr)) }}
+{%- endmacro %}
+
+{% macro default__array_distinct(arr) -%}
+    list_distinct({{ arr }})
+{%- endmacro %}
+
+{% macro databricks__array_distinct(arr) -%}
+    array_distinct({{ arr }})
+{%- endmacro %}
