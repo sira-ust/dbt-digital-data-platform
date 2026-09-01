@@ -88,9 +88,17 @@ event_placement as (
         e.feature_name,
         e.description_code,
         e.seconds_since_prev_event,
+        -- The window edges are GPS SAMPLE times, not arrival and departure, so
+        -- they are padded by var('presence_edge_tolerance_minutes'). See that
+        -- var for why the test stays PER EVENT rather than moving to per
+        -- session, and what breaks if it does.
         max(case
-                when v.arrived_at <= e.event_at_local
-                 and e.event_at_local <= v.departed_at then 1
+                when {{ dbt.dateadd('minute',
+                        '-' ~ var('presence_edge_tolerance_minutes'), 'v.arrived_at') }}
+                        <= e.event_at_local
+                 and e.event_at_local <=
+                     {{ dbt.dateadd('minute',
+                        var('presence_edge_tolerance_minutes'), 'v.departed_at') }} then 1
                 else 0
             end)                                                         as was_on_site
     from activity_events as e
@@ -100,6 +108,35 @@ event_placement as (
         e.entity_id, e.customer_day_key, e.sales_code, e.customer_key,
         e.activity_date, e.session_seq, e.event_at_local, e.customer_key_source,
         e.is_add, e.feature_name, e.description_code, e.seconds_since_prev_event
+
+),
+
+-- ── number the CONTIGUOUS RUNS of on-site / off-site within a session ───────
+-- session_bounds below groups by (session_seq, was_on_site), so two SEPARATE
+-- on-site stretches in one session collapse into a single portion and its
+-- first_touch..last_touch span silently covers the off-site stretch between
+-- them. NEW052 on 2026-08-25 reads 12:17-13:17 on-site and 12:18-13:21
+-- elsewhere -- overlapping ranges that look like a bug but are really four
+-- alternating runs (on 12:17-12:17, off 12:18-12:29, on 12:39-13:17, off
+-- 13:18-13:21) flattened to two min/max pairs.
+--
+-- The gap is genuine: 39 events fall in a 24-minute silence between fixes, so
+-- the model cannot place him and 'elsewhere' is the honest label. What was
+-- missing is any signal that the span is NOT contiguous, which is what
+-- segment_seq counts.
+segmented as (
+
+    select
+        e.*,
+        sum(case when e.was_on_site = lag(e.was_on_site) over (
+                      partition by e.customer_day_key, e.session_seq
+                      order by e.event_at_local, e.entity_id)
+                 then 0 else 1 end) over (
+            partition by e.customer_day_key, e.session_seq
+            order by e.event_at_local, e.entity_id
+            rows between unbounded preceding and current row
+        )                                                                as segment_seq
+    from event_placement as e
 
 ),
 
@@ -121,8 +158,9 @@ session_bounds as (
         sum(case when e.is_add then 1 else 0 end)                        as item_count,
         sum(case when e.feature_name is not null then 1 else 0 end)      as browse_count,
         sum(case when e.description_code = '10050900' then 1 else 0 end) as typed_count,
-        {{ median('case when e.is_add then e.seconds_since_prev_event end') }} as median_sec_per_item
-    from event_placement as e
+        {{ median('case when e.is_add then e.seconds_since_prev_event end') }} as median_sec_per_item,
+        count(distinct e.segment_seq)                                    as segments
+    from segmented as e
     group by
         e.customer_day_key, e.sales_code, e.customer_key, e.activity_date,
         e.session_seq, e.was_on_site
@@ -181,9 +219,18 @@ session_scenario as (
         -- SUN015 (76) were each counted twice. was_on_site already identifies
         -- which portion was actually inside the visit, so the minutes go there
         -- and the keyed-elsewhere row gets zero.
+        -- PADDED on both edges, the same way event_placement classifies. They
+        -- must agree: event_placement used the padded window to call NEW057
+        -- 'on-site' on 2026-08-25 while this test used the raw window, found no
+        -- overlap (its session ended 16:18:59, its first fix was 16:20:01) and
+        -- awarded 0 minutes -- an on-site visit reporting no on-site time.
         sum(case when b.was_on_site = 1
-                  and v.arrived_at <= b.session_end
-                  and b.session_start <= v.departed_at
+                  and {{ dbt.dateadd('minute',
+                          '-' ~ var('presence_edge_tolerance_minutes'), 'v.arrived_at') }}
+                          <= b.session_end
+                  and b.session_start <=
+                      {{ dbt.dateadd('minute',
+                          var('presence_edge_tolerance_minutes'), 'v.departed_at') }}
                  then v.on_site_minutes else 0 end)                       as overlap_on_site_minutes
     from session_bounds as b
     left join session_orders as so
@@ -194,7 +241,7 @@ session_scenario as (
     group by
         b.customer_day_key, b.sales_code, b.customer_key, b.activity_date,
         b.session_seq, b.was_on_site, b.session_start, b.session_end,
-        b.event_count, b.inherited_event_count,
+        b.event_count, b.inherited_event_count, b.segments,
         b.item_count, b.browse_count, b.typed_count, b.median_sec_per_item,
         so.increment_ids, so.order_channel
 
@@ -389,6 +436,8 @@ by_scenario as (
         l.activity_date,
         l.scenario,
         count(*)                                                         as sessions,
+        -- >1 means the time range below is NOT one continuous stretch
+        sum(l.segments)                                                  as segments,
         -- rounded per DEVICE, not per stint, so the columns sum to keying_minutes
         cast(round(sum(d.pda_seconds)    / 60.0) as {{ dbt.type_int() }}) as pda_minutes,
         cast(round(sum(d.ipad_seconds)   / 60.0) as {{ dbt.type_int() }}) as ipad_minutes,
@@ -438,7 +487,54 @@ scenario_orders as (
 ),
 
 -- ── the FULL OUTER half: visits with no app activity at all ───────────────
-visit_only as (
+-- ── visits with NO app record for the customer ─────────────────────────────
+-- These rest on GPS position alone, so three tests apply that a visit backed by
+-- a device record does not need. Each was measured against a rep's own account
+-- of his day, not chosen for tidiness.
+--
+--  1. DISTANCE. var('presence_no_activity_max_metres'), 80 m. The record is the
+--     proof where one exists; where none does, the position must be better.
+--  2. OWNERSHIP. Standing near a store that belongs to ANOTHER rep is not
+--     evidence of calling on it. On 2026-08-25 one GPS fix at 17:32 put rep 030
+--     25 m from ASI006 (rep 025) and 71 m from PEE001 (rep 030); crediting the
+--     nearer one on distance alone was wrong. Activity-backed visits are exempt
+--     -- a rep may legitimately transact on a colleague's account.
+--  3. SAME MOMENT. A no-activity visit whose fix set is IDENTICAL to an
+--     activity-backed one is that visit seen through a neighbour's fence: same
+--     arrival, same departure, same every fix between. YIN001 shared all nine of
+--     NEW052's fixes while NEW052 carried 98 device records and an order.
+--     EQUALITY ONLY, never containment: PAR017's 3 fixes are a subset of
+--     TAI012's 17 and rep 032 confirmed PAR017 by name -- a shorter call inside
+--     a longer stop is exactly what a real second visit looks like.
+--  4. ARRIVAL LEG. Zero dwell on every touch, and shares a fix with an
+--     activity-backed visit => it is that visit's approach, not a stop. SEV009's
+--     13:31:10 fix IS NEW007's first fix. Requires 0 min on ALL touches, so
+--     GAN003 (31 min) and PAR017 (20 min) are untouched -- both confirmed real.
+--
+-- A rule dropping a row whose window activity belonged to another customer was
+-- tried and REJECTED: it deleted GAN003 and PAR017. Rep 032 keyed TAI012's order
+-- from Gangnam's kerb, and doing other paperwork while on site says nothing
+-- about whether this visit happened.
+with_activity as (
+
+    select
+        v.sales_code,
+        v.activity_date,
+        v.customer_key,
+        {{ sort_array(array_distinct('flatten(array_agg(v.fix_ids))')) }}   as fix_ids
+    from presence as v
+    -- EXISTS, not a join: a customer with two scenario rows (NEW052 is both
+    -- 'on-site' and 'visited, keyed elsewhere') would otherwise be joined twice
+    -- and its fix array doubled, so fix-set equality below silently never fired.
+    where exists (
+        select 1 from by_scenario as a
+        where a.customer_day_key = v.customer_day_key
+    )
+    group by v.sales_code, v.activity_date, v.customer_key
+
+),
+
+visit_only_candidates as (
 
     select
         v.customer_day_key,
@@ -446,12 +542,46 @@ visit_only as (
         v.customer_key,
         v.activity_date,
         sum(v.on_site_minutes)                                           as on_site_minutes,
-        max(v.is_ambiguous)                                              as is_ambiguous
+        max(v.on_site_minutes)                                           as longest_touch_minutes,
+        max(v.is_ambiguous)                                              as is_ambiguous,
+        min(v.closest_metres)                                            as closest_metres,
+        max(case when v.is_owned_by_rep then 1 else 0 end)               as is_owned_by_rep,
+        {{ sort_array(array_distinct('flatten(array_agg(v.fix_ids))')) }}   as fix_ids
     from presence as v
     left join by_scenario as a
         on a.customer_day_key = v.customer_day_key
     where a.customer_day_key is null
     group by v.customer_day_key, v.sales_code, v.customer_key, v.activity_date
+
+),
+
+visit_only as (
+
+    select
+        c.customer_day_key,
+        c.sales_code,
+        c.customer_key,
+        c.activity_date,
+        c.on_site_minutes,
+        c.is_ambiguous
+    from visit_only_candidates as c
+    where c.closest_metres <= {{ var('presence_no_activity_max_metres') }}   -- 1
+      and c.is_owned_by_rep = 1                                              -- 2
+      and not exists (                                                       -- 3
+          select 1 from with_activity as w
+          where w.sales_code    = c.sales_code
+            and w.activity_date = c.activity_date
+            and w.fix_ids       = c.fix_ids
+      )
+      and not (                                                              -- 4
+          c.longest_touch_minutes = 0
+          and exists (
+              select 1 from with_activity as w
+              where w.sales_code    = c.sales_code
+                and w.activity_date = c.activity_date
+                and {{ arrays_overlap('w.fix_ids', 'c.fix_ids') }}
+          )
+      )
 
 ),
 
@@ -469,7 +599,7 @@ combined as (
 
     select
         a.customer_day_key, a.sales_code, a.customer_key, a.activity_date,
-        a.scenario, a.sessions,
+        a.scenario, a.sessions, a.segments,
         a.pda_minutes, a.ipad_minutes, a.android_tablet_minutes, a.paired_minutes,
         a.inherited_event_count,
         a.on_site_minutes, a.opened_at,
@@ -490,6 +620,8 @@ combined as (
         v.customer_day_key, v.sales_code, v.customer_key, v.activity_date,
         'visit only, no app'                                             as scenario,
         0                                                                as sessions,
+        -- no app session at all, so nothing to be discontiguous
+        1                                                                as segments,
         0, 0, 0, 0,
         0                                                                as inherited_event_count,
         v.on_site_minutes,
@@ -511,6 +643,7 @@ select
     c.activity_date,
     c.scenario,
     c.sessions,
+    c.segments,
 
     c.pda_minutes,
     c.ipad_minutes,

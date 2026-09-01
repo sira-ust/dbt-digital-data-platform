@@ -80,6 +80,50 @@ vars:
   office_longitude: -122.1362259
   office_radius_metres: 150
 
+  # ── evidence tiers for a visit ─────────────────────────────────────────────
+  # A visit backed by a device record naming the customer needs no distance
+  # help: the record is the proof, so the full geofence above applies. A visit
+  # with NO such record rests on position alone, so the position has to be
+  # better. 80 m is where the August 2026 population changes character: inside
+  # it, no-activity visits average 11-25 min over 2-4 fixes; beyond it, 1.2-1.5
+  # fixes and 2.7-5.4 min, i.e. drive-pasts. Measured over 4,967 no-activity
+  # visits.
+  presence_no_activity_max_metres: 80
+
+  # arrived_at / departed_at are GPS SAMPLE times, not arrival and departure.
+  # The device reports every ~16 min, so the rep was at the store before the
+  # first fix and after the last, and work keyed in those minutes was being
+  # labelled 'keyed elsewhere'. DEL009 on 2026-08-25 is one unbroken session,
+  # 16:19:05-16:22:46, cut in two by a fix at 16:20:01; NEW057's whole session
+  # (16:17:48-16:18:59) fell 62 s before its first fix and scored 0 on-site min.
+  #
+  # Applied PER EVENT, deliberately. Classifying per SESSION instead -- "any
+  # overlap makes the whole session on-site" -- was tried and is wrong: rep 026's
+  # JUN003 session on 2026-08-17 touches the window then runs 97 more events and
+  # 496 MINUTES past departure, all of which would become on-site.
+  #
+  # 10 minutes, set 2026-09-02. There is NO elbow in the distribution to
+  # calibrate against -- events fall off smoothly (768 within 1 min, 1,948 within
+  # 3, 3,429 within 8) -- so this is a judgement, not a measurement.
+  #
+  # NOTE this is most of one reporting interval: the devices fix every ~16 min,
+  # so a 10-minute pad on each edge claims roughly the whole gap either side of a
+  # visit. It was 3, which covered the two measured cases (56 s and 2 m 13 s)
+  # with no room to absorb a driving leg. At 10 the window can reach work keyed
+  # in the car shortly after pulling away, so on-site minutes and the 'on-site'
+  # vs 'visited, keyed elsewhere' split both shift toward on-site.
+  presence_edge_tolerance_minutes: 10
+
+  # Test and internal customer rows. Filtering on the OFFICE RADIUS alone is not
+  # enough: eleven of these geocode 4.6-25.5 km away ("123 Fake St, SAN
+  # FRANCISCO", or literally "test"), so the radius never sees them. They score
+  # no visits today only because Google happened to resolve those strings
+  # somewhere no rep parks.
+  # Matched on customer_key, never on customer_name: "THE LATEST SCOOP" contains
+  # "TEST", and NIRVANA WAREHOUSE / ALBERTSONS CORPORATE OFFICE are real.
+  test_customer_key_regex: '^ZZZ[0-9]'
+  test_customer_keys: ['JDA01', 'OFF001', 'PMT001', 'UST001', 'YYY001']
+
   # system_event_log production go-live: event_at_utc is device time, so a
   # few rows carry clock-skewed dates before this — int_item_demand_daily
   # clamps to [go-live, now].

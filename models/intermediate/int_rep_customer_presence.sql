@@ -77,6 +77,26 @@ with fixes as (
 
 ),
 
+-- ── app activity per customer, used to bridge a GPS hole ───────────────────
+-- Not used for MATCHING -- presence stays derived from GPS alone. Used only to
+-- answer one question: while the fixes went quiet, was the rep demonstrably
+-- still working THIS customer? If so he did not leave, and the silence is a
+-- gap in the evidence rather than a gap in the visit.
+customer_activity as (
+
+    select distinct
+        sales_code,
+        customer_key,
+        rep_local_date,
+        event_at_utc
+    from {{ ref('int_events_enriched') }}
+    where actor_type        = 'sales'
+      and sales_code       is not null
+      and customer_key     is not null
+      and description_code <> '01040100'
+
+),
+
 -- one row per rep-day carrying the SHARED clock, joined back at the end rather
 -- than threaded through six intermediate CTEs that do not otherwise need it
 rep_clock as (
@@ -149,8 +169,32 @@ speed_checked as (
 -- ── step 3 + 4: match each fix to the nearest customer inside the geofence ──
 stores as (
 
-    select customer_key, latitude as store_lat, longitude as store_lon, is_active
+    -- TEST AND INTERNAL ROWS, by key. The office radius in `candidates` below
+    -- catches the ones geocoded to the office, but eleven ZZZ accounts resolve
+    -- to "123 Fake St, SAN FRANCISCO" or literally "test", 4.6-25.5 km away,
+    -- where the radius never sees them.
+    --
+    -- INACTIVE ACCOUNTS are now dropped outright. This REVERSES the earlier
+    -- decision to keep them as a tie-break -- see the ranked_candidates comment
+    -- below, which still describes the old behaviour for the active-vs-active
+    -- case. The trade: a rep calling on a lapsed account no longer registers.
+    -- What it buys is that duplicate rows for one store stop double-counting --
+    -- T&L MARKET is TLM001 (inactive) and TLM002 (active) at the same point,
+    -- and both were being credited the same 155 minutes on 2026-08-25.
+    select
+        customer_key,
+        latitude                                                         as store_lat,
+        longitude                                                        as store_lon,
+        is_active,
+        salesperson_code                                                 as owner_rep
     from {{ ref('stg_nav__customer_locations') }}
+    where is_active
+      and not {{ regex_matches('customer_key', var('test_customer_key_regex')) }}
+      and customer_key not in (
+          {%- for k in var('test_customer_keys') %}
+          '{{ k }}'{{ ',' if not loop.last }}
+          {%- endfor %}
+      )
 
 ),
 
@@ -170,6 +214,7 @@ candidates as (
         f.app_customer_key,
         s.customer_key,
         s.is_active,
+        s.owner_rep,
         {{ haversine_metres('f.latitude', 'f.longitude', 's.store_lat', 's.store_lon') }} as metres
     from speed_checked as f
     join stores as s
@@ -241,34 +286,103 @@ ranked_candidates as (
 matched as (
 
     select
-        sales_code, device_name, customer_key, event_at_utc, event_at_local,
+        entity_id,
+        sales_code, device_name, customer_key, owner_rep, event_at_utc, event_at_local,
         rep_local_date, metres, candidate_count, pick
     from ranked_candidates
 
 ),
 
 -- ── step 5: group consecutive fixes at one store into visits ───────────────
--- Partitioned BY CUSTOMER now. One fix can belong to several customers, so a
--- single timeline ordered by time alone interleaves them and the old
--- "customer changed => new visit" test would start a fresh visit on every row.
--- Partitioning by customer_key makes each customer's fixes their own sequence,
--- and the gap test is then the only thing that opens a visit.
-gapped as (
+-- Partitioned BY CUSTOMER, and NOT by device. One fix can belong to several
+-- customers, so a single timeline ordered by time alone interleaves them and the
+-- old "customer changed => new visit" test would start a fresh visit on every
+-- row. Partitioning by customer_key makes each customer's fixes their own
+-- sequence, and the gap test is then the only thing that opens a visit.
+--
+-- device_name USED to be in this partition, and step 7 below was meant to merge
+-- the per-device visits back together. It could not: its test is
+-- `arrived_at > previous departed_at`, which merges OVERLAPPING spans, but reps
+-- carry 3-5 devices reporting every ~16 min, so they INTERLEAVE rather than
+-- overlap. Each device contributed a single fix, each fix became an
+-- instantaneous visit, and two instants never overlap -- so one stop fragmented
+-- into N zero-minute visits.
+--
+-- Measured over August 2026 before the fix: 3,825 of 6,266 visits (61%) reported
+-- 0 minutes, 1,566 consecutive visits under the 20-minute gap were split purely
+-- because the device changed, and total on-site time read 109,355 minutes
+-- against 212,649 if merged -- understated by roughly half. LGV001 on 2026-08-25
+-- was two 0-minute visits (Honeywell 17:15:04, samsung 17:24:50) instead of one
+-- 9-minute call.
+--
+-- Dropping device_name here does not reintroduce teleporting: speed_checked has
+-- already removed impossible hops within each device track, and every fix
+-- reaching this point is inside the same 100 m geofence, so ordering across
+-- devices is safe.
+lagged as (
 
     select
         *,
+        -- rep_local_date IS IN THE PARTITION. Without it the last fix of one day
+        -- and the first of the next are 'consecutive', and the bridge below then
+        -- spans the night: TAI012 merged into a single 5,843-minute visit and
+        -- every downstream customer_day_key it touched broke. A visit cannot
+        -- cross a rep-day; that is the grain of this model.
+        lag(event_at_utc) over (
+            partition by sales_code, customer_key, rep_local_date
+            order by event_at_utc
+        )                                                                as prev_at
+    from matched
+
+),
+
+-- Did the rep keep working THIS customer while the fixes were silent?
+--
+-- NEW052 on 2026-08-25 is the case. He was in the store from 12:17 to 13:21
+-- without a break -- 123 events, longest gap between them 9.5 min -- but one
+-- samsung fix at 12:29:24 reported 446 m away while he stood there. That fix
+-- falls outside the 100 m fence, so the gap between IN-FENCE fixes became
+-- 12:15:18 -> 12:39:10 = 23.9 min, over the 20-minute boundary. One visit split
+-- into two, and the 49 events in the hole were labelled 'keyed elsewhere' on a
+-- second row spanning a time range that overlapped the first.
+--
+-- Raising presence_visit_gap_minutes would loosen every visit boundary to fix a
+-- GPS-error case. This is narrower: it requires activity FOR THAT CUSTOMER
+-- strictly inside the gap, which is positive evidence he never left. Activity
+-- for anyone else does not bridge, and neither does silence.
+bridged as (
+
+    select
+        l.entity_id,
+        l.customer_key,
+        max(case when a.event_at_utc is not null then 1 else 0 end)       as activity_bridges
+    from lagged as l
+    left join customer_activity as a
+        on  a.sales_code     = l.sales_code
+       and  a.customer_key   = l.customer_key
+       and  a.rep_local_date = l.rep_local_date
+       and  a.event_at_utc   > l.prev_at
+       and  a.event_at_utc   < l.event_at_utc
+    group by l.entity_id, l.customer_key
+
+),
+
+gapped as (
+
+    select
+        l.*,
+        b.activity_bridges,
         case
-            when lag(event_at_utc) over (
-                     partition by sales_code, device_name, customer_key
-                     order by event_at_utc
-                 ) is null then 1
-            when {{ dbt.datediff(
-                    'lag(event_at_utc) over (partition by sales_code, device_name, customer_key order by event_at_utc)',
-                    'event_at_utc', 'minute') }}
-                 >= {{ var('presence_visit_gap_minutes') }} then 1
+            when l.prev_at is null then 1
+            when {{ dbt.datediff('l.prev_at', 'l.event_at_utc', 'minute') }}
+                 >= {{ var('presence_visit_gap_minutes') }}
+             and b.activity_bridges = 0 then 1
             else 0
         end                                                              as is_new_visit
-    from matched
+    from lagged as l
+    join bridged as b
+        on  b.entity_id    = l.entity_id
+       and  b.customer_key = l.customer_key
 
 ),
 
@@ -277,7 +391,7 @@ numbered as (
     select
         *,
         sum(is_new_visit) over (
-            partition by sales_code, device_name, customer_key
+            partition by sales_code, customer_key, rep_local_date
             order by event_at_utc
             rows between unbounded preceding and current row
         )                                                                as raw_visit_seq
@@ -290,15 +404,25 @@ device_visits as (
     select
         sales_code,
         customer_key,
-        device_name,
+        {{ sort_array('array_agg(distinct device_name)') }}               as device_names,
         min(rep_local_date)                                             as activity_date,
         min(event_at_local)                                              as arrived_at,
         max(event_at_local)                                              as departed_at,
         count(*)                                                         as fix_count,
         min(metres)                                                      as closest_metres,
-        max(candidate_count)                                             as candidate_count
+        max(candidate_count)                                             as candidate_count,
+        max(owner_rep)                                                   as owner_rep,
+        -- the GPS fixes this visit is built from. Published so a consumer can
+        -- ask whether two visits are the SAME MOMENT rather than merely
+        -- overlapping: one fix can match several customers, so two visits
+        -- sharing an identical fix set are one position seen through two
+        -- geofences, not two calls.
+        array_agg(entity_id)                                             as fix_ids
     from numbered
-    group by sales_code, customer_key, device_name, raw_visit_seq
+    -- rep_local_date is in the key because raw_visit_seq restarts each day
+    -- (its running sum is partitioned by day); without it, day 1's visit 1
+    -- and day 2's visit 1 collapse into one group.
+    group by sales_code, customer_key, rep_local_date, raw_visit_seq
     -- step 6: dwell gate. presence_min_dwell_minutes is 0, so this passes
     -- everything -- see the var's comment in dbt_project.yml for why. Kept as a
     -- filter rather than deleted so the threshold can be raised again in one
@@ -308,7 +432,10 @@ device_visits as (
 
 ),
 
--- ── step 7: merge the same visit seen by two devices into one ──────────────
+-- ── step 7: number the visits ───────────────────────────────────
+-- This used to be the cross-device merge. Step 5 now does that work by not
+-- splitting on device in the first place, so what remains here is sequence
+-- numbering plus a safety net for any residual overlap.
 merge_flagged as (
 
     select
@@ -358,7 +485,10 @@ select
     -- true when another customer also sat inside the geofence for any fix in
     -- this visit: the match is plausible but not proven
     max(v.candidate_count) > 1                                           as is_ambiguous,
-    {{ sort_array('array_agg(distinct v.device_name)') }}                as devices,
+    {{ sort_array(array_distinct('flatten(array_agg(v.device_names))')) }}  as devices,
+    max(v.owner_rep)                                                     as owner_rep,
+    max(v.owner_rep) = v.sales_code                                      as is_owned_by_rep,
+    {{ sort_array(array_distinct('flatten(array_agg(v.fix_ids))')) }}       as fix_ids,
     -- published so the shared-clock invariant is TESTABLE rather than merely
     -- asserted in a comment, which is how an hour-wide disagreement with
     -- int_rep_customer_activity went unnoticed. See
