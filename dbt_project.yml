@@ -102,12 +102,17 @@ vars:
   # JUN003 session on 2026-08-17 touches the window then runs 97 more events and
   # 496 MINUTES past departure, all of which would become on-site.
   #
-  # 3 minutes because it covers both measured cases (56 s, 2 m 13 s) and is far
-  # too short to absorb a driving leg. There is NO elbow in the distribution to
+  # 10 minutes, set 2026-09-02. There is NO elbow in the distribution to
   # calibrate against -- events fall off smoothly (768 within 1 min, 1,948 within
-  # 3, 3,429 within 8) -- so this is a judgement, not a measurement, and it is a
-  # var so it can be revised against a rep's own account of a day.
-  presence_edge_tolerance_minutes: 3
+  # 3, 3,429 within 8) -- so this is a judgement, not a measurement.
+  #
+  # NOTE this is most of one reporting interval: the devices fix every ~16 min,
+  # so a 10-minute pad on each edge claims roughly the whole gap either side of a
+  # visit. It was 3, which covered the two measured cases (56 s and 2 m 13 s)
+  # with no room to absorb a driving leg. At 10 the window can reach work keyed
+  # in the car shortly after pulling away, so on-site minutes and the 'on-site'
+  # vs 'visited, keyed elsewhere' split both shift toward on-site.
+  presence_edge_tolerance_minutes: 10
 
   # Test and internal customer rows. Filtering on the OFFICE RADIUS alone is not
   # enough: eleven of these geocode 4.6-25.5 km away ("123 Fake St, SAN
