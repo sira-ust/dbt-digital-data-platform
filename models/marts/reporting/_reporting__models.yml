@@ -1,6 +1,113 @@
 version: 2
 
 models:
+  - name: mart_rep_order_journey
+    description: >
+      Per-cycle rep behaviour, one row per matched open->close order cycle from
+      int_rep_order_cycle. Every event falling in the cycle window is aggregated
+      into cart, navigation, feature-flag and submit-quality metrics.
+
+      TWO THINGS TO KNOW BEFORE AGGREGATING. (1) The cycle itself is
+      RECONSTRUCTED BY TIME HEURISTIC, not recorded — cart events carry no order
+      number, so open->close is inferred. (2) Events are joined on USERNAME AND
+      TIME WINDOW ONLY, with no customer key, so an event inside two overlapping
+      cycles is counted into BOTH. 5,330 of 12,118 cycles (44%) overlap the
+      previous cycle for the same rep, and days_to_close reaches 156, so a long
+      cycle sweeps up months of unrelated activity. Counts here are therefore
+      upper bounds per cycle and MUST NOT be summed across cycles as if they were
+      disjoint. For a per-customer view of what a rep actually did, use
+      mart_rep_customer_activity instead — it is keyed on the customer.
+    columns:
+      - name: username
+        description: Salesperson login that owned the cycle.
+      - name: order_customer_no
+        description: Customer the order was for. NOT used to attribute events — see the model description.
+      - name: local_id
+        description: Device-side cycle identifier from int_rep_order_cycle.
+      - name: increment_id
+        description: M-prefixed order number, when the cycle closed with a submit.
+      - name: sales_code
+        description: Rep territory code.
+      - name: source_code
+        description: App source the cycle ran on.
+      - name: app_version
+        description: App version string at cycle time.
+      - name: opened_at
+        description: Cycle start, UTC. Inferred, not a recorded "order opened" event.
+      - name: submitted_at
+        description: Cycle close, UTC. Null would mean still open; there are none today.
+      - name: days_to_close
+        description: >
+          Whole days from opened_at to submitted_at. Median is ~1 but the max is
+          156 — treat the long tail as heuristic error, not slow selling.
+      - name: cycle_bucket
+        description: "days_to_close banded: same-day / 1-3d / 4-7d / 8-14d / 14d+."
+      - name: add_count
+        description: Cart add events in the window (Order Operations, l2 05).
+      - name: remove_count
+        description: Cart remove events in the window (Order Operations, l2 04).
+      - name: oos_check_count
+        description: Out-of-stock checks in the window (Order Operations, l2 13).
+      - name: churn_ratio
+        description: >
+          remove_count / add_count. Null when nothing was added. High means the
+          basket was reworked a lot before sending.
+      - name: click_backorder_count
+        description: Backorder icon taps in the window.
+      - name: click_history_count
+        description: Purchase-history icon taps in the window.
+      - name: click_suggest_count
+        description: Suggested-items icon taps in the window.
+      - name: click_new_count
+        description: New-items icon taps in the window.
+      - name: click_promo_count
+        description: Promotion icon taps in the window.
+      - name: click_new_promo_count
+        description: Combined new-and-promo icon taps in the window.
+      - name: filter_events
+        description: Filtering & Sorting events in the window.
+      - name: search_events
+        description: Search events in the window.
+      - name: icon_clicks
+        description: All Activity (Customer Interactions) events — the parent of the click_* columns.
+      - name: catalog_views
+        description: Catalog View Analytics events in the window.
+      - name: used_filter
+        description: 1 if the rep filtered at all during the cycle, else 0.
+      - name: used_search
+        description: 1 if the rep searched at all during the cycle, else 0.
+      - name: used_icons
+        description: 1 if any icon was tapped during the cycle, else 0.
+      - name: used_catalog_view
+        description: 1 if the catalog was viewed during the cycle, else 0.
+      - name: used_backorder
+        description: 1 if the backorder icon was used during the cycle, else 0.
+      - name: used_history
+        description: 1 if purchase history was opened during the cycle, else 0.
+      - name: used_suggest
+        description: 1 if suggested items were opened during the cycle, else 0.
+      - name: used_new
+        description: 1 if new items were opened during the cycle, else 0.
+      - name: used_promo
+        description: 1 if promotions were opened during the cycle, else 0.
+      - name: used_new_promo
+        description: 1 if the combined new-and-promo view was opened, else 0.
+      - name: used_all_product
+        description: 1 if the all-products view was opened during the cycle, else 0.
+      - name: used_categories
+        description: 1 if categories were browsed during the cycle, else 0.
+      - name: had_submit_attempt
+        description: 1 if any Send Order event fired in the window, else 0.
+      - name: submit_fail_count
+        description: Failed submit attempts in the window (Send Order, l3 02).
+      - name: behavior_segment
+        description: >
+          One of High Editor / Decisive / Planner / Slow Sender, in that
+          precedence. High Editor = churn_ratio >= 0.3. Decisive = churn_ratio <
+          0.1 and closed within a day. Planner = took 4 days or more. Slow Sender
+          is everything left. Thresholds are conventions, not measured
+          break-points, and they inherit the overlap caveat above.
+
   - name: mart_rep_weekly
     description: >
       Rep workload + feature usage, one row per sales_code x week. Order
@@ -26,6 +133,52 @@ models:
         description: Cycles the rep touched that week (approximate).
       - name: cycles_submitted
         description: Of those, cycles that ended in a submit.
+      - name: avg_adds_per_cycle
+        description: Mean cart adds per reconstructed cycle. APPROXIMATE — cycle grain is heuristic.
+      - name: avg_removes_per_cycle
+        description: Mean cart removes per cycle. APPROXIMATE.
+      - name: avg_net_item_events
+        description: Mean (adds minus removes) per cycle — net basket-building. APPROXIMATE.
+      - name: avg_active_minutes
+        description: >
+          Mean active minutes per cycle, from the cycle's own event span. This is
+          TIME IN THE APP, not time at a customer — for on-site minutes use
+          mart_rep_customer_activity. APPROXIMATE.
+      - name: pct_cycles_search
+        description: >
+          Share of the rep's cycles that used search at least once, 0-1. A rate
+          over cycles, NOT a count — averaging it across weeks weights small
+          weeks equally with large ones.
+      - name: pct_cycles_filter
+        description: Share of cycles that filtered at least once, 0-1.
+      - name: pct_cycles_icon_click
+        description: Share of cycles that tapped any icon at least once, 0-1.
+      - name: pct_cycles_catalog_view
+        description: Share of cycles that opened the catalog at least once, 0-1.
+      - name: pct_cycles_promo
+        description: Share of cycles that entered the promo section at least once, 0-1.
+      - name: pct_cycles_backorder
+        description: Share of cycles that entered the backorder section at least once, 0-1.
+      - name: pct_cycles_history
+        description: Share of cycles that opened purchase history at least once, 0-1.
+      - name: pct_cycles_suggest
+        description: Share of cycles that opened suggested items at least once, 0-1.
+      - name: avg_search_per_cycle
+        description: Mean searches per cycle — depth, where pct_cycles_search is reach.
+      - name: avg_filter_per_cycle
+        description: Mean filter uses per cycle.
+      - name: avg_icon_click_per_cycle
+        description: Mean icon taps per cycle.
+      - name: avg_catalog_view_per_cycle
+        description: Mean catalog views per cycle.
+      - name: avg_promo_per_cycle
+        description: Mean promo-section events per cycle.
+      - name: avg_backorder_per_cycle
+        description: Mean backorder-section events per cycle.
+      - name: avg_history_per_cycle
+        description: Mean purchase-history events per cycle.
+      - name: avg_suggest_per_cycle
+        description: Mean suggested-items events per cycle.
       - name: avg_days_to_close
         description: Average calendar days from first cycle event to submit (approximate).
 
@@ -106,6 +259,17 @@ models:
         description: Minutes keying on the iPad (CatalogFS iOS).
       - name: android_tablet_minutes
         description: Minutes keying on the Android tablet (CatalogFS Android).
+      - name: paired_minutes
+        description: >
+          Minutes keyed while an iPad was BLE-paired to a PDA. Frequently 0 —
+          the app logs no reliable unpair event, so pairing is inferred from the
+          L1=17 connect events and expired after ble_pairing_expiry_minutes.
+      - name: inherited_event_count
+        description: >
+          Of event_count, how many events did NOT name the customer themselves
+          and had it filled in from a BLE pairing or the paired PDA. High values
+          mean the attribution leans on the pairing repair rather than on what
+          the app recorded — see customer_key_source in int_events_enriched.
       - name: keying_minutes
         description: >
           Always equals pda + ipad + android_tablet. Measured in stints (unbroken

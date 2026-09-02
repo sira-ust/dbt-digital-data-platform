@@ -690,6 +690,14 @@ models:
           Every device that recorded this visit, sorted and de-duplicated. A
           visit is no longer split per device, so this is normally more than one:
           reps carry 3-5 and they interleave.
+      - name: rep_day_offset_hours
+        description: >
+          Hours from UTC used to place this rep-day in local time. Published so
+          the shared-clock invariant with int_rep_customer_activity is TESTABLE
+          rather than merely asserted — the two models must read a visit and the
+          session inside it against the SAME offset, and an hour-wide
+          disagreement once made a two-hour on-site stretch report as three
+          minutes. See tests/assert_presence_and_activity_share_one_clock.sql.
       - name: owner_rep
         description: >
           The rep NAV says owns this account (salesperson_code). Not necessarily
