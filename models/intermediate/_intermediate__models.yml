@@ -638,14 +638,17 @@ models:
       app activity on purpose: a visit that produced no typing has no activity
       row to hang off, so joining GPS onto activity would erase exactly the case
       the business most wants counted. Pipeline, each step justified by a
-      measured failure: split per device (97% of impossible-travel hops are
-      device changes); drop hops over presence_max_mph; exclude the company
-      office (it is a customer row and would otherwise be every rep's
-      most-visited store); match each fix to the nearest customer within
-      presence_geofence_metres; group consecutive fixes into visits on
-      presence_visit_gap_minutes; drop visits under presence_min_dwell_minutes;
-      merge visits seen by two devices. Ambiguity is PUBLISHED not hidden —
-      21.2% of customers have another customer within 100m.
+      measured failure: drop hops over presence_max_mph within a device track
+      (97% of impossible-travel hops are device changes); exclude the company
+      office, test/internal accounts by key, and inactive accounts; match each
+      fix to EVERY customer within presence_geofence_metres, not just the
+      nearest; group consecutive fixes into visits on presence_visit_gap_minutes,
+      BRIDGING a gap when there is app activity for that same customer inside it;
+      drop visits under presence_min_dwell_minutes (0 — dwell no longer gates).
+      Visits are grouped per CUSTOMER, not per device: splitting on device made
+      3,825 of 6,266 August visits report 0 minutes and understated total on-site
+      time by roughly half. Ambiguity is PUBLISHED not hidden — 21.2% of
+      customers have another customer within 100m.
     columns:
       - name: customer_day_key
         description: sales_code-customer_key-activity_date; joins to the activity models.
@@ -683,5 +686,24 @@ models:
           order. "Nearest" is still a coin flip where two live customers sit
           within GPS error of each other. Exclude these from strict visit counts.
       - name: devices
-        description: Which device(s) recorded the visit, sorted.
+        description: >
+          Every device that recorded this visit, sorted and de-duplicated. A
+          visit is no longer split per device, so this is normally more than one:
+          reps carry 3-5 and they interleave.
+      - name: owner_rep
+        description: >
+          The rep NAV says owns this account (salesperson_code). Not necessarily
+          the rep whose GPS matched — used downstream to decide a visit that has
+          no device record naming the customer.
+      - name: is_owned_by_rep
+        description: >
+          True when owner_rep equals the rep who was there. A visit with NO app
+          activity requires this: standing near a store that belongs to another
+          rep is not evidence of calling on it.
+      - name: fix_ids
+        description: >
+          entity_id of every GPS fix behind this visit, sorted and de-duplicated.
+          Published so a consumer can ask whether two visits are the SAME MOMENT
+          rather than merely overlapping — one fix matches several customers, so
+          an identical fix set means one position seen through two geofences.
 

@@ -40,8 +40,12 @@ models:
       order M000182028" and implied he sent it there. Scenarios: remote /
       on-site / visited, keyed elsewhere / customer ordered online / visit only,
       no app / unknown. FULL OUTER JOIN of activity and presence, so a visit
-      that produced no typing still gets a row. EXACT per row: customer, device
-      split, order numbers, GPS distance. INFERRED: session boundaries (idle
+      that produced no typing still gets a row — but a 'visit only, no app' row
+      must ALSO be within var('presence_no_activity_max_metres') and be an
+      account this rep owns, and is dropped when its GPS fix set is identical to
+      an activity-backed visit's or when it is that visit's arrival leg. With no
+      device record the position is the only evidence, so it has to be better.
+      EXACT per row: customer, device split, order numbers, GPS distance. INFERRED: session boundaries (idle
       gaps, since cart events carry no order number) and which customer a fix
       belongs to when two share a geofence (see is_ambiguous).
     columns:
@@ -87,6 +91,15 @@ models:
                          "visit only, no app", "unknown"]
       - name: sessions
         description: Separate sittings on this customer in this scenario. 0 for visit-only rows.
+      - name: segments
+        description: >
+          Contiguous runs behind this row. >1 means first_touch_local to
+          last_touch_local is NOT one continuous stretch — the label alternated
+          across the day and this row is the min/max of every run carrying it.
+          On 2026-08-25 rep 030's NEW052 read 12:17-13:17 on-site and 12:18-13:21
+          elsewhere: overlapping ranges that were four alternating runs flattened
+          into two pairs. Read a span with segments > 1 as an envelope, not a
+          duration, and do not compare it against on_site_minutes.
       - name: pda_minutes
         description: Minutes keying on the PDA.
       - name: ipad_minutes
@@ -102,7 +115,11 @@ models:
       - name: on_site_minutes
         description: >
           Minutes physically at the customer, from GPS. Null/0 when the rep was
-          not there or there is no GPS.
+          not there or there is no GPS. Attributed to the ON-SITE row only, and
+          matched against the visit window padded by
+          var('presence_edge_tolerance_minutes') on both edges — those edges are
+          GPS SAMPLE times, not arrival and departure, and the device only
+          reports every ~16 minutes.
       - name: opened_at
         description: One HH:mm per session, ascending. Inferred from idle gaps, not a recorded login event.
       - name: first_touch_local

@@ -240,14 +240,13 @@ candidates as (
 -- picked the dead account — rep 026 got a 94-minute "visit only, no app" against
 -- HZJ001 on 2026-08-17 while the app showed him working YMA002 all along.
 --
--- Inactive customers are NOT excluded outright: a rep can legitimately call on a
--- lapsed account, and dropping them would silently move that visit to a
--- neighbour. They just lose every tie.
---
--- candidate_count counts ACTIVE candidates only, so is_ambiguous downstream
--- means "two live customers here", not "one live customer and three dead ones".
--- Filtering to active cuts shared points from 725 to 123 and colliding customers
--- from 1,662 to 308. Measured 2026-08-21.
+-- SUPERSEDED, kept because it explains the tie-break order above. Inactive
+-- customers USED to reach this point and merely lose every tie. They are now
+-- dropped in `stores`, so the is_active branch of the row_number() is dead code
+-- and candidate_count counts every candidate rather than only the live ones --
+-- is_ambiguous means the same thing either way. The reason for dropping them is
+-- in `stores`; the reason for the ordering is here, and the HZJ001/YMA002 case
+-- above is still what the app-open-then-nearest order protects against.
 ranked_candidates as (
 
     select
