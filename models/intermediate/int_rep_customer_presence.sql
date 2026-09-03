@@ -45,10 +45,27 @@
 
 with fixes as (
 
-    -- 01040100 Location-Success is the only geo-bearing event. customer_key on
-    -- the fix is NOT used for matching (it only says which customer was open in
-    -- the app, and 80% of fixes have none) — it is kept solely as a tie-break
-    -- signal in step 4.
+    -- EVERY geo-bearing event, not just 01040100. The old comment here claimed
+    -- "01040100 Location-Success is the only geo-bearing event"; that was wrong
+    -- and load-bearing. seed_event_codes flags 24 codes as has_geo, and across
+    -- August 2026 the ones this model ignored carried 30,708 positions -- 27% of
+    -- all located rows.
+    --
+    -- They are FRESH, not cached. Measured 2026-09-03 as the distance from each
+    -- to the nearest 01040100 fix in time (median):
+    --     Login: Username         3,374 rows    0 m
+    --     Order List: Sales       1,437 rows    1 m
+    --     Create Order            3,757 rows    2 m
+    --     Order Detail: Sales       510 rows   11 m
+    --     Catalog View            8,386 rows   14 m
+    -- The valuable ones are WORK events: a located Create Order says where the
+    -- rep stood when he keyed it, which is exactly the corroboration a visit
+    -- with no app record otherwise lacks.
+    --
+    -- THE BLE-ONLY FAMILY IS EXCLUDED. Same measurement: 09050000 median 595 m,
+    -- 09080000 281 m, and 09060000 3,675 KM. Those carry a stale or fabricated
+    -- position, so they are dropped by code rather than left to the speed filter
+    -- -- 595 m inside one reporting interval passes an 80 mph test comfortably.
     select
         e.entity_id,
         e.sales_code,
@@ -69,7 +86,8 @@ with fixes as (
         -- three minutes. The comment here used to CLAIM the two matched.
         e.event_at_local
     from {{ ref('int_events_enriched') }} as e
-    where e.description_code = '01040100'
+    where e.expects_geo
+      and e.description_code not in ('09050000', '09060000', '09070000', '09080000')
       and e.actor_type = 'sales'
       and e.sales_code is not null
       and e.latitude  is not null
