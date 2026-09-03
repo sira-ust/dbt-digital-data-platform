@@ -31,6 +31,21 @@ cycle_events as (
     from {{ ref('fct_events') }} e
     inner join cycles o
         on  e.username     = o.username
+        -- CUSTOMER KEY IS PART OF THE JOIN. Without it the match was username +
+        -- time window only, so an event falling inside two overlapping cycles was
+        -- counted into BOTH. Measured 2026-09-03 before this change: 5,330 of
+        -- 12,118 cycles (44%) overlapped the previous cycle for the same rep, and
+        -- days_to_close reaches 156, so a long cycle swept up months of unrelated
+        -- work. Every counted column here -- add_count, the click_* family, the
+        -- used_* flags, churn_ratio, behavior_segment -- was inflated by it.
+        --
+        -- The two keys share a domain: all 1,480 distinct order_customer_no values
+        -- exist in fct_events.customer_key.
+        --
+        -- Events with NO customer_key are now excluded rather than counted into
+        -- every open cycle. They cannot be attributed to one cycle, and spreading
+        -- them across all of them is what this change exists to stop.
+        and e.customer_key = o.order_customer_no
         and e.event_at_utc between o.opened_at
             and coalesce(o.submitted_at, {{ dbt.current_timestamp() }})
     where e.actor_type = 'sales'
