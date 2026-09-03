@@ -261,9 +261,22 @@ models:
         description: Minutes keying on the Android tablet (CatalogFS Android).
       - name: paired_minutes
         description: >
-          Minutes keyed while an iPad was BLE-paired to a PDA. Frequently 0 —
-          the app logs no reliable unpair event, so pairing is inferred from the
-          L1=17 connect events and expired after ble_pairing_expiry_minutes.
+          Minutes keyed while a BLE PAIRING WAS ACTIVE. While paired the rep
+          drives the iPad from the PDA and events alternate every few seconds, so
+          the two count as ONE workstation and this time is EXCLUDED from
+          pda_minutes and ipad_minutes rather than added to them. That is why the
+          August total here (7,997) can exceed total ipad_minutes (6,321).
+
+          DOES NOT MEAN "used both devices". device_group is set to paired
+          whenever is_ble_paired is true, even when only one device is in use.
+          For "the rep used both", test ipad_minutes > 0 AND pda_minutes > 0 —
+          1,474 rows satisfy that with paired_minutes = 0, i.e. both devices, no
+          pairing.
+
+          Frequently 0: the app logs no reliable unpair event, so pairing is
+          inferred from the L1=17 connect events and expired after
+          ble_pairing_expiry_minutes. A pairing whose events are telemetry only,
+          a single event, or under ~30 seconds correctly rounds to 0.
       - name: inherited_event_count
         description: >
           Of event_count, how many events did NOT name the customer themselves
@@ -272,10 +285,14 @@ models:
           the app recorded — see customer_key_source in int_events_enriched.
       - name: keying_minutes
         description: >
-          Always equals pda + ipad + android_tablet. Measured in stints (unbroken
-          runs on one device) in seconds and rounded once per device, so a
-          PDA -> iPad -> PDA handoff is never billed to either and short bursts
-          are not inflated.
+          Always equals pda + ipad + android_tablet + PAIRED. The four device
+          columns are mutually exclusive, so paired_minutes is a component of
+          this total and NOT a subset of the other three — leaving it out
+          understates keying time on the 1,839 rows that have any (verified
+          2026-09-02: the four-way sum matches all 27,415 rows, the three-way
+          only 25,576). Measured in stints (unbroken runs on one device_group) in
+          seconds and rounded once per device, so a PDA -> iPad -> PDA handoff is
+          never billed to either and short bursts are not inflated.
       - name: on_site_minutes
         description: >
           Minutes physically at the customer, from GPS. Null/0 when the rep was
