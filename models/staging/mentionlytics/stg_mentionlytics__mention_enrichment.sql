@@ -20,6 +20,13 @@ typed as (
         mentioned_products,
         ingredients,
         brands,
+        -- v4 prompt: WHAT THE POST IS ABOUT, strict subsets of mentioned_dishes /
+        -- mentioned_products. Null for any mention still labelled at v3 or earlier —
+        -- int_social_concept_trends treats null as "role unknown" rather than
+        -- "not a subject", so a partly re-labelled corpus degrades instead of
+        -- silently reporting every older mention as incidental.
+        subject_dishes,
+        subject_products,
         cast(confidence as double)                                              as confidence,
         cast(enriched_at as timestamp)                                          as enriched_at,
         nullif(trim(cast(model_version as {{ dbt.type_string() }})), '')        as model_version
@@ -44,6 +51,8 @@ select
     mentioned_products,
     ingredients,
     brands,
+    subject_dishes,
+    subject_products,
     confidence,
     enriched_at,
     model_version

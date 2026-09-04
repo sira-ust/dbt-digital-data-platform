@@ -100,7 +100,17 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # Databricks-hosted; billed via Databricks
-PROMPT_VERSION = "v3"                    # bump when INSTRUCTIONS change (stored in model_version).
+PROMPT_VERSION = "v4"                    # bump when INSTRUCTIONS change (stored in model_version).
+                                         # v4 = added subject_dishes / subject_products: WHAT THE POST
+                                         #      IS ABOUT, as opposed to everything it names. The
+                                         #      existing arrays are exhaustive by design, which made a
+                                         #      recipe caption listing "2 tbsp oyster sauce" count as
+                                         #      an oyster-sauce mention indistinguishable from a Haday
+                                         #      oyster-sauce advert. Measured on 2026-W35: of 20 oyster
+                                         #      sauce mentions, 2 were about oyster sauce and 17 were
+                                         #      recipes using it. Both are real signals for a
+                                         #      distributor — ingredient demand and product buzz — but
+                                         #      they are different signals and were being summed.
                                          # v2 = added mentioned_products (sellable-SKU signal).
                                          # v3 = several mentions per call (see MENTIONS_PER_CALL).
                                          #      Bumped even though the per-mention task is unchanged:
@@ -110,7 +120,17 @@ PROMPT_VERSION = "v3"                    # bump when INSTRUCTIONS change (stored
                                          #      say how a label was made.
                                          # A bump re-labels the recent window (see BACKFILL_WEEKS).
 MAX_TOKENS_BASE = 400                    # envelope + slack
-MAX_TOKENS_PER_MENTION = 260             # 4 arrays + 3 scalars comfortably fits
+MAX_TOKENS_PER_MENTION = 330             # 6 arrays + 3 scalars comfortably fits. Raised from 260
+                                         # with the v4 subject arrays: the reply is capped at
+                                         # BASE + this x len(batch), and a cap that fits the old
+                                         # four arrays truncates the JSON mid-object at ten
+                                         # mentions per call. A truncated reply is not a partial
+                                         # result — extract_json fails and the whole batch is
+                                         # retried, which is how the resolver's grouping pass
+                                         # silently produced 'no duplicates' for a day (see
+                                         # resolve_trending_concepts.propose_groups). The two new
+                                         # arrays are subsets capped at 3 entries total, so this
+                                         # is generous rather than tight.
 CONCURRENCY = 8                          # parallel serving calls — lower if you hit FMAPI rate limits
 # Mentions per LLM call. The instruction block is ~900 tokens and used to be re-sent
 # once per mention: at 12.8k mentions that is the bulk of the spend, and pure
@@ -224,8 +244,42 @@ missing, no extras, no invented ids. Each entry has exactly these keys:
   "mentioned_products": [string],// SELLABLE PRODUCTS — see the rule below
   "ingredients": [string],       // notable ingredients: "fish sauce", "coconut milk"...
   "brands": [string],            // brand / restaurant / product names
+  "subject_dishes": [string],    // WHAT THE POST IS ABOUT — see the rule below
+  "subject_products": [string],  // WHAT THE POST IS ABOUT — see the rule below
   "confidence": number           // 0.0–1.0, your overall certainty for THIS mention
 }
+
+subject_dishes / subject_products — WHAT THE POST IS ABOUT, as opposed to what it \
+happens to name. Both are STRICT SUBSETS: every string here must be copied \
+character-for-character from mentioned_dishes / mentioned_products respectively. \
+Never introduce a new string here, and never put a dish in subject_products or a \
+product in subject_dishes.
+
+The test is what the post is FOR. If a reader would say "this post is about X", X is \
+a subject. If X only appears because it is a step, an ingredient, or one item on a \
+menu, it is NOT a subject — it stays in the exhaustive array only.
+
+  A lemongrass-chicken recipe whose marinade calls for fish sauce and oyster sauce:
+      mentioned_dishes   = ["Vietnamese lemongrass chicken"]
+      mentioned_products = ["fish sauce", "oyster sauce", "condensed milk"]
+      subject_dishes     = ["Vietnamese lemongrass chicken"]
+      subject_products   = []            <- the sauces are ingredients, not the point
+  A brand post for Haday premium oyster sauce:
+      subject_products   = ["oyster sauce"]
+  "Today's questionable decision: fish sauce chimichurri":
+      subject_products   = ["fish sauce"]     <- the post exists because of it
+  A restaurant round-up listing six dishes and an iced coffee:
+      subject_dishes     = []            <- it is about the restaurant, not one dish
+      subject_products   = []
+  A dish NAMED for the product ("fried pork with fish sauce", "หมูทอดน้ำปลา"):
+      subject_dishes     = ["fried pork with fish sauce"]
+      subject_products   = ["fish sauce"]     <- the product defines the dish
+
+BE STRICT AND BE WILLING TO RETURN EMPTY. Most posts are about ONE thing, many are \
+about none in particular (a haul, a menu, a restaurant review), and two empty \
+subject arrays are a perfectly good answer. At most 3 entries across BOTH arrays \
+combined — a post about five things is about nothing. Listing everything here \
+recreates the exact problem these fields exist to solve.
 
 mentioned_products — THE RULE THAT MATTERS MOST HERE. This is the only array a \
 food DISTRIBUTOR can act on, so it is deliberately narrow: a product a grocery \
@@ -265,6 +319,7 @@ exactly as written."""
 _REQUIRED_KEYS = {
     "is_food_relevant", "is_spam", "themes", "mentioned_dishes",
     "mentioned_products", "ingredients", "brands", "confidence",
+    "subject_dishes", "subject_products",
 }
 
 
@@ -422,6 +477,8 @@ def _dbx_enrichment_schema():
         StructField("mentioned_products", arr),
         StructField("ingredients", arr),
         StructField("brands", arr),
+        StructField("subject_dishes", arr),
+        StructField("subject_products", arr),
         StructField("confidence", DoubleType()),
         StructField("enriched_at", TimestampType()),
         StructField("model_version", StringType()),
@@ -466,6 +523,7 @@ def prefilter_record(m, enriched_at):
         "is_spam": True,
         "themes": [], "mentioned_dishes": [], "mentioned_products": [],
         "ingredients": [], "brands": [],
+        "subject_dishes": [], "subject_products": [],
         "confidence": 1.0,
         "enriched_at": enriched_at,
         "model_version": PREFILTER_VERSION,
@@ -572,6 +630,21 @@ def classify_batch(client, mentions, concurrency, per_call=None):
     return out
 
 
+def _subset(claimed, exhaustive):
+    """Keep only the claimed subjects that really appear in the exhaustive array.
+
+    Compared case- and space-insensitively so "Fish Sauce" matches "fish sauce", but
+    the value KEPT is the exhaustive array's spelling — that is the string the ranking
+    folds into a concept key, so a subject that differs from it by even a space would
+    never join up. Order follows the exhaustive array, so the output is stable across
+    runs regardless of what order the model listed them in.
+    """
+    if not claimed:
+        return []
+    want = {str(c).strip().lower() for c in claimed if str(c).strip()}
+    return [str(x) for x in (exhaustive or []) if str(x).strip().lower() in want]
+
+
 def to_records(attrs_by_id, enriched_at):
     model_version = f"{MODEL}/{PROMPT_VERSION}"
     records = []
@@ -585,6 +658,14 @@ def to_records(attrs_by_id, enriched_at):
             "mentioned_products": list(a["mentioned_products"]),
             "ingredients": list(a["ingredients"]),
             "brands": list(a["brands"]),
+            # SUBSETS, enforced here rather than trusted: the prompt says to copy
+            # these from the exhaustive arrays, and a model that paraphrases instead
+            # ("lemongrass chicken" for "Vietnamese lemongrass chicken") would create
+            # a subject string that matches no concept downstream and silently mark
+            # the mention as being about nothing. Intersecting is cheap and makes the
+            # subset property true by construction instead of by instruction.
+            "subject_dishes": _subset(a.get("subject_dishes"), a["mentioned_dishes"]),
+            "subject_products": _subset(a.get("subject_products"), a["mentioned_products"]),
             "confidence": float(a["confidence"]),
             "enriched_at": enriched_at,
             "model_version": model_version,

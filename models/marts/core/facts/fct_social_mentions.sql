@@ -86,6 +86,12 @@ enriched as (
         e.mentioned_products,
         e.ingredients,
         e.brands,
+        -- the SUBJECT arrays: what the post is about, as opposed to everything it
+        -- names. Kept beside the exhaustive arrays rather than replacing them —
+        -- "17 recipes use oyster sauce" and "2 posts about oyster sauce" are both
+        -- real signals for a distributor, and the point is to stop summing them.
+        e.subject_dishes,
+        e.subject_products,
         e.confidence,
         e.enriched_at,
         e.model_version
@@ -138,6 +144,8 @@ select
     mentioned_products,
     ingredients,
     brands,
+    subject_dishes,
+    subject_products,
     confidence,
     enriched_at,
     model_version

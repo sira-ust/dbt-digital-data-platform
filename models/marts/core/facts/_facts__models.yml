@@ -228,5 +228,15 @@ models:
         description: Multi-label ingredients (array) — includes raw commodities; not ranked. See mentioned_products.
       - name: brands
         description: Multi-label brands / restaurants / products / retailers (array).
+      - name: subject_dishes
+        description: >
+          The dishes the post is ABOUT (strict subset of mentioned_dishes, prompt v4).
+          Null while a mention is still labelled at v3.
+      - name: subject_products
+        description: >
+          The products the post is ABOUT (strict subset of mentioned_products).
+          int_social_concept_trends turns this into a per-mention role — subject vs
+          ingredient — which gates which posts become source_links and splits
+          mention_count on the board.
       - name: confidence
         description: LLM confidence 0.0–1.0.

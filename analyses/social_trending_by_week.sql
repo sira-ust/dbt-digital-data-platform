@@ -26,8 +26,13 @@
 -- Read `mentions` before believing `movement`: the item board runs on small numbers, so
 -- "up 40" on 3 mentions is noise. Movement is meaningful in double digits.
 --
--- `in_stock`, `our_product` and `action_signal` are always about TODAY, even on an older
+-- `in_stock`, `our_products` and `action_signal` are always about TODAY, even on an older
 -- week's row — they describe what to do now, not what was true then.
+--
+-- `our_products` lists EVERY SKU we stock the trending item under (our_sku_count says how
+-- many), matched brand first and then rotating across the others. It is derived from item
+-- NAMES, so it is a floor: a SKU whose name uses different words is left out rather than
+-- guessed at. Read a short list as "these are definitely it", not "this is all we have".
 
 with observed_weeks as (
 
@@ -89,9 +94,25 @@ select
 
     -- do we sell it, and what to do about it
     b.result_type,
-    b.matched_item_name                                      as our_product,
+    -- EVERY SKU we stock this under, not one. matched_item_name is a single part number
+    -- because the resolver returns a scalar, so this column used to read "LKK GREEN
+    -- PANDA OYSTER SAUCE" while we carried 16 oyster sauces including six Dragonfly.
+    -- carried_items leads with the resolver's pick and then rotates across brands.
+    b.carried_sku_count                                      as our_sku_count,
+    concat_ws(', ', b.carried_items)                         as our_products,
+    -- in_stock is about ONE part number — the resolver's representative pick, named
+    -- here so the number is attributable. It is NOT "can we ship this today": the other
+    -- SKUs in our_products have their own stock, so a 'restock' beside a long
+    -- our_products list means that particular SKU is out, not the product.
+    b.matched_item_name                                      as stock_checked_on,
     b.current_in_stock                                       as in_stock,
+    -- what to offer when we do NOT carry the thing itself: substitutes, or the
+    -- ingredient basket for a dish
     concat_ws(', ', b.recommended_items)                     as suggested_items,
+    -- real SKUs the resolver found but was not confident enough to recommend — shown
+    -- only on a 'none' row, and the reason action_signal says review_nearest instead of
+    -- source_new. Worth a look before anyone goes sourcing.
+    concat_ws(', ', b.nearest_items)                         as nearest_items,
     b.action_signal,
 
     -- EVERY link, as the array itself. The mart holds up to 5 posts per concept and one

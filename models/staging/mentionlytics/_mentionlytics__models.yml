@@ -96,6 +96,16 @@ models:
         description: Multi-label ingredients (array) — a loose list including raw commodities. Not ranked; feeds the resolver's basket side. See mentioned_products for the sellable-product signal.
       - name: brands
         description: Multi-label brand / restaurant / product / retailer names (array).
+      - name: subject_dishes
+        description: >
+          What the post is ABOUT — a strict subset of mentioned_dishes, verbatim
+          (enrichment prompt v4). NULL for mentions labelled at v3 or earlier, which
+          int_social_concept_trends reads as "role unknown", not "not a subject".
+      - name: subject_products
+        description: >
+          What the post is ABOUT — a strict subset of mentioned_products, verbatim.
+          This is what separates "17 recipes called for oyster sauce" from "2 posts
+          about oyster sauce"; before it existed, the board summed them.
       - name: confidence
         description: Model self-rated certainty, 0.0–1.0.
       - name: enriched_at

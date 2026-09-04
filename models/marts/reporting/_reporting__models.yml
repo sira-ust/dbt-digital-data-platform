@@ -577,8 +577,9 @@ models:
       Per trending thing it answers: what's trending and how hard (rank, mentions,
       score, mention_share); whether it's moving (rank_change, mention_share_change);
       where to see it (source_links); do we carry it (result_type + matched item +
-      CURRENT stock); if not, what similar to offer (recommended_items); and what to
-      DO (action_signal). Ranking is deterministic and author-diversity based (see
+      CURRENT stock, and carried_items — every SKU we stock it under); if not,
+      what similar to offer (recommended_items, or nearest_items when nothing cleared
+      the bar); and what to DO (action_signal). Ranking is deterministic and author-diversity based (see
       int_social_concept_trends for the score's formula and the internals behind the
       rank, which are deliberately not republished here); the concept->SKU
       link comes from the OFFLINE LLM resolution — dbt never calls the LLM. A concept
@@ -649,6 +650,26 @@ models:
                 where: "is_top_n"
       - name: mention_count
         description: Distinct food-relevant, non-spam mentions behind the trend THAT WEEK.
+      - name: subject_mentions
+        description: >
+          Of mention_count, how many posts are ABOUT this concept rather than merely
+          naming it. Two brand posts plus seventeen recipes is a "promote it as a
+          cooking staple" story; twenty brand posts is a "the product itself is
+          trending" story — the same mention_count, opposite decisions.
+      - name: ingredient_mentions
+        description: >
+          Of mention_count, how many named it as an ingredient, a step, or one item on
+          a menu. Kept inside mention_count on purpose: for a distributor this is real
+          ingredient demand, and it is the reason someone orders a case.
+      - name: unlabelled_mentions
+        description: >
+          Of mention_count, how many predate enrichment prompt v4 and so carry no role.
+          The three add to mention_count exactly (assert_social_mention_roles_sum); this
+          column falls to zero once the v4 re-label finishes.
+      - name: has_subject_evidence
+        description: >
+          False means no post was about this concept, so source_links show posts that
+          merely named it — the best evidence available, but not proof of a trend.
       - name: mention_share
         description: >
           mention_count as a share of all (concept, mention) pairs that week in that
@@ -717,10 +738,17 @@ models:
         description: Name of the matched item, joined authoritatively from int_jdawms_items_active.
       - name: current_in_stock
         description: >
-          1 if the matched item is shippable in the LATEST stock snapshot week (CABOT
-          only) — TODAY's stock, not stock as of this row's week. Named current_* for
-          that reason: on a historical row it is still today's number, because
-          action_signal is a decision about now.
+          BOOLEAN. true if the matched item is shippable in the LATEST stock snapshot
+          week (CABOT only) — TODAY's stock, not stock as of this row's week. Named
+          current_* for that reason: on a historical row it is still today's number,
+          because action_signal is a decision about now.
+          Three states, and the difference matters: true = shippable, false = we hold a
+          stock record and it says not shippable, null = there is no stock record for
+          that part number at all, which is not the same as knowing it is out.
+          action_signal treats null as not-in-stock; a reader should not.
+          It describes ONE part number — matched_prtnum — not the product. When
+          carried_prtnums lists several SKUs, the others have their own stock, so a
+          'restock' next to a long carried_items is about that SKU, not the product.
       - name: current_shippable_qty
         description: End-of-week shippable units for the matched item in the latest snapshot week (see current_in_stock).
       - name: recommended_prtnums
@@ -735,6 +763,56 @@ models:
           Display names parallel to recommended_prtnums, taken from the item master
           (authoritative), not the LLM's self-reported names. Length equality with
           recommended_prtnums is asserted by assert_social_recommendations_aligned.
+      - name: carried_prtnums
+        description: >
+          EVERY SKU of this product we stock, matched_prtnum included and listed first —
+          our other brands, sizes and pack formats of it (e.g. the Dragonfly and Maekrua
+          oyster sauces alongside the LKK the resolver named). These are not
+          substitutes: "Oyster Sauce" is a product we carry, and these are the part
+          numbers it is carried under; matched_prtnum is the resolver's representative
+          pick, not a claim that one SKU is the real answer. Populated ONLY where
+          result_type = 'carried'. Derived deterministically from the item master, NOT
+          from the LLM: a SKU must sit in the matched item's item_family AND carry every
+          concept token the matched item's own name uses.
+          NOT TRUNCATED — the list answers "what do we carry", so cutting it short
+          would make it wrong rather than brief; all 16 of our oyster sauces appear.
+          social_carried_skus_max is a runaway guard set far above any real product
+          family, and the test fails if it ever actually bites. After the matched item
+          the list rotates across brands (Dragonfly, Maekrua, LKK, then their second
+          entries) so one brand's part-number block cannot fill it, in-stock first.
+
+          Matching is on canonical name tokens: warehouse shorthand is expanded through
+          seed_jdawms_name_abbreviations (SCE -> SAUCE, PWDR -> POWDER) and plurals are
+          folded, so "LKK PREMIUM OYSTER SCE18OZ(12)" is recognised as an oyster sauce
+          and "rice noodles" meets "RICE NOODLE". Precision is preferred over reach: a
+          SKU whose name uses different words is left out rather than guessed at, so
+          rice noodles does NOT pull in rice sticks or vermicelli, and condensed milk
+          does not pull in condensed creamers. Read a short list as "these are
+          definitely it", not "this is all we have".
+      - name: carried_items
+        description: >
+          Display names parallel to carried_prtnums, from the item master. Length
+          equality, the carried-only rule, the presence of matched_prtnum in its own
+          list, and that the runaway guard is not truncating are all asserted by
+          assert_social_carried_skus_aligned.
+      - name: carried_sku_count
+        description: >
+          How many SKUs carried_prtnums holds — the number to read for "how many ways do
+          we stock this". Equal to the array length by construction; exposed as a scalar
+          so a report can sort or filter on it without unnesting.
+      - name: nearest_prtnums
+        description: >
+          Array of WMS part numbers the resolver DID name for this concept but that did
+          not survive — either the verifier rejected them, or the confidence floor
+          suppressed the whole match. Populated ONLY where result_type = 'none', and
+          verified against int_jdawms_items_active exactly like recommended_prtnums.
+          These are NOT a recommendation: they are what a human should look at before
+          accepting that we carry nothing. Null on any row with a real match.
+      - name: nearest_items
+        description: >
+          Display names parallel to nearest_prtnums, from the item master
+          (authoritative). Length equality is asserted by
+          assert_social_nearest_items_aligned.
       - name: match_confidence
         description: >
           The resolver's VERIFIED confidence in the match, 0.0–1.0 (a second,
@@ -745,9 +823,11 @@ models:
         description: >
           promote_now (carried + in stock), restock (carried + OOS),
           offer_substitute (not carried, similar exists), promote_ingredients
-          (dish/category basket), source_new (nothing carried), monitor
-          (unresolved / no signal). Always about TODAY's stock — see current_in_stock.
+          (dish/category basket), review_nearest (no confident match, but the resolver
+          named real active SKUs — see nearest_items), source_new (nothing carried and
+          nothing near), monitor (unresolved / no signal). Always about TODAY's stock —
+          see current_in_stock.
         tests:
           - accepted_values:
               arguments:
-                values: [promote_now, restock, offer_substitute, promote_ingredients, source_new, monitor]
+                values: [promote_now, restock, offer_substitute, promote_ingredients, review_nearest, source_new, monitor]
