@@ -171,6 +171,7 @@ vars:
                                      # grain than a multi-week one: expect gaps in trajectories
   social_trend_link_count: 5         # source_links per concept-week, top links by reach then engagement
   social_resolve_min_confidence: 0.7 # below this, ANY match (carried/substitute/basket) is suppressed
+  social_carried_skus_max: 200       # RUNAWAY GUARD only — the SKU list is not meant to truncate
                                      # (shown as none/source_new). Inventory wins only when confident — a
                                      # 0.45 carried guess (sushi -> corn oil) is dropped like a shaky basket.
   # TWO ranking classes, ranked SEPARATELY so a flood of viral dishes can't crowd

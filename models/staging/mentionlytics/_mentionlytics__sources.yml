@@ -136,6 +136,22 @@ sources:
             description: Multi-label ingredients named (array of strings). A loose list of what the post mentions — raw commodities included; NOT the sellable-product signal (see mentioned_products). Feeds the resolver's ingredient-basket side.
           - name: brands
             description: Multi-label brand / restaurant / product / retailer names (array of strings).
+          - name: subject_dishes
+            description: >
+              WHAT THE POST IS ABOUT, as opposed to everything it names — a STRICT
+              SUBSET of mentioned_dishes, verbatim. A recipe caption that lists
+              "2 tbsp oyster sauce" keeps oyster sauce in mentioned_dishes and
+              leaves it OUT of here; a Haday oyster-sauce advert puts it in both.
+              Enrichment prompt v4. NULL (not empty) for any mention still labelled
+              at v3 or earlier — null means "role unknown", never "not a subject".
+          - name: subject_products
+            description: >
+              WHAT THE POST IS ABOUT, as opposed to everything it names — a STRICT
+              SUBSET of mentioned_products, verbatim. A recipe caption that lists
+              "2 tbsp oyster sauce" keeps oyster sauce in mentioned_products and
+              leaves it OUT of here; a Haday oyster-sauce advert puts it in both.
+              Enrichment prompt v4. NULL (not empty) for any mention still labelled
+              at v3 or earlier — null means "role unknown", never "not a subject".
           - name: confidence
             description: Model's overall self-rated certainty, 0.0–1.0.
           - name: enriched_at

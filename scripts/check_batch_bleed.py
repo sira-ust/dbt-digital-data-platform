@@ -47,7 +47,7 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 import enrich_mentions as E
 
 ARRAY_FIELDS = ["mentioned_dishes", "mentioned_products", "ingredients",
-                "themes", "brands"]
+                "themes", "brands", "subject_dishes", "subject_products"]
 SCALAR_FIELDS = ["is_food_relevant", "is_spam", "sentiment_normalized"]
 
 

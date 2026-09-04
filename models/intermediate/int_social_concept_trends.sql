@@ -103,7 +103,12 @@ with mentions as (
         follower_count,
         link,
         mentioned_dishes,
-        mentioned_products
+        mentioned_products,
+        -- v4 enrichment: what the post is ABOUT, strict subsets of the two arrays
+        -- above. NULL for any mention still labelled at v3 — see role_rank below,
+        -- which keeps null as its own state rather than reading it as "incidental".
+        subject_dishes,
+        subject_products
     from {{ ref('fct_social_mentions') }}
 
 ),
@@ -259,12 +264,27 @@ mentions_normalized as (
     select
         m.mention_id, m.profile, m.channel, m.posted_date, m.follower_count, m.link,
         m.mentioned_dishes, m.mentioned_products,
+        m.subject_dishes, m.subject_products,
         m.week_start, m.week_end,
         m.engagement, m.views,
         case when cb.channel_median_engagement > 0
              then m.engagement * 1.0 / cb.channel_median_engagement else 0 end as engagement_ratio,
         case when cb.channel_median_views > 0
-             then m.views * 1.0 / cb.channel_median_views else 0 end           as views_ratio
+             then m.views * 1.0 / cb.channel_median_views else 0 end           as views_ratio,
+        -- REACH, on terms that survive a mixed-channel corpus. Neither raw metric
+        -- works alone, because coverage is wildly uneven (measured 2026-09-03 over
+        -- ~37k mentions since July): Instagram is 65% of the corpus and reports a
+        -- view count on 0.3% of its posts, with median engagement 1; TikTok reports
+        -- views on 100% and has median engagement 586. Sorting on raw views would
+        -- give two thirds of the data no signal and hand every slot to TikTok;
+        -- sorting on raw engagement would call a typical Instagram post a failure.
+        -- Both ratios are already divided by that channel's own median for that
+        -- week, and both are 0 where the channel does not report the metric, so the
+        -- sum uses whichever measure the channel actually has.
+        (case when cb.channel_median_engagement > 0
+              then m.engagement * 1.0 / cb.channel_median_engagement else 0 end)
+      + (case when cb.channel_median_views > 0
+              then m.views * 1.0 / cb.channel_median_views else 0 end)          as reach_ratio
     from scoped as m
     left join channel_baseline as cb
         on cb.channel    = m.channel
@@ -283,8 +303,12 @@ dish_concepts_raw as (
     select
         mention_id, profile, channel, posted_date, engagement, views,
         engagement_ratio, views_ratio, follower_count, link,
-        week_start, week_end,
+        week_start, week_end, reach_ratio,
         'dish'                                                          as concept_class,
+        -- the subject array for THIS class. A dish is a subject only if it is in
+        -- subject_dishes; a product only if it is in subject_products. Crossing them
+        -- would make every recipe's dish mark its ingredients as subjects too.
+        subject_dishes                                                  as subject_arr,
         {{ unnest('mentioned_dishes') }}                                as concept
     from mentions_normalized
 
@@ -295,8 +319,9 @@ item_concepts_raw as (
     select
         mention_id, profile, channel, posted_date, engagement, views,
         engagement_ratio, views_ratio, follower_count, link,
-        week_start, week_end,
+        week_start, week_end, reach_ratio,
         'item'                                                          as concept_class,
+        subject_products                                                as subject_arr,
         {{ unnest('mentioned_products') }}                              as concept
     from mentions_normalized
 
@@ -320,8 +345,26 @@ concepts_degloss as (
         mention_id, profile, channel, posted_date, engagement, views,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
+        reach_ratio,
         concept_class,
         concept,
+        -- ROLE: is this post ABOUT the concept, or does it merely name it?
+        --   2 = subject     the post exists because of this thing
+        --   1 = ingredient  named as a step, an ingredient, or one line on a menu
+        --   0 = unknown     mention not yet re-labelled at prompt v4
+        -- Decided on the RAW string, before deglossing and folding, because that is
+        -- the spelling enrich_mentions._subset guarantees the subject array holds.
+        -- Comparing after folding would need the same fold applied to the array and
+        -- would silently return "not a subject" if the two ever drifted.
+        --
+        -- Three states, not a boolean: between deploying this model and finishing
+        -- the v4 re-label the corpus is a mix, and treating an unlabelled mention as
+        -- "not a subject" would report almost the whole board as incidental.
+        case
+            when subject_arr is null                        then 0
+            when {{ array_contains('subject_arr', 'concept') }} then 2
+            else 1
+        end                                                             as role_rank,
         {{ strip_parenthetical_gloss('concept') }}                      as concept_deglossed
     from concepts_raw
     where nullif(trim(concept), '') is not null
@@ -334,6 +377,8 @@ concepts as (
         mention_id, profile, channel, posted_date, engagement, views,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
+        reach_ratio,
+        role_rank,
         concept_class,
         -- fold Vietnamese diacritic/case/spacing variants to one key so the same
         -- thing (bánh khọt / banh khot) ranks once, not several times
@@ -425,8 +470,8 @@ grouped as (
 
     select
         c.mention_id, c.profile, c.channel, c.posted_date, c.engagement, c.views,
-        c.engagement_ratio, c.views_ratio, c.follower_count, c.link,
-        c.week_start, c.week_end, c.concept_class,
+        c.engagement_ratio, c.views_ratio, c.reach_ratio, c.follower_count, c.link,
+        c.week_start, c.week_end, c.concept_class, c.role_rank,
         coalesce(g.group_primary, c.concept_norm)                       as concept_norm
     from concepts_kept as c
     left join concept_groups as g
@@ -445,7 +490,7 @@ concept_mentions as (
     select distinct
         week_start, week_end, concept_class,
         concept_norm, mention_id, profile, channel, posted_date,
-        engagement, views, engagement_ratio, views_ratio,
+        engagement, views, engagement_ratio, views_ratio, reach_ratio,
         follower_count, link,
         -- anonymised placeholder, confirmed with Mentionlytics as an Instagram
         -- API limitation (~97% of Instagram rows) — extend this list if another
@@ -453,6 +498,22 @@ concept_mentions as (
         (profile = 'Instagram User')                                    as is_anon,
         concat(channel, ':', lower(trim(profile)))                      as author_key
     from grouped
+
+),
+
+-- Role at the (week, class, concept, mention) grain. max() resolves the folding
+-- collision described above and prefers subject over ingredient: if any spelling of
+-- the concept in this post was the subject, the post is about it.
+concept_roles as (
+
+    select
+        week_start,
+        concept_class,
+        concept_norm,
+        mention_id,
+        max(role_rank)                                                  as role_rank
+    from grouped
+    group by 1, 2, 3, 4
 
 ),
 
@@ -472,16 +533,41 @@ mention_concept_counts as (
 
 ),
 
+-- how many DISTINCT things this mention names IN TOTAL, across BOTH classes — the
+-- focus proxy source_links ranks on. Separate from mention_concept_counts on purpose:
+-- that one is the scoring divisor and is per-class, because the two boards are
+-- independent rank spaces and cross-normalising them would let a dish-heavy post
+-- deflate an item's score. This one is deliberately NOT per-class, because "is this
+-- post about one thing" is a property of the whole post: a restaurant round-up naming
+-- six dishes and one product is unfocused even though it names ONE product. Reads
+-- `grouped`, so the stoplist and concept grouping both apply and salt/water/oil cannot
+-- inflate the breadth.
+mention_concept_breadth as (
+
+    select
+        mention_id,
+        count(distinct concept_norm)                                    as n_concepts_all
+    from grouped
+    group by 1
+
+),
+
 concept_mentions_shared as (
 
     select
         cm.*,
+        cr.role_rank,
         cm.engagement_ratio / mcc.n_concepts                            as engagement_share,
         cm.views_ratio      / mcc.n_concepts                            as views_share
     from concept_mentions as cm
     inner join mention_concept_counts as mcc
         on mcc.mention_id    = cm.mention_id
        and mcc.concept_class = cm.concept_class
+    inner join concept_roles as cr
+        on cr.week_start    = cm.week_start
+       and cr.concept_class = cm.concept_class
+       and cr.concept_norm  = cm.concept_norm
+       and cr.mention_id    = cm.mention_id
 
 ),
 
@@ -505,6 +591,22 @@ agg as (
         -- named-author companion: real, non-anonymised authors only
         count(distinct case when not is_anon then author_key end)      as named_authors,
         sum(case when not is_anon then 1 else 0 end)                   as named_mentions,
+        -- THE SPLIT. mention_count stays the total on purpose: for a distributor,
+        -- "17 recipes called for oyster sauce" is real ingredient demand and belongs
+        -- in the count. What it must not do is masquerade as product conversation.
+        -- Measured on 2026-W35, oyster sauce had 20 mentions: 2 posts about oyster
+        -- sauce (both Haday brand posts) and 17 recipes using it. Two brand posts
+        -- plus 17 recipes is a "promote it as a cooking staple" story; 20 brand posts
+        -- would be a "the product itself is trending" story. Same number, opposite
+        -- decisions — so both are published and neither is inferred from the other.
+        --
+        -- unlabelled_mentions is the honest denominator while the v4 re-label is in
+        -- flight: subject + ingredient + unlabelled = mention_count always, so a
+        -- reader can see how much of the split is actually known yet. It goes to zero
+        -- once the backfill completes.
+        sum(case when role_rank = 2 then 1 else 0 end)                 as subject_mentions,
+        sum(case when role_rank = 1 then 1 else 0 end)                 as ingredient_mentions,
+        sum(case when role_rank = 0 then 1 else 0 end)                 as unlabelled_mentions,
         count(distinct channel)                                        as channel_count
     from concept_mentions_shared
     group by 1, 2, 3
@@ -572,22 +674,61 @@ scored as (
 
 ),
 
--- top-N source links per (week, class, concept): highest reach first, then engagement
+-- top-N source links per (week, class, concept): RELEVANCE GATES, REACH SORTS.
+--
+-- These links are EVIDENCE — a human opens them to see the trend — so the two things
+-- that matter are that the post is genuinely about the concept, and that it is the
+-- biggest such post. Those used to be in tension: with no relevance signal, ordering
+-- by reach put ingredient-list posts at the top of every concept's evidence (2026-W35,
+-- "condensed milk": the top link was a lemongrass-chicken recipe whose marinade calls
+-- for a tablespoon of it), and the first fix for that ordered by how FEW things a post
+-- named, which demoted a 500k-view post about the concept beneath a 1-like post that
+-- happened to be terse.
+--
+-- The v4 role label dissolves the tension: relevance becomes a FILTER and reach is
+-- free to be the SORT. Tiers, best first:
+--   0  known subject      the post is about this concept
+--   1  unlabelled, terse  not yet re-labelled, but names <= 2 things — the old proxy
+--   2  unlabelled, broad  not yet re-labelled, names more
+--   3  known ingredient   definitively not what the post is about
+--
+-- Tier 3 sorts LAST rather than being dropped: a concept can have no subject posts at
+-- all (oyster sauce nearly does), and showing the recipes that use it beats showing no
+-- evidence. has_subject_evidence on the row says which case a reader is looking at.
+--
+-- TIERS 1 AND 2 ARE TRANSITIONAL. They exist only because deploying this model and
+-- finishing the v4 re-label are two separate steps, and for the window between them
+-- the corpus is a mix. Collapse them into tier 2 once unlabelled_mentions is zero
+-- across the retained history — the breadth proxy is strictly worse than the label and
+-- should not outlive it.
+--
+-- reach_ratio, not raw engagement or raw views: see mentions_normalized for why
+-- neither raw metric survives a corpus that is 65% Instagram. follower_count is not in
+-- the ordering — it is NULL on 100% of Instagram rows, so it never ordered anything.
+-- mention_id last keeps the result deterministic across runs.
 links_ranked as (
 
     select
-        week_start,
-        concept_class,
-        concept_norm,
-        link,
+        cms.week_start,
+        cms.concept_class,
+        cms.concept_norm,
+        cms.link,
         row_number() over (
-            partition by week_start, concept_class, concept_norm
-            order by coalesce(follower_count, 0) desc,
-                     coalesce(engagement, 0) desc,
-                     mention_id
+            partition by cms.week_start, cms.concept_class, cms.concept_norm
+            order by case
+                         when cms.role_rank = 2                              then 0
+                         when cms.role_rank = 0 and mcb.n_concepts_all <= 2  then 1
+                         when cms.role_rank = 0                              then 2
+                         else 3
+                     end,
+                     coalesce(cms.reach_ratio, 0) desc,
+                     coalesce(cms.engagement, 0) desc,
+                     cms.mention_id
         )                                                              as _rn
-    from concept_mentions_shared
-    where link is not null
+    from concept_mentions_shared as cms
+    inner join mention_concept_breadth as mcb
+        on mcb.mention_id = cms.mention_id
+    where cms.link is not null
 
 ),
 
@@ -653,6 +794,12 @@ with_rank as (
         s.distinct_authors_adj,
         s.named_authors,
         s.named_mentions,
+        s.subject_mentions,
+        s.ingredient_mentions,
+        s.unlabelled_mentions,
+        -- whether source_links for this row are posts ABOUT the concept or merely
+        -- posts that named it. Read the links differently in the two cases.
+        s.subject_mentions > 0                                         as has_subject_evidence,
         s.channel_count,
         s.author_quality,
         s.is_single_channel,

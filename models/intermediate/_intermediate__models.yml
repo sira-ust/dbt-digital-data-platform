@@ -496,6 +496,27 @@ models:
         description: Distinct authors among NON-anonymised mentions only. The denominator for author_quality — anonymised rows are excluded, not counted as diverse.
       - name: named_mentions
         description: Count of non-anonymised mentions. The numerator for author_quality.
+      - name: subject_mentions
+        description: >
+          Mentions where the post is ABOUT this concept. Requires enrichment prompt v4;
+          see subject_products on fct_social_mentions.
+      - name: ingredient_mentions
+        description: >
+          Mentions where the concept was named as a component of something else — a
+          recipe ingredient, a step, one line on a menu. Real demand signal for a
+          distributor, but not product conversation, which is why it is reported
+          separately rather than netted off.
+      - name: unlabelled_mentions
+        description: >
+          Mentions not yet re-labelled at prompt v4, so their role is unknown.
+          subject_mentions + ingredient_mentions + unlabelled_mentions = mention_count
+          always (asserted by assert_social_mention_roles_sum). Goes to zero once the
+          v4 backfill completes; until then it is the honest denominator for the split.
+      - name: has_subject_evidence
+        description: >
+          True when at least one mention is ABOUT the concept. When false, source_links
+          are posts that merely named it — the best available evidence, but read
+          differently.
       - name: channel_count
         description: Distinct channels this concept was mentioned on. Drives is_single_channel.
       - name: author_quality
