@@ -47,6 +47,39 @@ models:
       - name: last_seen_utc
         description: Latest server time the code appeared.
 
+  - name: dq_social_unpromoted_matches
+    description: >
+      Review queue of concepts the resolver did NOT call 'carried' even though one
+      of its own recommendations is named after the concept — one row per
+      (concept, SKU). Catches the failure fixed by PROMPT_VERSION v10: before it,
+      the reviewer could reject a candidate but not re-file one, so a recommendation
+      that WAS the trending thing stayed a substitute and the board told the sales
+      team to offer an alternative to a SKU we stock ('vietnamese coffee' ->
+      VIETNAMESE INSTANT COFFEE(100), 2026-09-02). NON-EMPTY BY DESIGN: name
+      containment cannot tell a finished good from an input to it, so genuine
+      basket rows (BOT BANH XEO for 'banh xeo', DF SUSHI GINGER for 'sushi') land
+      here too and are correctly not carried. Read it, don't alert on it.
+    columns:
+      - name: concept_norm
+        description: Match key of the trending concept.
+      - name: canonical_label
+        description: Display label the resolver settled on.
+      - name: result_type
+        description: What the resolver called it — substitute, basket or none. Never 'carried' here.
+      - name: match_confidence
+        description: Reviewer confidence on the items it kept. Below social_resolve_min_confidence the match is suppressed downstream anyway.
+      - name: prtnum
+        description: Recommended SKU whose catalog name contains every concept token.
+      - name: item_name
+        description: AUTHORITATIVE catalog name from int_jdawms_items_active — judge from this, not from the concept label.
+      - name: concept_tokens
+        description: How many tokens the concept contributed. One-token concepts ('coffee', 'sushi') match far more loosely than three-token ones.
+      - name: looks_like_input
+        description: >
+          HINT, not a verdict — true when the item name carries a word that usually
+          marks an input to the concept rather than the concept itself (BOT, MIX,
+          PASTE, FLOUR, SEASONING, POWDER, STOCK, SAUCE). Sorts those rows last.
+
   - name: dq_social_mentions
     description: >
       DQ scorecard for Mentionlytics staging — one row per named quality check
