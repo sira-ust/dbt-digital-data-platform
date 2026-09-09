@@ -124,19 +124,36 @@ event_placement as (
 -- the model cannot place him and 'elsewhere' is the honest label. What was
 -- missing is any signal that the span is NOT contiguous, which is what
 -- segment_seq counts.
+--
+-- SPLIT ACROSS TWO CTEs, not written as one expression. The natural spelling
+-- nests the lag() inside the sum() over (), and DuckDB rejects that outright
+-- ("window function calls cannot be nested") while Databricks accepts it. Fused,
+-- this model therefore built in prod and failed every dev build from 2026-09-02
+-- until it was noticed. Hoisting the lag() into its own pass is equivalent on
+-- both engines, so keep it hoisted.
+placement_lagged as (
+
+    select
+        e.*,
+        lag(e.was_on_site) over (
+            partition by e.customer_day_key, e.session_seq
+            order by e.event_at_local, e.entity_id
+        )                                                                as prev_was_on_site
+    from event_placement as e
+
+),
+
 segmented as (
 
     select
         e.*,
-        sum(case when e.was_on_site = lag(e.was_on_site) over (
-                      partition by e.customer_day_key, e.session_seq
-                      order by e.event_at_local, e.entity_id)
+        sum(case when e.was_on_site = e.prev_was_on_site
                  then 0 else 1 end) over (
             partition by e.customer_day_key, e.session_seq
             order by e.event_at_local, e.entity_id
             rows between unbounded preceding and current row
         )                                                                as segment_seq
-    from event_placement as e
+    from placement_lagged as e
 
 ),
 
