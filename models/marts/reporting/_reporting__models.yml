@@ -696,7 +696,12 @@ models:
           week-over-week rise (redefined from the old half-window version, which was
           volume-driven). Null on a concept's first week. Not the rank.
       - name: source_links
-        description: Array of the top mention URLs behind the trend THAT WEEK (by reach then engagement).
+        description: >
+          URLs of the best-performing posts ABOUT this concept that week — subject
+          mentions only, ordered by engagement then reach. A post that merely names
+          the concept is excluded, so this is a "top content" list rather than
+          evidence of the trend. Empty when nobody posted about it directly; see
+          has_subject_evidence, and int_social_concept_trends for the full rule.
       - name: distinct_authors
         description: >
           Distinct authors behind the trend (channel-scoped; anonymised Instagram rows each

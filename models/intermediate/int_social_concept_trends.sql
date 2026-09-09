@@ -100,6 +100,11 @@ with mentions as (
         -- often than Mentionlytics' aggregate total_engagement, which is ~45% null)
         coalesce(likes, 0) + coalesce(comments, 0) + coalesce(shares, 0) as engagement,
         coalesce(views, 0)                                              as views,
+        -- REACH, on whichever column the channel actually reports. Twitter carries
+        -- impressions on 97.9% of its posts and views on 0.0%; TikTok and YouTube are
+        -- the other way round (measured 2026-09-10 over ~40k mentions). Summing is
+        -- safe because no channel populates both.
+        coalesce(views, 0) + coalesce(impressions, 0)                   as reach,
         follower_count,
         link,
         mentioned_dishes,
@@ -266,7 +271,7 @@ mentions_normalized as (
         m.mentioned_dishes, m.mentioned_products,
         m.subject_dishes, m.subject_products,
         m.week_start, m.week_end,
-        m.engagement, m.views,
+        m.engagement, m.views, m.reach,
         case when cb.channel_median_engagement > 0
              then m.engagement * 1.0 / cb.channel_median_engagement else 0 end as engagement_ratio,
         case when cb.channel_median_views > 0
@@ -301,7 +306,7 @@ mentions_normalized as (
 dish_concepts_raw as (
 
     select
-        mention_id, profile, channel, posted_date, engagement, views,
+        mention_id, profile, channel, posted_date, engagement, views, reach,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end, reach_ratio,
         'dish'                                                          as concept_class,
@@ -317,7 +322,7 @@ dish_concepts_raw as (
 item_concepts_raw as (
 
     select
-        mention_id, profile, channel, posted_date, engagement, views,
+        mention_id, profile, channel, posted_date, engagement, views, reach,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end, reach_ratio,
         'item'                                                          as concept_class,
@@ -342,7 +347,7 @@ concepts_raw as (
 concepts_degloss as (
 
     select
-        mention_id, profile, channel, posted_date, engagement, views,
+        mention_id, profile, channel, posted_date, engagement, views, reach,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
         reach_ratio,
@@ -374,7 +379,7 @@ concepts_degloss as (
 concepts as (
 
     select
-        mention_id, profile, channel, posted_date, engagement, views,
+        mention_id, profile, channel, posted_date, engagement, views, reach,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
         reach_ratio,
@@ -469,7 +474,7 @@ concept_groups as (
 grouped as (
 
     select
-        c.mention_id, c.profile, c.channel, c.posted_date, c.engagement, c.views,
+        c.mention_id, c.profile, c.channel, c.posted_date, c.engagement, c.views, c.reach,
         c.engagement_ratio, c.views_ratio, c.reach_ratio, c.follower_count, c.link,
         c.week_start, c.week_end, c.concept_class, c.role_rank,
         coalesce(g.group_primary, c.concept_norm)                       as concept_norm
@@ -490,7 +495,7 @@ concept_mentions as (
     select distinct
         week_start, week_end, concept_class,
         concept_norm, mention_id, profile, channel, posted_date,
-        engagement, views, engagement_ratio, views_ratio, reach_ratio,
+        engagement, views, reach, engagement_ratio, views_ratio, reach_ratio,
         follower_count, link,
         -- anonymised placeholder, confirmed with Mentionlytics as an Instagram
         -- API limitation (~97% of Instagram rows) — extend this list if another
@@ -533,25 +538,14 @@ mention_concept_counts as (
 
 ),
 
--- how many DISTINCT things this mention names IN TOTAL, across BOTH classes — the
--- focus proxy source_links ranks on. Separate from mention_concept_counts on purpose:
--- that one is the scoring divisor and is per-class, because the two boards are
--- independent rank spaces and cross-normalising them would let a dish-heavy post
--- deflate an item's score. This one is deliberately NOT per-class, because "is this
--- post about one thing" is a property of the whole post: a restaurant round-up naming
--- six dishes and one product is unfocused even though it names ONE product. Reads
--- `grouped`, so the stoplist and concept grouping both apply and salt/water/oil cannot
--- inflate the breadth.
-mention_concept_breadth as (
-
-    select
-        mention_id,
-        count(distinct concept_norm)                                    as n_concepts_all
-    from grouped
-    group by 1
-
-),
-
+-- mention_concept_breadth (n_concepts_all) lived here until 2026-09-10. It was a
+-- FOCUS PROXY for ranking source_links: an unlabelled mention naming <= 2 concepts
+-- was probably about them, so it outranked one naming six. The v4 subject labels
+-- answer that question directly, and links now filter on role_rank = 2 instead, so
+-- the proxy has no callers. Restore it from git if a future consumer needs a
+-- "how many things does this post talk about" measure — note it was deliberately
+-- NOT per-class, unlike mention_concept_counts, because being about one thing is a
+-- property of the whole post.
 concept_mentions_shared as (
 
     select
@@ -706,6 +700,28 @@ scored as (
 -- neither raw metric survives a corpus that is 65% Instagram. follower_count is not in
 -- the ordering — it is NULL on 100% of Instagram rows, so it never ordered anything.
 -- mention_id last keeps the result deterministic across runs.
+-- RELEVANCE IS A FILTER, NOT A TIE-BREAK (changed 2026-09-10). These links answer
+-- "what is the best-performing content ABOUT this thing", so a post that merely
+-- names the concept is not a weaker candidate — it is not a candidate. A viral
+-- pho video that lists fish sauce in its ingredients is content about pho, and
+-- putting it on the fish-sauce board misrepresents both.
+--
+-- role_rank = 2 means the concept is in the mention's SUBJECT array. Dropping
+-- role_rank 1 (named only) and 0 (unlabelled, enriched before v4) empties the
+-- array for concept-weeks where nobody posted about the thing — 28% of the last
+-- three weeks, and ALL weeks before 2026-08-17, which predate the v4 subject
+-- labels. An empty array is the honest answer there, and has_subject_evidence
+-- already tells a reader which case they are looking at. Widen the enrichment
+-- backfill if the older weeks need their links back.
+--
+-- ORDERING IS PURE PERFORMANCE, deliberately unnormalised. Engagement leads
+-- because it is the metric with the widest coverage (Instagram 61%, YouTube 79%,
+-- TikTok 98%, Twitter 55%, Reddit 97%) and it survives a channel that reports no
+-- reach at all; reach breaks its ties. The previous version summed two
+-- median-normalised ratios, which quietly paid channels for REPORTING two metrics
+-- rather than for performing: mean reach_ratio was 213 on YouTube against 30 on
+-- TikTok and 34 on Instagram, and 36% of the links then on boards had neither
+-- engagement nor reach and were ordered by mention_id, i.e. arbitrarily.
 links_ranked as (
 
     select
@@ -715,20 +731,14 @@ links_ranked as (
         cms.link,
         row_number() over (
             partition by cms.week_start, cms.concept_class, cms.concept_norm
-            order by case
-                         when cms.role_rank = 2                              then 0
-                         when cms.role_rank = 0 and mcb.n_concepts_all <= 2  then 1
-                         when cms.role_rank = 0                              then 2
-                         else 3
-                     end,
-                     coalesce(cms.reach_ratio, 0) desc,
-                     coalesce(cms.engagement, 0) desc,
+            order by coalesce(cms.engagement, 0) desc,
+                     coalesce(cms.reach, 0) desc,
+                     cms.posted_date desc,
                      cms.mention_id
         )                                                              as _rn
     from concept_mentions_shared as cms
-    inner join mention_concept_breadth as mcb
-        on mcb.mention_id = cms.mention_id
     where cms.link is not null
+      and cms.role_rank = 2
 
 ),
 

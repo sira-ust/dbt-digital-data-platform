@@ -552,7 +552,18 @@ models:
               arguments:
                 expression: ">= 0"
       - name: source_links
-        description: Array of the top social_trend_link_count mention URLs behind this concept THAT WEEK (by reach then engagement). Top-N set, order not guaranteed.
+        description: >
+          Up to social_trend_link_count URLs of the BEST-PERFORMING posts ABOUT this
+          concept that week. Two things define it. (1) Candidates are subject
+          mentions only (role_rank = 2) — a post that merely names the concept, such
+          as a pho video listing fish sauce as an ingredient, is excluded rather than
+          ranked lower. (2) Among those, ordering is raw performance: engagement
+          (likes + comments + shares) desc, then reach (views + impressions) desc,
+          then most recent. Deliberately NOT normalised per channel — these are the
+          top posts, not a per-platform fair fight. EMPTY when nobody posted about
+          the concept, which has_subject_evidence flags; also empty for weeks before
+          2026-08-17, whose mentions predate the v4 subject labels. Top-N set, order
+          not guaranteed by the array itself.
       - name: trend_rank
         description: >
           1..N by trend_score desc WITHIN (week_start, concept_class) — each week's
