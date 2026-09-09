@@ -25,6 +25,7 @@ Run from the repo root:  python scripts/generate_jdawms_mock.py
 """
 
 import csv
+import hashlib
 import json
 import random
 import re
@@ -40,9 +41,10 @@ OUT_JDAWMS = ROOT / "data" / "mock" / "jdawmsrep"
 OUT_NAV = ROOT / "data" / "mock" / "navrep"
 OUT_MYSQL = ROOT / "data" / "mock" / "mysql"
 
-# navrep (NAV ERP) rows are type-correct filler only — no PK/FK awareness, because
-# no NAV keys or tests are declared yet. Once nav staging models land with unique/
-# relationship tests, give those tables ROWCOUNTS/KEYED entries like jdawmsrep.
+# navrep (NAV ERP): keys and FK chains ARE declared now — see the navrep KEYED
+# block below. Everything not named there is still type-correct filler. Add a
+# KEYED entry before giving a nav staging model a unique/relationship test, or
+# the test will fail on random collisions rather than on anything real.
 NAV_DEFAULT_ROWS = 200
 
 # ---------------------------------------------------------------------------
@@ -212,6 +214,80 @@ KEYED["shipment_line"] = {
 }
 
 
+# ── navrep (NAV ERP) keys and FK chains ────────────────────────────────────
+# Added when the first nav staging model grew a `unique` test
+# (stg_nav__customers.customer_key). Until then navrep was pure filler, per the
+# note at the top of this file — and that had a sharper edge than a failing
+# test. A refreshed snapshot produced 23 distinct customer_no across 200 rows,
+# which not only broke the test but collapsed the join in
+# stg_nav__customer_locations from 200 keys to 23, quietly gutting dev coverage
+# of the whole presence chain. Keys here, FKs below, so a nav model that joins
+# in dev actually gets rows instead of passing its tests vacuously.
+#
+# customer_geocode.parquet is written by scripts/geocode_customers.py FROM
+# customer.parquet, so it inherits whatever keys this produces — re-run that
+# script (local mode, no credentials, no cost) after changing NAV_CUSTOMERS.
+NAV_CUSTOMERS = [f"C{i:05d}" for i in range(NAV_DEFAULT_ROWS)]
+NAV_ITEMS = [f"ITM{i:05d}" for i in range(NAV_DEFAULT_ROWS)]
+NAV_INVOICES = [f"INV{i:06d}" for i in range(NAV_DEFAULT_ROWS)]
+NAV_CRMEMOS = [f"CRM{i:06d}" for i in range(NAV_DEFAULT_ROWS)]
+# the real territory codes the event-log mock also uses, so a rep who has app
+# activity in dev also has NAV invoices to join to
+NAV_REPS = ["002", "003", "004", "007", "008", "009", "015", "018",
+            "019", "024", "025", "026", "030", "031", "032"]
+
+KEYED["customer"] = {
+    "customer_no": list(NAV_CUSTOMERS),
+    "salesperson_code": [rng.choice(NAV_REPS) for _ in NAV_CUSTOMERS],
+}
+KEYED["item"] = {"item_no": list(NAV_ITEMS)}
+KEYED["ethnicity_codes"] = {
+    "ethnicity_code": [f"ETH{i:03d}" for i in range(NAV_DEFAULT_ROWS)]
+}
+KEYED["customer_ethnicity"] = {
+    "customer_no": [rng.choice(NAV_CUSTOMERS) for _ in range(NAV_DEFAULT_ROWS)]
+}
+
+KEYED["sales_invoice_header"] = {
+    "document_no": list(NAV_INVOICES),
+    "bill_to_customer_no": [rng.choice(NAV_CUSTOMERS) for _ in NAV_INVOICES],
+    "salesperson_code": [rng.choice(NAV_REPS) for _ in NAV_INVOICES],
+}
+# 40 invoices x 5 lines, so (document_no, line_no) is unique AND every
+# document_no exists in the header above — the grain the replica actually has.
+_inv_lines = [(NAV_INVOICES[i // 5], (i % 5) + 1) for i in range(NAV_DEFAULT_ROWS)]
+KEYED["sales_invoice_line"] = {
+    "document_no": [d for d, _ in _inv_lines],
+    "line_no": [n for _, n in _inv_lines],
+    "sell_to_customer_no": [rng.choice(NAV_CUSTOMERS) for _ in _inv_lines],
+    "item_no": [rng.choice(NAV_ITEMS) for _ in _inv_lines],
+    "salesperson_code": [rng.choice(NAV_REPS) for _ in _inv_lines],
+}
+
+KEYED["sales_cr_memo_header"] = {
+    "document_no": list(NAV_CRMEMOS),
+    "bill_to_customer_no": [rng.choice(NAV_CUSTOMERS) for _ in NAV_CRMEMOS],
+    "salesperson_code": [rng.choice(NAV_REPS) for _ in NAV_CRMEMOS],
+}
+# NO line_no: the replica's projection of Sales Cr_Memo Line omits NAV's
+# `Line No_`, so this table has no natural key and CANNOT carry a unique test.
+# Duplicates on (document_no, item, qty, date) are real distinct lines, not
+# ingestion artefacts — 29,004 of 121,290 rows on the live replica.
+KEYED["sales_cr_memo_line"] = {
+    "document_no": [NAV_CRMEMOS[i // 5] for i in range(NAV_DEFAULT_ROWS)],
+    "sell_to_customer_no": [rng.choice(NAV_CUSTOMERS) for _ in range(NAV_DEFAULT_ROWS)],
+    "cr_memo_item_no": [rng.choice(NAV_ITEMS) for _ in range(NAV_DEFAULT_ROWS)],
+    "salesperson_code": [rng.choice(NAV_REPS) for _ in range(NAV_DEFAULT_ROWS)],
+}
+
+KEYED["item_ledger_entry"] = {
+    "entry_no": list(range(1, NAV_DEFAULT_ROWS + 1)),
+    "item_no": [rng.choice(NAV_ITEMS) for _ in range(NAV_DEFAULT_ROWS)],
+    "source_no": [rng.choice(NAV_CUSTOMERS) for _ in range(NAV_DEFAULT_ROWS)],
+    "salesperson_code": [rng.choice(NAV_REPS) for _ in range(NAV_DEFAULT_ROWS)],
+}
+
+
 def load_snapshot() -> dict[str, dict[str, list[tuple[str, str]]]]:
     schemas: dict[str, dict[str, list[tuple[str, str]]]] = {}
     with open(SNAPSHOT, encoding="utf-8") as f:
@@ -301,6 +377,73 @@ def mock_nav(schemas) -> None:
         print(f"navrep.{table}: {len(df)} rows, {len(cols)} cols")
 
 
+
+def mock_geocode(schemas) -> None:
+    """ust_external.nav_customer_geocode — the out-of-band coordinate table.
+
+    Generated HERE rather than by scripts/geocode_customers.py, because that
+    script's only job is calling Google: a local run against this mock would
+    send 200 fake addresses ("address_0, city_0") for about a dollar and get
+    garbage back. A mock needs coordinates, not a geocoder.
+
+    Derived from the customer mock so the keys always agree -- that pairing is
+    load-bearing. When customer_no last changed shape underneath a stale
+    geocode file, the join in stg_nav__customer_locations fell from 200 keys to
+    23 and quietly gutted dev coverage of the entire presence chain.
+
+    THREE POPULATIONS ON PURPOSE, because the models branch on all three:
+      ~88% resolve to a real coordinate near the office
+      ~12% have NO ROW AT ALL, so dim_customers.has_coordinates is false and
+           the "visit history is unknowable" path is actually exercised -- it
+           matches the 12% of real customers with no resolvable address
+      a few resolve to (0,0), the classic geocoder failure that
+           stg_nav__customer_locations filters out by name
+
+    Some coordinates are deliberately placed within ~40 m of each other so the
+    shared-geofence case (int_rep_customer_presence.is_ambiguous, 21.2% of real
+    customers) is reachable in dev instead of only in production.
+    """
+    tables = schemas.get("navrep")
+    if not tables or "customer" not in tables:
+        print("customer_geocode: navrep.customer not in the snapshot, skipped")
+        return
+
+    keys = KEYED["customer"]["customer_no"]
+    # the office, from dbt_project.yml office_latitude / office_longitude
+    lat0, lon0 = 37.6449309, -122.1362259
+
+    rows = []
+    for i, key in enumerate(keys):
+        if i % 8 == 7:            # ~12%: no geocode row at all
+            continue
+        if i % 47 == 13:          # a couple of (0,0) geocoder failures
+            lat, lon = 0.0, 0.0
+            status = "ZERO_RESULTS"
+        else:
+            # pairs of neighbours land inside one geofence; ~0.0003 deg is ~33 m
+            cluster = i // 2
+            jitter = 0.0003 if i % 2 else 0.0
+            lat = round(lat0 + (cluster % 25) * 0.004 - 0.05 + jitter, 7)
+            lon = round(lon0 + (cluster // 25) * 0.006 - 0.02 + jitter, 7)
+            status = "OK"
+        rows.append({
+            "customer_no": key,
+            "latitude": lat,
+            "longitude": lon,
+            "geocode_status": status,
+            "geocoded_address": f"{i} Mock St, Hayward, CA 945{i % 100:02d}",
+            "address_hash": hashlib.sha256(key.encode()).hexdigest()[:32],
+            "geocoded_at": pd.Timestamp("2026-09-01 12:00:00"),
+        })
+
+    df = pd.DataFrame(rows)
+    OUT_NAV.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(OUT_NAV / "customer_geocode.parquet", index=False)
+    ok = int((df.geocode_status == "OK").sum())
+    print(f"navrep.customer_geocode: {len(df)} rows "
+          f"({ok} usable, {len(df) - ok} zero-result, "
+          f"{len(keys) - len(df)} customers with no row)")
+
 def main() -> None:
     schemas = load_snapshot()
     OUT_JDAWMS.mkdir(parents=True, exist_ok=True)
@@ -317,6 +460,7 @@ def main() -> None:
         df.to_parquet(OUT_JDAWMS / f"{table}.parquet", index=False)
         print(f"jdawmsrep.{table}: {len(df)} rows, {len(cols)} cols")
     mock_nav(schemas)
+    mock_geocode(schemas)
     mock_mysql(schemas)
 
 

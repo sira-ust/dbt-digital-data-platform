@@ -831,3 +831,313 @@ models:
           - accepted_values:
               arguments:
                 values: [promote_now, restock, offer_substitute, promote_ingredients, review_nearest, source_new, monitor]
+
+
+  # ── THE REP ASSISTANT'S TWO TABLES ──────────────────────────────────────────
+  # mart_rep_period_status (rep x period, cumulative) and mart_rep_account_status
+  # (rep x account) are read by an authenticated assistant on one rep's behalf.
+  # Resolve the login through dim_rep_logins to a sales_code, then filter both
+  # on it.
+  #
+  # THERE IS NO SEPARATE DAILY TABLE. A day is just the shortest period_type, so
+  # "how did yesterday go" is `period_type = 'day' and is_current` and "how is my
+  # month going" is `period_type = 'month' and is_current` — same columns, same
+  # meanings, one model. A dedicated daily mart existed briefly and was folded
+  # in: every column it held was the same expression over a one-day window, and
+  # two models that must agree are two models that will eventually stop agreeing.
+  #
+  # SALES AND ORDERS ONLY, both tables. No store visits, on-site minutes, GPS,
+  # app time or device split, and no scenario labels from
+  # mart_rep_customer_activity: those rest on the geofence and idle-gap
+  # heuristics, which are not accurate enough yet to put in front of a rep as a
+  # number. Everything here is stated outright by the order payload, so there is
+  # nothing to caveat. When the on-site algorithm is trusted, coverage columns
+  # can be added; until then their absence is the honest position, not a gap.
+  #
+  # WHICH TABLE ANSWERS WHAT
+  #   "how did yesterday go"      period, period_type = 'day'
+  #   "how am I doing this month" period, period_type = 'month'
+  #   "who should I call"         account, ordered by attention_priority
+  #
+  # THE ONE ARITHMETIC RULE. Orders, value and line counts are additive across
+  # periods of the same type; accounts_ordered is NOT. A store that ordered in
+  # two different weeks is one account for the month, so every period type is
+  # computed independently from the order rows rather than rolled up from
+  # shorter ones. Never sum accounts_ordered — ask for the longer period_type.
+
+  - name: mart_rep_period_status
+    description: >
+      One row per REP per PERIOD, cumulative to date — "how am I doing", at
+      whatever granularity is asked. FIVE PERIOD TYPES IN ONE TABLE
+      (period_type = day / week / month / quarter / year), so a day is simply
+      the shortest period and there is no separate daily table. ALWAYS filter on
+      period_type, because without it a query sums the same orders five times
+      over. AS_OF_DATE IS THE CONTRACT: the
+      pipeline processes the PREVIOUS day, so as_of_date is yesterday and
+      yesterday is complete — there is no partial "today" here. "Month to date"
+      means "month through as_of_date", and days_elapsed and both projections
+      are measured to it, because pacing against today's calendar date would
+      divide by a day whose data does not exist yet and report the whole team as
+      behind every morning. ZERO IS REPORTED AS ZERO: a rep gets a row for every
+      period from his first order onward, including one he sold nothing in, so
+      this is the table to use when an answer must exist. NO GOAL COLUMN YET —
+      order_value_projected is a straight-line pace, not attainment; see the
+      model header for what a target source would need.
+    columns:
+      - name: sales_code
+        description: Rep territory code. Join key to dim_reps.
+        tests: [not_null]
+      - name: rep_name
+        description: Display name from dim_reps.
+      - name: period_type
+        description: >
+          day / week / month / quarter / year. ALWAYS filter on this — without
+          it a query sums the same orders five times over. Weeks are ISO (Monday
+          start), matching week_start in mart_rep_weekly. At period_type = 'day',
+          period_start = period_end and days_in_period = 1.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [day, week, month, quarter, year]
+      - name: period_start
+        description: First calendar day of the period.
+        tests: [not_null]
+      - name: period_end
+        description: >
+          Last calendar day of the period. In the FUTURE for the current period —
+          it is the calendar bound, not the extent of the data. Equals
+          period_start when period_type = 'day'.
+      - name: day_of_week
+        description: >
+          Weekday NAME of period_start, and ONLY for period_type = 'day' — for
+          every other type period_start is a fixed weekday (weeks always start
+          Monday) and the column would say nothing, so it is null. The name
+          rather than a number because DuckDB and Databricks number weekdays
+          differently, so an integer silently shifts by a day between dev and
+          prod.
+      - name: as_of_date
+        description: >
+          The newest day with complete data: yesterday, because the pipeline
+          processes the previous day. Every cumulative number and both
+          projections stop here. Taken from the event log rather than
+          current_date, which renders in the session timezone and would name a
+          different day in dev than in prod. Say it out loud in a spoken answer.
+        tests: [not_null]
+      - name: is_current
+        description: >
+          The period containing as_of_date. `where period_type = 'month' and
+          is_current` is the month-to-date row.
+      - name: days_in_period
+        description: Calendar days in the whole period.
+      - name: days_elapsed
+        description: >
+          Calendar days of the period covered by complete data, i.e. through
+          as_of_date. Equals days_in_period for a finished period.
+      - name: pct_period_elapsed
+        description: >
+          days_elapsed / days_in_period. Publish this alongside any comparison
+          against a previous period, so a part-elapsed month reads as "38% of the
+          way through" rather than "down 62%".
+      - name: orders_submitted
+        description: Orders sent in the period to date. Summed from the daily table; additive.
+      - name: orders_keyed
+        description: Of those, keyed by the rep on the PDA.
+      - name: orders_received
+        description: Of those, placed by the customer on web or the app.
+      - name: days_with_orders
+        description: >
+          Days in the period on which the rep sent at least one order. The
+          denominator for a per-day average — days_elapsed includes weekends and
+          days off. Always 0 or 1 when period_type = 'day'.
+      - name: order_value_total
+        description: >
+          Sum of grand_total for the period to date, EXACT. NULL rather than 0
+          when nothing was sold: a rep with no orders has no order value, and a 0
+          would average into a run rate as though it were one.
+      - name: order_value_avg
+        description: order_value_total / orders_submitted for the period.
+      - name: order_value_largest
+        description: Biggest single order in the period.
+      - name: order_line_count
+        description: Total item count across the period's orders.
+      - name: accounts_ordered
+        description: >
+          DISTINCT accounts that ordered in the period, counted from the order
+          rows over that whole period. NOT summable across periods: a store that
+          ordered in two different weeks is ONE account for the month, so
+          summing the weekly (or daily) figures would say two. Ask for the
+          longer period_type instead.
+      - name: order_value_projected
+        description: >
+          A STRAIGHT-LINE PROJECTION, not a forecast and not attainment: what the
+          period would end at if the rest of it matched the rate so far. Divided
+          by days_elapsed (complete data), never by today's date. NULL for a
+          finished period, which needs no projection. Degenerate but harmless at
+          period_type = 'day', where it equals the actual.
+      - name: orders_submitted_projected
+        description: The same straight-line projection applied to order count.
+      - name: order_value_per_selling_day
+        description: >
+          order_value_total / days_with_orders — per SELLING day, so a short
+          month or a week off does not read as a slump.
+      - name: prev_order_value_total
+        description: >
+          The value STRICTLY the preceding period achieved — the day before, the
+          week before, the month before. Joined on prev_period_start rather than
+          taken from lag(), because lag() returns the previous period WITH A ROW,
+          which after a gap is not last month at all. NULL means no comparison is
+          available, never "flat".
+      - name: prev_orders_submitted
+        description: Orders the strictly-preceding period achieved.
+      - name: prev_accounts_ordered
+        description: Distinct accounts the strictly-preceding period reached.
+      - name: order_value_change_pct
+        description: >
+          (this period - previous) / previous, as a fraction. Null when there is
+          no previous row or it was zero. Comparing a part-elapsed current period
+          against a full previous one understates it by design — pair this with
+          pct_period_elapsed.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [sales_code, period_type, period_start]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "days_elapsed <= days_in_period"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "orders_keyed + orders_received = orders_submitted"
+      # exactly one current period per rep per period_type, or is_current cannot
+      # be used as the month-to-date filter it is documented to be
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "period_start <= period_end"
+      # a day period is exactly one day long, and its weekday name is the only
+      # place day_of_week is meaningful
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: >
+              period_type <> 'day'
+              or (days_in_period = 1 and period_start = period_end
+                  and day_of_week is not null)
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "period_type = 'day' or day_of_week is null"
+
+  - name: mart_rep_account_status
+    description: >
+      One row per REP per ACCOUNT, orders only — "which of my accounts have
+      stopped buying". SPINE unions two senses of "the rep's account": owned
+      (NAV assigns it) and ordered (he has actually sold to it). Neither alone
+      is right — an owned account that has never ordered is exactly the row a
+      to-do list exists to surface, and a rep can legitimately sell to a
+      colleague's account. Carries NO visit or app-usage clock: those rest on
+      the geofence heuristic and are not accurate enough to tell a rep he has
+      not called on someone, so this list answers only what the order data
+      answers exactly and stays silent on coverage. A null last_order_date means
+      NOTHING ON RECORD since var('event_log_go_live_date'), not "never".
+      Test and internal accounts are excluded. The overdue threshold is a
+      CONVENTION pending a conversation with the sales managers.
+    columns:
+      - name: sales_code
+        description: Rep territory code. Join key to dim_reps; resolve a login via dim_rep_logins.
+        tests: [not_null]
+      - name: rep_name
+        description: Display name from dim_reps.
+      - name: customer_key
+        description: The account.
+        tests: [not_null]
+      - name: customer_name
+        description: Account name — the string a spoken answer should use, not the key.
+      - name: city
+        description: City, for routing a day's calls.
+      - name: county
+        description: County, or state in US-style addresses.
+      - name: post_code
+        description: Postal/ZIP code.
+      - name: owner_rep
+        description: The rep NAV says owns the account, whoever has been selling to it.
+      - name: is_owned_by_rep
+        description: >
+          owner_rep equals this rep. FALSE means he has sold to a colleague's
+          account, which is legitimate and is why the spine is a union rather
+          than the owned list alone.
+      - name: customer_is_active
+        description: Account is live in NAV. Inactive accounts are ranked last, not dropped.
+      - name: first_order_date
+        description: Earliest order on record for this rep-account, on the rep's local day.
+      - name: last_order_date
+        description: >
+          Most recent order, on the rep's local day. NULL = nothing on record in
+          the observed window, which starts at var('event_log_go_live_date').
+      - name: days_since_last_order
+        description: >
+          Days from last_order_date to as_of_date. NULL, not a large number, when
+          there is no order on record.
+      - name: orders_all_time
+        description: Orders on record for this rep-account in the observed window.
+      - name: orders_recent
+        description: Orders within var('rep_account_recent_window_days') (90) of as_of_date.
+      - name: order_value_all_time
+        description: Sum of grand_total over the observed window, EXACT.
+      - name: order_value_recent
+        description: Sum of grand_total within the recent window.
+      - name: order_value_avg
+        description: >
+          Mean order value over the observed window. Null rather than 0 when
+          nothing was ordered.
+      - name: delivery_days
+        description: >
+          The account's delivery pattern as a readable string, "Tue, Thu".
+          Actionable, not decorative: an account that only takes Tuesday
+          deliveries has to be ordered before Tuesday, so this decides WHEN a
+          call is worth making.
+      - name: delivery_day_count
+        description: >
+          How many delivery days are set. 0 means NAV has no pattern on file —
+          unknown, not "never delivers".
+      - name: appointment_required
+        description: Delivery needs a booked appointment — affects how a call is planned.
+      - name: customer_group
+        description: Customer group/segment.
+      - name: as_of_date
+        description: >
+          The date days_since_last_order is measured from: the newest day the
+          pipeline has processed. Shared with mart_rep_period_status so the two
+          tables cannot disagree about what "today" is — see
+          macros/rep_log_today.sql.
+      - name: attention_reason
+        description: >
+          ONE reason per account, in precedence order, so an assistant reads out
+          a cause instead of re-deriving one from six columns. An inactive
+          account is not the rep's problem; an account that has never ordered is
+          the biggest one; then one that has stopped.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['no order on record', 'order overdue', 'ok', 'inactive account']
+      - name: attention_priority
+        description: >
+          1 = most urgent, mirroring attention_reason exactly, so `order by
+          attention_priority` gives the call list without the consumer needing to
+          know the precedence. 1 no order on record, 2 order overdue, 5 ok,
+          9 inactive account.
+        tests: [not_null]
+      - name: needs_attention
+        description: >
+          attention_priority <= 2 — the two reasons that are genuinely a to-do.
+          Deliberately excludes 'inactive account', which the rep cannot act on.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [sales_code, customer_key]
+      # days_since_last_order must be null exactly when there is no order date,
+      # so a consumer can trust null to mean "nothing on record" and never
+      # stumble on a sentinel number
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: >
+              (last_order_date is null and days_since_last_order is null)
+              or (last_order_date is not null and days_since_last_order is not null)

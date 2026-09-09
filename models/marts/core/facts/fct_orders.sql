@@ -57,6 +57,13 @@ parsed as (
         sales_code,
         username,
         event_at_utc                                                                 as submitted_at,
+        -- The rep-day this submit belongs to, carried straight through from
+        -- int_events_enriched rather than re-derived. THIS is the column any
+        -- per-rep daily/weekly/monthly reporting must group by; submitted_date
+        -- below is a UTC date and a 17:30 Pacific submit lands on the following
+        -- day in it, which at a month boundary moves revenue between months.
+        -- Null for customer-app submits, which have no rep-day clock.
+        rep_local_date,
         upper({{ parse_kv_response('response', 'order_source') }})                   as order_channel,
         try_cast({{ parse_kv_response('response', 'grand_total') }} as double)        as grand_total,
         try_cast({{ parse_kv_response('response', 'subtotal') }} as double)           as subtotal,
@@ -91,7 +98,10 @@ select
     sales_code,
     username,
     submitted_at,
+    -- UTC date. Correct for company-wide totals, WRONG for anything keyed on a
+    -- rep's day, week or month -- use submitted_date_local for those.
     cast(submitted_at as date)                                          as submitted_date,
+    rep_local_date                                                      as submitted_date_local,
     order_channel,
     grand_total,
     subtotal,

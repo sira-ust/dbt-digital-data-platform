@@ -189,12 +189,7 @@ stores as (
         salesperson_code                                                 as owner_rep
     from {{ ref('stg_nav__customer_locations') }}
     where is_active
-      and not {{ regex_matches('customer_key', var('test_customer_key_regex')) }}
-      and customer_key not in (
-          {%- for k in var('test_customer_keys') %}
-          '{{ k }}'{{ ',' if not loop.last }}
-          {%- endfor %}
-      )
+      and not {{ is_test_customer('customer_key') }}
 
 ),
 

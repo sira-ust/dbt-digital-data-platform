@@ -30,7 +30,21 @@ models:
         description: Submit event time in UTC.
         tests: [not_null]
       - name: submitted_date
-        description: Calendar date of submitted_at.
+        description: >
+          Calendar date of submitted_at, in UTC. Correct for company-wide
+          totals; WRONG for anything keyed on a rep's day, week or month, where
+          a 17:30 Pacific submit lands on the following day and at a month
+          boundary moves revenue into the wrong month. Use
+          submitted_date_local for per-rep reporting.
+      - name: submitted_date_local
+        description: >
+          The REP-DAY this submit belongs to, carried straight through from
+          int_events_enriched.rep_local_date rather than re-derived — one
+          timezone offset is chosen per rep-day upstream, and re-deriving a
+          local date from a timestamp can land on the neighbouring day. This is
+          the column every per-rep daily / weekly / monthly rollup must group
+          by, and mart_rep_daily_status and mart_rep_account_status both do.
+          Null for submits with no rep-day clock (customer-app orders).
       - name: order_channel
         description: >
           Coarse channel from the payload order_source (WEB / APP / PDA),

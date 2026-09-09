@@ -92,12 +92,14 @@ SOURCES
                       prtftp_dtl, prtmst, rplcfg, shipment, shipment_line)
   mentionlytics       weekly social-listening xlsx drop, plus the two tables the
                       offline scripts write back (mention_enrichment, concept_resolution)
-  nav (ERP)           16 replica tables; only `customer` is modelled so far.
+  nav (ERP)           16 replica tables; only `customer` is modelled so far
+                      (as both stg_nav__customers, the full master, and
+                      stg_nav__customer_locations, the geocoded subset).
                       Coordinates come from ust_external.nav_customer_geocode,
                       written out-of-band by scripts/geocode_customers.py
         │
 staging/ (view)       stg_mysql__*  (3)  ·  stg_jdawms__*  (16)
-                      stg_mentionlytics__*  (3)  ·  stg_nav__*  (1)
+                      stg_mentionlytics__*  (3)  ·  stg_nav__*  (2)
                       1:1 lossless: cast, trim, dedup only — no decoding
         │
 seeds/ (CSV)          event dictionary · app registry · categories · WMS code
@@ -117,6 +119,11 @@ intermediate/         int_events_decoded         decode 8-digit code, event_time
                       int_jdawms_sale_picks_daily daily picks / sales
                       int_jdawms_stock_weekly    weekly stock levels
         │
+marts/core/dims/      dim_reps                   one row per sales territory code — the rep entity
+                      dim_rep_logins             one row per login — resolves a sign-in to a sales_code
+                      dim_customers              one row per account — the name, the owner, and
+                                                 whether it could be geofenced at all
+        │
 marts/core/facts/     fct_orders                 one row per submitted order (increment_id)
                       fct_events                 one row per event, decoded + enriched
                       fct_order_cycles           one row per order cycle (rep journey)
@@ -129,6 +136,9 @@ marts/reporting/      mart_rep_weekly            weekly sales-rep scorecard
                       mart_rep_customer_activity was the rep in the store, and what did they do there?
                                                  rep × customer × day × scenario
                       mart_rep_customer_activity_events  the same work, event by event
+                      mart_rep_period_status     rep × day/week/month/quarter/year,
+                                                 cumulative to date — "how am I doing"
+                      mart_rep_account_status    rep × account — who has stopped ordering
                       mart_item_demand_supply    weekly demand × WMS supply per item
                       mart_social_trending_items weekly trending board × do we stock it?
         │
@@ -144,8 +154,9 @@ tests/                8 singular tests (+ YAML tests; see TESTING.md)
 | **Staging** | `stg_<source>__*` — 1:1 lossless views: cast, trim, dedup. No decoding or business logic |
 | **Seeds** | Event dictionary, app registry, categories, WMS code descriptions, social stoplist — reference data for decoding + DQ |
 | **Intermediate** | Decoding, enrichment, and grain shaping (event / day / visit) — the reusable foundation for facts and marts |
+| **Dimensions** | `dim_*` — conformed rep / login / customer dimensions. Join on these instead of carrying bare codes; see the grain warning in `_dims__models.yml` |
 | **Facts** | `fct_*` — analytics-ready event / order / cycle / mention grain |
-| **Reporting** | `mart_*` — weekly rollups, rep store-visit reporting, and cross-source (demand × supply, social × WMS) analytics |
+| **Reporting** | `mart_*` — weekly rollups, the rep assistant's two sales-only status tables, rep store-visit reporting, and cross-source (demand × supply, social × WMS) analytics |
 | **DQ** | `dq_*` — queryable quarantine / drift-monitoring tables |
 | **Tests** | YAML generic tests + singular tests in `tests/` — see [TESTING.md](TESTING.md) |
 
@@ -171,6 +182,90 @@ PDA and an iPad in the same pocket report offsets an hour apart in summer.
 `event_at_local` — group by `rep_local_date`. Durations are unaffected either way:
 every gap and dwell is computed on `event_at_utc`, which is epoch-derived and needs no
 timezone at all.
+
+### The rep assistant reads two tables, and they are sales-only on purpose
+
+`mart_rep_period_status` (rep × period, cumulative) and
+`mart_rep_account_status` (rep × account) exist to be queried by an
+authenticated assistant on one rep's behalf:
+
+```sql
+-- 1. who signed in?                          many-to-one, always safe
+select sales_code from dim_rep_logins where username = :login;
+
+-- 2. how did yesterday go?                   a day is just the shortest period
+select period_start, day_of_week, orders_submitted, order_value_total, accounts_ordered
+from mart_rep_period_status
+where sales_code = :sales_code and period_type = 'day' and is_current;
+
+-- 3. how am I doing this month?              same columns, wider window
+select as_of_date, orders_submitted, order_value_total, accounts_ordered,
+       days_elapsed, days_in_period, order_value_projected, prev_order_value_total
+from mart_rep_period_status
+where sales_code = :sales_code and period_type = 'month' and is_current;
+
+-- 4. who should I call?                      already ranked
+select customer_name, city, attention_reason, days_since_last_order, delivery_days
+from mart_rep_account_status
+where sales_code = :sales_code and needs_attention
+order by attention_priority, days_since_last_order desc;
+```
+
+**There is no separate daily table.** `period_type` is `day` / `week` / `month`
+/ `quarter` / `year`, and a day is simply the shortest period — same columns,
+same meanings, one model. A dedicated `mart_rep_daily_status` existed briefly
+and was folded in: every column it held was the same expression over a one-day
+window, and two models that must agree are two models that will eventually stop
+agreeing. **Always filter on `period_type`** — without it a query sums the same
+orders five times over.
+
+**They carry sales and order metrics only.** No store visits, on-site minutes,
+GPS, app time, device split, or the scenario labels from
+`mart_rep_customer_activity`. Those all rest on the geofence and idle-gap
+heuristics, which are not accurate enough yet to put in front of a rep as a
+number. Everything in these two tables is stated outright by the order payload,
+so there is nothing to caveat. When the on-site algorithm is trusted, coverage
+columns can be added — until then their absence is the honest position, not a
+gap. `mart_rep_customer_activity` and its event-level drill-down remain for
+analysis, unchanged.
+
+**"Today" means the last day the pipeline processed, which is yesterday.** The
+daily job lands the previous day's data, so `as_of_date` is yesterday and
+yesterday is *complete* — there is no partial "today" in this warehouse to guard
+against. Month-to-date therefore means "month through `as_of_date`", and a rep
+asking at 10am is being told about a month that ends last night. Say the date
+out loud; it is the caveat an assistant is most likely to drop.
+
+`days_elapsed` and both projections are measured to `as_of_date` for the same
+reason. Pacing a month against *today's* calendar date, when data reaches only
+yesterday, divides by a day whose data does not exist yet and reports the whole
+team as behind — every morning.
+
+**Never use `current_date` for this.** It renders in the session timezone — UTC
+on Databricks, the developer's zone on DuckDB — and `event_at_utc` is
+`TIMESTAMP WITH TIME ZONE` on both engines, so a clock-based cutoff means
+different days in dev and prod. `int_events_enriched` settles this once by
+publishing `rep_local_date`; `macros/rep_log_today.sql` is how a mart asks "what
+day is it" without breaking that rule, and `fct_orders.submitted_date_local`
+carries the rep-day onto every order so the marts stay plain group-bys.
+
+**Two traps to respect.**
+
+- **`accounts_ordered` is not additive.** A store that ordered in week 1 and
+  again in week 3 is one account for the month, not two. Every period type is
+  computed independently from the order rows rather than rolled up from shorter
+  ones — so ask for the longer `period_type`, never sum a shorter one.
+- **Join `dim_reps` to a metric, never `dim_rep_logins`.** The latter is per
+  login, and joining it on `sales_code` multiplies the metric by the rep's login
+  count.
+
+**There is no goal column yet.** `order_value_projected` is a straight-line
+pace, not attainment. A target needs a source this warehouse does not have: NAV
+`sales_quota_line` is per *item* in units whose UOM is marked CONFIRM in the
+source docs, and the NAV feed carries no actuals to compare against
+(`sales_line` has `quantity` but no amount, and the replica has no invoice or
+ledger table). Once a target source is agreed — confirmed NAV quota, or a
+business-maintained seed — it joins on `(sales_code, period_start)`.
 
 ## Column documentation (glossaries)
 
