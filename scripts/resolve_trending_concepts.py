@@ -128,7 +128,7 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v9"                    # v5 = propose + independent VERIFY pass; deglossed snippet keys
+PROMPT_VERSION = "v10"                   # v5 = propose + independent VERIFY pass; deglossed snippet keys
                                          # v6 = SECOND LOOK on a "none": recall matters as much as
                                          #      precision here, because a false "we don't carry this"
                                          #      sends someone to source a product we already sell
@@ -146,6 +146,14 @@ PROMPT_VERSION = "v9"                    # v5 = propose + independent VERIFY pas
                                          #      a concept away removed it from the ranking and therefore
                                          #      from the gate forever — v7 and v8 both reported success
                                          #      while never once looking at the merge they existed to fix.
+                                         # v10 = the reviewer may PROMOTE a recommendation to the carried
+                                         #      match. Before this, result_type could only reach 'carried'
+                                         #      if pass ① had already set matched_prtnum, so a proposer
+                                         #      that filed the real product as a "recommended" substitute
+                                         #      pinned it there — the reviewer's own 'carried' verdict was
+                                         #      discarded. 'vietnamese coffee' sat on VIETNAMESE INSTANT
+                                         #      COFFEE(100) as a SUBSTITUTE, telling the sales team to
+                                         #      offer an alternative to 8k units on the shelf.
 _CURRENT_VERSION = f"{MODEL}/{PROMPT_VERSION}"  # stamp on each row; drives version-aware re-resolve
 MAX_TOKENS = 700
 VERIFY_MAX_TOKENS = 1200                 # per-candidate verdicts + reasons
@@ -388,6 +396,18 @@ Keep a candidate ONLY if it passes the test for how it was proposed:
   - "recommended" as a basket item: it is a CORE, DEFINING ingredient of THIS
     specific dish, from the SAME cuisine — the dish is not that dish without it.
 
+PROMOTION — the proposer regularly files the real thing under "recommended". If \
+one KEPT candidate IS the trending thing itself, ready to sell, name it in \
+"promote_prtnum" and answer result_type "carried". Judge the ITEM, not the role \
+it arrived in: "VIETNAMESE INSTANT COFFEE" IS vietnamese coffee, and stocking it \
+means we carry the concept. Do NOT promote something used to MAKE the thing — \
+"BOT BANH XEO (PREPARED FLOUR)" is batter for banh xeo, "DF SUSHI GINGER" is a \
+condiment beside sushi, "BEEF PASTE (PHO BO)" is one component of pho. A mix, \
+paste, flour, seasoning, stock or single component stays a basket item. Promote \
+at most ONE part number, and only one you are keeping; leave it null whenever you \
+are unsure, because a wrong promotion tells the sales team to push a product that \
+does not answer the trend.
+
 REJECT, always:
   - a different cuisine's ingredient placed under this dish;
   - a generic all-purpose staple (plain rice, sugar, salt, cooking oil, plain flour)
@@ -403,6 +423,8 @@ Return ONE JSON object — no markdown, no prose — exactly:
   "verdicts": [                    // one entry per candidate, same part numbers you were given
     {"prtnum": string, "keep": boolean, "reason": string}   // reason <= 120 chars, concrete
   ],
+  "promote_prtnum": string|null,   // a KEPT candidate that IS the concept itself, when the
+                                   //   proposer filed it as "recommended". null if none.
   "result_type": string,           // final call: "carried" | "substitute" | "basket" | "none".
                                    //   "none" if you kept nothing.
   "canonical_label": string,       // the proposer's display name, CORRECTED if it is wrong or
@@ -1344,6 +1366,22 @@ def reconcile(proposal, verdict, candidates, matched):
             reject.append((p, str(v.get("reason") or "")[:200]))
 
     matched_ok = bool(matched) and matched in keep
+
+    # PROMOTION. The proposer files the real thing under "recommended" often enough
+    # that the reviewer needs a way to say so: 'vietnamese coffee' resolved to
+    # VIETNAMESE INSTANT COFFEE(100) as a SUBSTITUTE (2026-09-02), so the board told
+    # the team to offer an alternative to a SKU sitting on the shelf. Before this,
+    # result_type could never reach 'carried' unless pass ① had already set
+    # matched_prtnum — the reviewer's own "carried" verdict was discarded.
+    # Only a candidate that SURVIVED review can be promoted, so this can never
+    # resurrect a rejected item, and the prompt draws the line at finished goods
+    # (a batter mix for banh xeo is still a basket item, not banh xeo).
+    if not matched_ok:
+        promoted = verdict.get("promote_prtnum")
+        promoted = str(promoted).strip() if promoted else ""
+        if promoted and promoted in keep:
+            matched, matched_ok = promoted, True
+
     kept = [c["prtnum"] for c in candidates
             if c["role"] == "recommended" and c["prtnum"] in keep][:MAX_RECOMMENDATIONS]
 
