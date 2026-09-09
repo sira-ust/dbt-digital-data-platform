@@ -1,0 +1,231 @@
+version: 2
+
+models:
+
+  # ── WHY THREE DIMENSIONS AND NOT ONE ────────────────────────────────────────
+  # dim_rep_logins and dim_reps describe the same people at two different
+  # GRAINS, and the split is the point. A territory code can hold more than one
+  # login, so login -> rep is many-to-one (always safe to join) while rep ->
+  # login is one-to-many (multiplies any metric joined through it). Keeping them
+  # apart means neither join needs a remembered filter to be correct — which
+  # matters more than usual here, because the consumer is an AI assistant
+  # writing its own SQL, and a forgotten `where is_primary_login` is exactly the
+  # kind of mistake that produces a confidently wrong number.
+
+  - name: dim_rep_logins
+    description: >
+      One row per LOGIN, keyed on username. The table an authenticated app hits
+      FIRST: "this person just signed in, whose data is theirs?" Resolve the
+      login to a sales_code here, then use that sales_code against every rep
+      mart. ADMINS ARE INCLUDED with sales_code null and is_salesperson false,
+      so a caller can distinguish "this person has no territory" from "this
+      person is unknown" — returning no row would conflate the two. NEVER join
+      this table to a metric table on sales_code: that direction is one-to-many
+      and will multiply the metric by the rep's login count. Join dim_reps
+      instead.
+    columns:
+      - name: username
+        description: Login name — the PK. What an authenticated session resolves on.
+        tests: [not_null, unique]
+      - name: user_id
+        description: admin_users primary key.
+        tests: [not_null, unique]
+      - name: email
+        description: Login email. A second candidate identifier for an authenticated session.
+      - name: first_name
+        description: Given name from admin_users.
+      - name: last_name
+        description: Family name from admin_users.
+      - name: rep_name
+        description: >
+          One display string, built once. Falls back to username rather than
+          concatenating a null into "Jane NULL".
+      - name: sales_code
+        description: >
+          Territory code this login belongs to; the join key to every rep mart.
+          NULL for an admin, who has no territory.
+      - name: role_name
+        description: admin_users role (salesperson / admin / ...).
+      - name: is_active
+        description: Login is enabled.
+      - name: is_salesperson
+        description: >
+          admin_users flags this login as a salesperson. A login can carry a
+          salesperson_code without this being true; both are published rather
+          than reconciled here.
+      - name: is_primary_login
+        description: >
+          True for exactly one login per sales_code — active first, then most
+          recently used, then lowest user_id as a deterministic tie-break, so
+          a dormant-but-newer login cannot outrank the one the rep signs in
+          with. FALSE (never null) for admins, who are never ranked: a null
+          would drop them from `where is_primary_login` and from `where not
+          is_primary_login` alike.
+      - name: login_count
+        description: Lifetime sign-in count (admin_users.lognum).
+      - name: last_login_at
+        description: Last sign-in (admin_users.logdate). Decides the primary login.
+      - name: interface_locale
+        description: UI locale on the login. Useful for choosing a reply language.
+      - name: created_at
+        description: When the login was created.
+
+  - name: dim_reps
+    description: >
+      One row per SALES TERRITORY CODE — the rep as an analytical entity. Safe
+      to join to any rep mart on sales_code without fan-out, which is the whole
+      reason it exists alongside dim_rep_logins. SPINE is the union of the two
+      places a code can be declared: admin_users (a person who can sign in) and
+      the NAV customer master (a person who owns accounts). Neither alone is
+      complete — a newly issued code can own accounts before its login exists,
+      and a departed rep's login can outlive the reassignment of their book — so
+      has_login / owns_accounts say which case a row is rather than the row
+      being dropped. Event sales_codes are deliberately NOT part of the spine: a
+      code on events but in neither source is a data-quality fault, and
+      inventing a dim row for it would hide that.
+    columns:
+      - name: sales_code
+        description: Territory code — the PK. The join key on every rep mart.
+        tests: [not_null, unique]
+      - name: rep_name
+        description: >
+          Display name of the PRIMARY login, chosen by is_primary_login rather
+          than by max() over the group. max() on a name returns whichever string
+          sorts highest, which is not a person's identity — that is how a rep
+          with two logins could be displayed under the wrong name.
+      - name: primary_username
+        description: The primary login's username.
+      - name: primary_email
+        description: The primary login's email.
+      - name: role_name
+        description: The primary login's role.
+      - name: login_count
+        description: >
+          How many logins this territory has. >1 means per-login analysis must
+          go through dim_rep_logins — and that joining THAT table on sales_code
+          to a metric would multiply the metric by this number.
+      - name: active_login_count
+        description: Of those, how many are enabled.
+      - name: usernames
+        description: Every username on this territory, sorted. Null when there are none.
+      - name: last_login_at
+        description: Most recent sign-in across all of the territory's logins.
+      - name: accounts_owned
+        description: >
+          Accounts NAV assigns to this rep, test/internal accounts excluded.
+      - name: accounts_owned_active
+        description: >
+          Of those, the ones not flagged inactive. Both are published because
+          "my accounts" means the active ones to a rep and all of them to a
+          manager.
+      - name: has_login
+        description: >
+          A person can sign in for this territory. False with owns_accounts true
+          means a book with nobody able to sign in for it.
+      - name: owns_accounts
+        description: >
+          NAV assigns at least one account to this code. False with has_login
+          true means a rep whose book has not been assigned, or was reassigned.
+      - name: is_active
+        description: At least one enabled login exists for this territory.
+
+  - name: dim_customers
+    description: >
+      One row per customer_key — the conformed customer dimension. The name to
+      say out loud, who owns the account, whether it is live, and whether it
+      could be geofenced at all. EVERY account is here, including inactive ones
+      and ones with no coordinate; that is the difference from
+      stg_nav__customer_locations and it is the point, because 12% of customers
+      have no resolvable address and for those "no visit recorded" means NOT
+      KNOWABLE rather than "did not visit". has_coordinates is how that
+      distinction reaches a consumer instead of dying in an inner join. Exists
+      because every rep mart to date carries customer_key and nothing else, so a
+      report reads "40 minutes at SUN015" — unusable in a spoken answer. NOTE
+      the key space: this is the NAV/WMS code space (= mysql ust_customer_no =
+      jdawms stcust); the CUSTOMER app identifies people by username instead and
+      those keys are not in this table.
+    columns:
+      - name: customer_key
+        description: Customer number — the PK.
+        tests: [not_null, unique]
+      - name: customer_name
+        description: Customer name. The string a spoken answer should use.
+      - name: customer_name_2
+        description: Second name line. Often null.
+      - name: address
+        description: Street address.
+      - name: city
+        description: City.
+      - name: county
+        description: County, or state in US-style addresses.
+      - name: post_code
+        description: Postal/ZIP code.
+      - name: country_region_code
+        description: Country/region code.
+      - name: owner_rep
+        description: >
+          The rep NAV says owns the account (salesperson_code). Ownership, NOT
+          "who last worked it" — a rep can legitimately transact on a
+          colleague's account, and the activity marts record who actually did.
+      - name: owner_rep_name
+        description: Display name of owner_rep, from dim_reps.
+      - name: is_active
+        description: >
+          Account is live. 48% of the customer master is inactive. Not a filter
+          to apply blindly — a rep can call on a lapsed account.
+      - name: has_coordinates
+        description: >
+          THE HONESTY FLAG. False means this account could never have matched a
+          GPS fix, so its visit history is unknown rather than empty. Any
+          statement of the form "you have not called on X" must check this
+          first.
+      - name: latitude
+        description: Geocoded latitude. Null when has_coordinates is false.
+      - name: longitude
+        description: Geocoded longitude. Null when has_coordinates is false.
+      - name: geocoded_address
+        description: The exact address string that was resolved, for tracing a bad coordinate.
+      - name: geocoded_at
+        description: When the coordinate was resolved.
+      - name: is_test_account
+        description: >
+          Seeded junk or an internal account (the office, ZZZ* rows), flagged
+          rather than deleted so a consumer can see why a count differs from the
+          raw customer master. int_rep_customer_presence drops these from the
+          geofence outright, and mart_rep_account_status excludes them from the
+          work list. Matched on customer_key, never on name: "THE LATEST SCOOP"
+          contains "TEST", and NIRVANA WAREHOUSE is real.
+      - name: accepts_monday
+        description: Accepts Monday deliveries.
+      - name: accepts_tuesday
+        description: Accepts Tuesday deliveries.
+      - name: accepts_wednesday
+        description: Accepts Wednesday deliveries.
+      - name: accepts_thursday
+        description: Accepts Thursday deliveries.
+      - name: accepts_friday
+        description: Accepts Friday deliveries.
+      - name: accepts_saturday
+        description: Accepts Saturday deliveries.
+      - name: accepts_sunday
+        description: Accepts Sunday deliveries.
+      - name: delivery_days
+        description: >
+          The same pattern as one readable string, "Tue, Thu", for a spoken
+          answer. Null when no day is set.
+      - name: delivery_day_count
+        description: >
+          How many days are set. 0 means NAV has no delivery pattern on file for
+          the account, which is UNKNOWN — not "delivers no day of the week".
+      - name: appointment_required
+        description: Delivery needs a booked appointment.
+      - name: customer_group
+        description: Customer group/segment.
+      - name: customer_price_group
+        description: Price group governing which price list applies.
+      - name: payment_terms_code
+        description: Payment terms.
+      - name: jda_route
+        description: Delivery route as sent to the WMS.
+      - name: m2_customer_id
+        description: Magento customer entity id.

@@ -124,6 +124,24 @@ vars:
   test_customer_key_regex: '^ZZZ[0-9]'
   test_customer_keys: ['JDA01', 'OFF001', 'PMT001', 'UST001', 'YYY001']
 
+  # ── REP STATUS TABLES ─────────────────────────────────────────────────────
+  # mart_rep_account_status, the account book behind the rep assistant.
+  # CONVENTIONS, not measured break-points — a rep's normal ordering cycle has
+  # not been established with the sales managers yet, so treat both as
+  # placeholders to be argued about with them.
+
+  # the "recent" window for the account book's rolling counts (orders_recent,
+  # order_value_recent). 90 days ~ one quarter: long enough that a seasonal
+  # account still shows a number, short enough that a lapsed one shows zero.
+  rep_account_recent_window_days: 90
+
+  # how long since an account's last order before it lands on the to-do list.
+  # Only ONE clock here, deliberately: the visit and app-usage clocks were
+  # dropped along with everything else that depends on the geofence and
+  # idle-gap heuristics, which are not accurate enough yet to tell a rep he has
+  # not called on someone.
+  rep_account_order_overdue_days: 60
+
   # system_event_log production go-live: event_at_utc is device time, so a
   # few rows carry clock-skewed dates before this — int_item_demand_daily
   # clamps to [go-live, now].
@@ -305,6 +323,13 @@ models:
           +materialized: table
           +schema: ust_facts
           +tags: ["facts"]
+        # Conformed dimensions. Tables, not views: every rep and customer mart
+        # joins them, and they are small enough that recompute cost is noise
+        # next to being read on every query an AI assistant issues.
+        dims:
+          +materialized: table
+          +schema: ust_dims
+          +tags: ["dims"]
       reporting:
         +materialized: table
         +schema: ust_reporting

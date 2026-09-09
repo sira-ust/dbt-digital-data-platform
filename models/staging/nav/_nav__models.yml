@@ -1,6 +1,90 @@
 version: 2
 
 models:
+  - name: stg_nav__customers
+    description: >
+      The NAV customer master, one row per customer_no — 1:1 with navrep.customer
+      apart from casting and flipping the two backwards booleans. NO geocode join
+      and NO filtering, deliberately: this is the complete account book,
+      including inactive customers and ones with no resolvable address.
+      stg_nav__customer_locations is the geofencing view of the same table and
+      INNER JOINS the geocode, which drops 12% of customers — right for matching
+      a GPS fix, wrong for asking "which of my accounts have I not called on",
+      where a missing coordinate has to read as unknown rather than as not
+      visited. customer_locations now takes its customer columns from here, so
+      the two can never disagree about a name or about the in_active flip.
+      customer_no is the same code as mysql ust_customer_no and jdawms stcust
+      (confirmed exact), so it joins straight to customer_key.
+    columns:
+      - name: customer_key
+        description: Customer number — the PK. Joins to customer_key across mysql and jdawms.
+        tests: [not_null, unique]
+      - name: customer_name
+        description: Customer name.
+      - name: customer_name_2
+        description: Customer name, second line. Often null.
+      - name: address
+        description: Street address.
+      - name: city
+        description: City.
+      - name: county
+        description: County, or state in US-style addresses.
+      - name: post_code
+        description: Postal/ZIP code.
+      - name: country_region_code
+        description: Country/region code.
+      - name: salesperson_code
+        description: >
+          The rep NAV says OWNS the account. Same code space as the sales_code on
+          every event, and a candidate join to mysql admin_users.salesperson_code.
+          Ownership, not "who last worked it" — a rep can legitimately transact on
+          a colleague's account.
+      - name: is_active
+        description: >
+          Flipped once, here, from NAV's in_active (1 = inactive) so it reads
+          correctly in a filter. 48% of customers are inactive (3,485 of 7,198).
+          Inactive does NOT mean "never contact" — a rep can call on a lapsed
+          account — so this is a column to read, never a filter to apply upstream
+          of the consumer.
+      - name: accepts_monday
+        description: Customer accepts Monday deliveries.
+      - name: accepts_tuesday
+        description: Customer accepts Tuesday deliveries.
+      - name: accepts_wednesday
+        description: Customer accepts Wednesday deliveries.
+      - name: accepts_thursday
+        description: Customer accepts Thursday deliveries.
+      - name: accepts_friday
+        description: Customer accepts Friday deliveries.
+      - name: accepts_saturday
+        description: Customer accepts Saturday deliveries.
+      - name: accepts_sunday
+        description: >
+          Customer accepts Sunday deliveries. The seven flags together are the
+          delivery-day pattern; all seven false means NAV has no pattern on file,
+          which is unknown rather than "delivers no day".
+      - name: appointment_required
+        description: Delivery needs a booked appointment. 1 genuinely means yes here.
+      - name: customer_group
+        description: Customer group/segment. CONFIRM whether NAV grouping or a Magento mirror.
+      - name: customer_price_group
+        description: Price group governing which price list applies.
+      - name: payment_terms_code
+        description: Payment terms (e.g. net days).
+      - name: responsibility_center
+        description: Responsibility centre — the branch owning the relationship.
+      - name: jda_route
+        description: Delivery route as sent to the WMS.
+      - name: m2_customer_id
+        description: >
+          Magento customer entity id. Carried, not used yet: the customer-app side
+          of the event log identifies customers by username, not by this id.
+      - name: loaded_at
+        description: >
+          Ingestion watermark — the pipeline run time. FULL LOAD, so this advances
+          every run whether or not the row changed; it measures the pipeline, not
+          row age.
+
   - name: stg_nav__customer_locations
     description: >
       One row per customer that has a usable coordinate. Isolates the single
