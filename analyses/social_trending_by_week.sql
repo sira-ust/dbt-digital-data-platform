@@ -88,6 +88,19 @@ select
     end                                                      as movement,
     b.concept_label                                          as trending,
     b.mention_count                                          as mentions,
+    -- WHAT KIND of mentions those are — the rank does not tell you. Ranking counts
+    -- every mention, which is right for a distributor (39 posts cooking with fish
+    -- sauce is real demand), but it means a staple that is in everything outranks a
+    -- product people are actually excited about.
+    --   cooked_with   named as an ingredient of something else
+    --   talked_about  the post is about the product itself
+    --   mixed         both, in roughly equal measure
+    --   unlabelled    older week, enriched before the labels existed
+    -- Read a rank-1 'cooked_with' as "a lot of people are cooking with this", never as
+    -- "this is the hot product". On 2026-08-31 fish sauce was rank 1 at 11% about it,
+    -- while phon-lami dong sat at 15 on 100%.
+    b.demand_type,
+    round(b.subject_ratio * 100, 0)                          as pct_about_it,
     round(b.mention_share * 100, 1)                          as share_pct,
     case when b.is_rising then 'yes' else 'no' end            as gaining_share,
     b.weeks_on_board,
@@ -115,10 +128,21 @@ select
     concat_ws(', ', b.nearest_items)                         as nearest_items,
     b.action_signal,
 
-    -- EVERY link, as the array itself. The mart holds up to 5 posts per concept and one
-    -- is not enough to judge a trend by. A CSV/Excel download serialises it to
-    -- ["url", "url", …]; if you need plain text in the cell, use
-    -- concat_ws(', ', b.source_links) instead.
+    -- The best-performing posts among this thing's MENTIONS, up to 5 — the same
+    -- mentions the `mentions` column counts, so the two always agree. Ordered by
+    -- engagement (likes + comments + shares), then reach. Nothing about relevance
+    -- enters the ordering.
+    --
+    -- SO READ THIS WITH demand_type, ALWAYS. On a 'cooked_with' row these links are
+    -- recipes that USE the thing, not posts about it, and they are usually the most
+    -- viral dish videos of the week. Fish sauce on 2026-08-31 is the honest example:
+    -- 44 mentions, only 5 about fish sauce, so its top 5 by performance are pho and
+    -- banh mi videos. That is a real demand signal for a distributor and a bad
+    -- content reference for a marketer — pct_about_it tells you which one you have.
+    --
+    -- EVERY link, as the array itself: one post is not enough to judge a trend by. A
+    -- CSV/Excel download serialises it to ["url", "url", …]; if you need plain text in
+    -- the cell, use concat_ws(', ', b.source_links) instead.
     b.source_links                                           as example_post
 
 from board as b

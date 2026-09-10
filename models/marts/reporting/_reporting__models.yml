@@ -714,11 +714,12 @@ models:
           volume-driven). Null on a concept's first week. Not the rank.
       - name: source_links
         description: >
-          URLs of the best-performing posts ABOUT this concept that week — subject
-          mentions only, ordered by engagement then reach. A post that merely names
-          the concept is excluded, so this is a "top content" list rather than
-          evidence of the trend. Empty when nobody posted about it directly; see
-          has_subject_evidence, and int_social_concept_trends for the full rule.
+          URLs of the best-performing posts among this concept's mentions that week,
+          drawn from the same pool mention_count counts and ordered by engagement then
+          reach. Relevance does not filter or order, so a post that merely names the
+          concept can top the list — read alongside demand_type and pct_about_it,
+          which say how much of the volume was about the thing itself. See
+          int_social_concept_trends for the full rule.
       - name: distinct_authors
         description: >
           Distinct authors behind the trend (channel-scoped; anonymised Instagram rows each

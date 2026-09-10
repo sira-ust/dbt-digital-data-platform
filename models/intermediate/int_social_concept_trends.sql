@@ -566,8 +566,8 @@ mention_concept_counts as (
 -- mention_concept_breadth (n_concepts_all) lived here until 2026-09-10. It was a
 -- FOCUS PROXY for ranking source_links: an unlabelled mention naming <= 2 concepts
 -- was probably about them, so it outranked one naming six. The v4 subject labels
--- answer that question directly, and links now filter on role_rank = 2 instead, so
--- the proxy has no callers. Restore it from git if a future consumer needs a
+-- answered that question directly and retired the proxy; source_links no longer
+-- weighs relevance at all (see links_ranked), so nothing calls it. Restore it from git if a future consumer needs a
 -- "how many things does this post talk about" measure — note it was deliberately
 -- NOT per-class, unlike mention_concept_counts, because being about one thing is a
 -- property of the whole post.
@@ -693,60 +693,47 @@ scored as (
 
 ),
 
--- top-N source links per (week, class, concept): RELEVANCE GATES, REACH SORTS.
+-- top-N source links per (week, class, concept): the best-performing posts among
+-- the mentions that made up the concept's count.
 --
--- These links are EVIDENCE — a human opens them to see the trend — so the two things
--- that matter are that the post is genuinely about the concept, and that it is the
--- biggest such post. Those used to be in tension: with no relevance signal, ordering
--- by reach put ingredient-list posts at the top of every concept's evidence (2026-W35,
--- "condensed milk": the top link was a lemongrass-chicken recipe whose marinade calls
--- for a tablespoon of it), and the first fix for that ordered by how FEW things a post
--- named, which demoted a 500k-view post about the concept beneath a 1-like post that
--- happened to be terse.
+-- HISTORY, because this changed three times in two days and the discarded designs
+-- keep looking attractive. Until 2026-09-10 the ordering was two median-normalised
+-- ratios summed, over a pool tiered by a proxy for relevance (how few things a post
+-- named). Both halves were wrong: the normalisation paid channels for REPORTING two
+-- metrics rather than for performing, and the breadth proxy demoted a 500k-view post
+-- about the concept beneath a 1-like post that happened to be terse. On 2026-09-10
+-- the v4 role label replaced the proxy and became a hard FILTER (subject posts only).
+-- That is now gone too, for the reason below.
 --
--- The v4 role label dissolves the tension: relevance becomes a FILTER and reach is
--- free to be the SORT. Tiers, best first:
---   0  known subject      the post is about this concept
---   1  unlabelled, terse  not yet re-labelled, but names <= 2 things — the old proxy
---   2  unlabelled, broad  not yet re-labelled, names more
---   3  known ingredient   definitively not what the post is about
+-- THE LINK POOL IS THE MENTION POOL (filter added 2026-09-10, removed
+-- 2026-09-11). Every mention counted in mention_count is a candidate here, and
+-- the top social_trend_link_count by performance win. mention_count and
+-- source_links answer for the SAME rows, which is what a reader assumes when
+-- they see "5 mentions" beside an empty array, and the reason the array can no
+-- longer be empty while mentions exist.
 --
--- Tier 3 sorts LAST rather than being dropped: a concept can have no subject posts at
--- all (oyster sauce nearly does), and showing the recipes that use it beats showing no
--- evidence. has_subject_evidence on the row says which case a reader is looking at.
+-- RELEVANCE IS NOT IN THE ORDERING. role_rank was briefly a filter (2026-09-10)
+-- and then briefly a leading sort key; it is neither now. A post that merely
+-- names the concept competes on equal terms with a post about it, so a staple
+-- shows the content it actually appears in: fish sauce has 5 subject posts
+-- among 44 mentions, and the 39 recipe posts out-perform them, so its links are
+-- pho and banh mi videos rather than fish-sauce videos. That is the known cost
+-- of this choice — the links show what the mentions were, not what the
+-- concept is.
 --
--- TIERS 1 AND 2 ARE TRANSITIONAL. They exist only because deploying this model and
--- finishing the v4 re-label are two separate steps, and for the window between them
--- the corpus is a mix. Collapse them into tier 2 once unlabelled_mentions is zero
--- across the retained history — the breadth proxy is strictly worse than the label and
--- should not outlive it.
---
--- reach_ratio, not raw engagement or raw views: see mentions_normalized for why
--- neither raw metric survives a corpus that is 65% Instagram. follower_count is not in
--- the ordering — it is NULL on 100% of Instagram rows, so it never ordered anything.
--- mention_id last keeps the result deterministic across runs.
--- RELEVANCE IS A FILTER, NOT A TIE-BREAK (changed 2026-09-10). These links answer
--- "what is the best-performing content ABOUT this thing", so a post that merely
--- names the concept is not a weaker candidate — it is not a candidate. A viral
--- pho video that lists fish sauce in its ingredients is content about pho, and
--- putting it on the fish-sauce board misrepresents both.
---
--- role_rank = 2 means the concept is in the mention's SUBJECT array. Dropping
--- role_rank 1 (named only) and 0 (unlabelled, enriched before v4) empties the
--- array for concept-weeks where nobody posted about the thing — 28% of the last
--- three weeks, and ALL weeks before 2026-08-17, which predate the v4 subject
--- labels. An empty array is the honest answer there, and has_subject_evidence
--- already tells a reader which case they are looking at. Widen the enrichment
--- backfill if the older weeks need their links back.
+-- demand_type is what keeps that legible, and the two columns must be read
+-- together: a 'cooked_with' row's links are recipes that USE the thing, and
+-- pct_about_it says how little of its volume was about the thing itself.
+-- has_subject_evidence still records whether any subject post existed at all.
 --
 -- ORDERING IS PURE PERFORMANCE, deliberately unnormalised. Engagement leads
 -- because it is the metric with the widest coverage (Instagram 61%, YouTube 79%,
 -- TikTok 98%, Twitter 55%, Reddit 97%) and it survives a channel that reports no
--- reach at all; reach breaks its ties. The previous version summed two
--- median-normalised ratios, which quietly paid channels for REPORTING two metrics
--- rather than for performing: mean reach_ratio was 213 on YouTube against 30 on
--- TikTok and 34 on Instagram, and 36% of the links then on boards had neither
--- engagement nor reach and were ordered by mention_id, i.e. arbitrarily.
+-- reach at all; reach breaks its ties. The numbers behind rejecting the old
+-- normalisation: mean reach_ratio was 213 on YouTube against 30 on TikTok and 34
+-- on Instagram, and 36% of the links it put on boards had neither engagement nor
+-- reach, so it ordered them by mention_id, i.e. arbitrarily. mention_id still
+-- sorts last here, which is what keeps the result deterministic across runs.
 links_ranked as (
 
     select
@@ -763,7 +750,6 @@ links_ranked as (
         )                                                              as _rn
     from concept_mentions_shared as cms
     where cms.link is not null
-      and cms.role_rank = 2
 
 ),
 
