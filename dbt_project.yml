@@ -185,6 +185,17 @@ vars:
   social_enrich_backfill_weeks: 4    # (4) weeks a PROMPT_VERSION bump re-labels. Week-aligned;
                                      # 0 = all history. Never re-label a PARTIAL week
   social_trend_top_n: 20             # trending items the mart shows PER CLASS PER WEEK
+  # demand_type — what KIND of signal a row is, not how strong. The score counts every
+  # mention (deliberately: cooking demand is real demand to a distributor), so these
+  # bands are what stop a reader mistaking a ubiquitous ingredient for a product people
+  # are excited about. Measured over 2026-08-17..08-31: soy sauce 5% and oyster sauce
+  # 20% are pure ingredient demand; nutella 63% and nam phrik 78% are genuine product
+  # interest; fish sauce 28% is the case that motivated the split. Bands are set so
+  # those land where a buyer would put them by eye — widen 'mixed' if too much is
+  # landing in the outer two.
+  social_trend_talked_about_min_ratio: 0.5   # subject share at/above this = 'talked_about'
+  social_trend_cooked_with_max_ratio: 0.3    # subject share at/below this = 'cooked_with'
+
   social_trend_min_mentions: 2       # noise floor, per concept per WEEK. Bites harder at a 7-day
                                      # grain than a multi-week one: expect gaps in trajectories
   social_trend_link_count: 5         # source_links per concept-week, top links by reach then engagement

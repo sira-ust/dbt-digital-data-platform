@@ -635,6 +635,8 @@ joined as (
         b.mention_count,
         b.subject_mentions,
         b.ingredient_mentions,
+        b.subject_ratio,
+        b.demand_type,
         b.unlabelled_mentions,
         b.has_subject_evidence,
         b.mention_count_wow_pct,
@@ -687,6 +689,11 @@ select
     -- deliberately left alone.
     j.subject_mentions,
     j.ingredient_mentions,
+    -- 'talked_about' / 'cooked_with' / 'mixed' — WHY this row ranks. The score
+    -- counts cooking demand as well as product interest, so the rank alone cannot
+    -- separate a trending product from a staple that is simply in everything.
+    j.subject_ratio,
+    j.demand_type,
     j.unlabelled_mentions,
     -- false means source_links are posts that merely NAMED the concept — there were
     -- no posts about it to show. Read the evidence accordingly.

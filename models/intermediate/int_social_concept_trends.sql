@@ -113,7 +113,24 @@ with mentions as (
         -- above. NULL for any mention still labelled at v3 — see role_rank below,
         -- which keeps null as its own state rather than reading it as "incidental".
         subject_dishes,
-        subject_products
+        subject_products,
+        -- WHICH BOARD THIS POST BELONGS TO. Assigned once, before anything is ranked.
+        -- The enrichment can name a post the subject of a dish AND of a product, and
+        -- 859 of the 13,924 mentions since 2026-08-17 are exactly that — so the same
+        -- post voted as a SUBJECT on both boards. That is how 'fish sauce' reached
+        -- item rank 1 on 11 subject mentions of which 8 were dish posts: four dishes
+        -- made WITH fish sauce, lending their popularity to the bottle.
+        --
+        -- A DISH SUBJECT WINS. If the enrichment says the post is about กุ้งแช่น้ำปลา
+        -- (Shrimp in Fish Sauce), the fish sauce in it is how the dish is made, not
+        -- what the post is about. Such a post is NOT dropped from the item board — it
+        -- falls to role_rank 1, which is the ingredient/basket signal, so "these
+        -- dishes are trending, here is what goes in them" survives intact. Only the
+        -- claim to be a SUBJECT is withdrawn.
+        case
+            when {{ array_size('subject_dishes') }}   > 0 then 'dish'
+            when {{ array_size('subject_products') }} > 0 then 'item'
+        end                                                             as post_class
     from {{ ref('fct_social_mentions') }}
 
 ),
@@ -271,7 +288,7 @@ mentions_normalized as (
         m.mentioned_dishes, m.mentioned_products,
         m.subject_dishes, m.subject_products,
         m.week_start, m.week_end,
-        m.engagement, m.views, m.reach,
+        m.engagement, m.views, m.reach, m.post_class,
         case when cb.channel_median_engagement > 0
              then m.engagement * 1.0 / cb.channel_median_engagement else 0 end as engagement_ratio,
         case when cb.channel_median_views > 0
@@ -306,7 +323,7 @@ mentions_normalized as (
 dish_concepts_raw as (
 
     select
-        mention_id, profile, channel, posted_date, engagement, views, reach,
+        mention_id, profile, channel, posted_date, engagement, views, reach, post_class,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end, reach_ratio,
         'dish'                                                          as concept_class,
@@ -322,7 +339,7 @@ dish_concepts_raw as (
 item_concepts_raw as (
 
     select
-        mention_id, profile, channel, posted_date, engagement, views, reach,
+        mention_id, profile, channel, posted_date, engagement, views, reach, post_class,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end, reach_ratio,
         'item'                                                          as concept_class,
@@ -347,7 +364,7 @@ concepts_raw as (
 concepts_degloss as (
 
     select
-        mention_id, profile, channel, posted_date, engagement, views, reach,
+        mention_id, profile, channel, posted_date, engagement, views, reach, post_class,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
         reach_ratio,
@@ -365,9 +382,17 @@ concepts_degloss as (
         -- Three states, not a boolean: between deploying this model and finishing
         -- the v4 re-label the corpus is a mix, and treating an unlabelled mention as
         -- "not a subject" would report almost the whole board as incidental.
+        -- A SUBJECT CLAIM ONLY COUNTS ON THE POST'S OWN BOARD. post_class is assigned
+        -- once, up in `mentions` — dish subject wins — so a post about a dish cannot
+        -- also be a subject on the item board. It drops to 1, which is the ingredient
+        -- signal the basket side reads, so nothing is lost: the post still says "this
+        -- dish is trending and here is what goes in it", it just no longer claims the
+        -- ingredient is what people are posting about. Without this, 859 of the 13,924
+        -- mentions since 2026-08-17 voted as a subject on BOTH boards at once.
         case
             when subject_arr is null                        then 0
-            when {{ array_contains('subject_arr', 'concept') }} then 2
+            when {{ array_contains('subject_arr', 'concept') }}
+                 and post_class = concept_class            then 2
             else 1
         end                                                             as role_rank,
         {{ strip_parenthetical_gloss('concept') }}                      as concept_deglossed
@@ -379,7 +404,7 @@ concepts_degloss as (
 concepts as (
 
     select
-        mention_id, profile, channel, posted_date, engagement, views, reach,
+        mention_id, profile, channel, posted_date, engagement, views, reach, post_class,
         engagement_ratio, views_ratio, follower_count, link,
         week_start, week_end,
         reach_ratio,
@@ -474,7 +499,7 @@ concept_groups as (
 grouped as (
 
     select
-        c.mention_id, c.profile, c.channel, c.posted_date, c.engagement, c.views, c.reach,
+        c.mention_id, c.profile, c.channel, c.posted_date, c.engagement, c.views, c.reach, c.post_class,
         c.engagement_ratio, c.views_ratio, c.reach_ratio, c.follower_count, c.link,
         c.week_start, c.week_end, c.concept_class, c.role_rank,
         coalesce(g.group_primary, c.concept_norm)                       as concept_norm
@@ -495,7 +520,7 @@ concept_mentions as (
     select distinct
         week_start, week_end, concept_class,
         concept_norm, mention_id, profile, channel, posted_date,
-        engagement, views, reach, engagement_ratio, views_ratio, reach_ratio,
+        engagement, views, reach, post_class, engagement_ratio, views_ratio, reach_ratio,
         follower_count, link,
         -- anonymised placeholder, confirmed with Mentionlytics as an Instagram
         -- API limitation (~97% of Instagram rows) — extend this list if another
@@ -806,6 +831,28 @@ with_rank as (
         s.named_mentions,
         s.subject_mentions,
         s.ingredient_mentions,
+        -- WHY THIS CONCEPT RANKS. The score counts every mention, which is right for a
+        -- wholesaler — 39 posts cooking with fish sauce is real demand — but it means a
+        -- ubiquitous ingredient outranks a product people are actually excited about,
+        -- and the rank alone cannot tell the two apart. Fish sauce held item rank 1 on
+        -- 5 subject mentions against 39 ingredient ones, while ผลไม้ดอง sat at 15 on 5
+        -- subject and 0 ingredient (2026-08-31). Both belong on a sourcing board; they
+        -- are not the same news, so the row now says which it is.
+        --
+        -- Ratio over LABELLED mentions only. Unlabelled ones (pre-v4 enrichment) are
+        -- excluded from the denominator rather than counted as ingredient, so an old
+        -- week reads 'unlabelled' instead of quietly reading as pure ingredient demand.
+        case when s.subject_mentions + s.ingredient_mentions > 0
+             then s.subject_mentions * 1.0 / (s.subject_mentions + s.ingredient_mentions)
+        end                                                             as subject_ratio,
+        case
+            when s.subject_mentions + s.ingredient_mentions = 0 then 'unlabelled'
+            when s.subject_mentions * 1.0 / (s.subject_mentions + s.ingredient_mentions)
+                 >= {{ var('social_trend_talked_about_min_ratio') }}    then 'talked_about'
+            when s.subject_mentions * 1.0 / (s.subject_mentions + s.ingredient_mentions)
+                 <= {{ var('social_trend_cooked_with_max_ratio') }}     then 'cooked_with'
+            else 'mixed'
+        end                                                             as demand_type,
         s.unlabelled_mentions,
         -- whether source_links for this row are posts ABOUT the concept or merely
         -- posts that named it. Read the links differently in the two cases.

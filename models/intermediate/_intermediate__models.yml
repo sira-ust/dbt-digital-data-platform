@@ -506,6 +506,23 @@ models:
           recipe ingredient, a step, one line on a menu. Real demand signal for a
           distributor, but not product conversation, which is why it is reported
           separately rather than netted off.
+      - name: subject_ratio
+        description: >
+          subject_mentions / (subject_mentions + ingredient_mentions). Null when the
+          week has no labelled mentions at all (pre-v4 enrichment) — unlabelled ones
+          are left OUT of the denominator rather than counted as ingredient, so an old
+          week reads as unknown instead of quietly reading as pure ingredient demand.
+      - name: demand_type
+        description: >
+          WHY the row ranks, not how strongly — 'talked_about' (subject_ratio at or
+          above social_trend_talked_about_min_ratio), 'cooked_with' (at or below
+          social_trend_cooked_with_max_ratio), 'mixed' between them, 'unlabelled' when
+          there is nothing to judge. trend_score counts EVERY mention, which is right
+          for a wholesaler — 39 posts cooking with fish sauce is real demand — but it
+          means a ubiquitous ingredient outranks a product people are excited about and
+          the rank alone cannot tell them apart. On 2026-08-31 fish sauce held item
+          rank 1 at ratio 0.11 while ผลไม้ดอง sat at 15 on 1.00. Both belong on a
+          sourcing board; they are not the same news.
       - name: unlabelled_mentions
         description: >
           Mentions not yet re-labelled at prompt v4, so their role is unknown.
