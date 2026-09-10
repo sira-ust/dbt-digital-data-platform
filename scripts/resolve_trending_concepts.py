@@ -128,7 +128,7 @@ def _dbt_var(name, default):
 
 
 MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
-PROMPT_VERSION = "v10"                   # v5 = propose + independent VERIFY pass; deglossed snippet keys
+PROMPT_VERSION = "v11"                   # v5 = propose + independent VERIFY pass; deglossed snippet keys
                                          # v6 = SECOND LOOK on a "none": recall matters as much as
                                          #      precision here, because a false "we don't carry this"
                                          #      sends someone to source a product we already sell
@@ -294,6 +294,9 @@ thing, one being a translation, transliteration, or spelling variant of the othe
 
 Worked through, so the test is unambiguous:
   "som tam" / "ส้มตำ"                 SAME — transliteration, nothing narrowed
+  "fish sauce" / "น้ำปลา"              SAME — TRANSLATION. The two texts share no
+                                      letters at all; that is not evidence of
+                                      difference. Judge the meaning, not the script.
   "banh khot" / "bánh khọt"           SAME — diacritics only
   "matcha" / "matcha powder"          SAME — "powder" is the form matcha comes in, it
                                       does not narrow which thing is meant
@@ -1157,34 +1160,69 @@ def group_concepts(client, concepts, brand_keys=frozenset()):
     if data is None:
         return ungrouped
 
-    # VALIDATE before trusting: a bad grouping fuses real trends, so anything that
-    # doesn't account for exactly the input set is discarded wholesale.
+    # VALIDATE before trusting: a bad grouping fuses real trends. Rejection is
+    # PER GROUP, not wholesale. It used to `return ungrouped` on the first bad
+    # member, which meant one cosmetically-wrong echo in a 40-concept reply threw
+    # away every good merge alongside it — and the log then read exactly like a
+    # model that had found no duplicates. Between that and the 2026-08-19
+    # truncation, group_primary was still equal to concept_norm on all 249 rows of
+    # every version through v10: the feature had never once merged anything in
+    # production. A bad group now costs that group only.
     by_norm = {c["concept_norm"]: c for c in concepts}
-    # every concept starts alone; the reply only has to describe the merges
+    # The board is rendered to the model as "[item] fish sauce   (12 mentions)", so
+    # a reply that echoes the decoration back is answering correctly in the wrong
+    # shape. Resolve leniently — strip the class tag, the mention count and case —
+    # before deciding a member is unknown. Exact match still wins.
+    lenient = {}
+    for k in by_norm:
+        lenient.setdefault(_merge_key(k), k)
+
+    def _resolve(raw):
+        if raw in by_norm:
+            return raw
+        return lenient.get(_merge_key(raw))
+
     mapping, seen = dict(ungrouped), set()
+    n_proposed = n_kept = n_skipped = 0
     for g in data["groups"]:
-        members = [str(m) for m in (g.get("members") or [])]
-        primary = str(g.get("primary") or "")
+        n_proposed += 1
+        raw_members = [str(m) for m in (g.get("members") or [])]
+        members = [_resolve(m) for m in raw_members]
+        primary = _resolve(str(g.get("primary") or ""))
         label = str(g.get("label") or "").strip() or None
-        if not members or primary not in members:
-            print("  WARN grouping: primary not in its own members — ignoring the "
-                  "whole grouping", file=sys.stderr)
-            return ungrouped
-        classes = set()
-        for m in members:
-            if m not in by_norm or m in seen:
-                print(f"  WARN grouping: {m!r} unknown or repeated — ignoring the "
-                      f"whole grouping", file=sys.stderr)
-                return ungrouped
-            seen.add(m)
-            classes.add(_class_hint(by_norm[m]))
+
+        bad = next((r for r, m in zip(raw_members, members) if m is None), None)
+        if bad is not None:
+            print(f"  WARN grouping: member {bad!r} matches no concept on the board "
+                  f"— skipping this group", file=sys.stderr)
+            n_skipped += 1
+            continue
+        if not members or primary is None or primary not in members:
+            print(f"  WARN grouping: primary {g.get('primary')!r} not in its own "
+                  f"members — skipping this group", file=sys.stderr)
+            n_skipped += 1
+            continue
+        repeated = next((m for m in members if m in seen), None)
+        if repeated is not None:
+            print(f"  WARN grouping: {repeated!r} already grouped — skipping this "
+                  f"group", file=sys.stderr)
+            n_skipped += 1
+            continue
+        classes = {_class_hint(by_norm[m]) for m in members}
         if len(classes) > 1:
             print(f"  WARN grouping: group {primary!r} mixes boards {classes} — "
-                  f"ignoring the whole grouping", file=sys.stderr)
-            return ungrouped
+                  f"skipping this group", file=sys.stderr)
+            n_skipped += 1
+            continue
         if len(members) > 1:
+            seen.update(members)
+            n_kept += 1
             for m in members:
                 mapping[m] = (primary, label)
+    # Say what came back. A discarded grouping and an honest "no duplicates" were
+    # indistinguishable in the log for eight prompt versions; they are not now.
+    print(f"  grouping: model proposed {n_proposed} groups, {n_kept} accepted, "
+          f"{n_skipped} skipped as invalid")
 
     # ── REFUTE THE MERGES ────────────────────────────────────────────────────────
     # First real run merged 3 wrong out of 4 — a brand into its category (มาม่า into
@@ -1224,6 +1262,30 @@ def group_concepts(client, concepts, brand_keys=frozenset()):
     return mapping
 
 
+def _merge_key(s):
+    """Loose key for matching a grouping reply back to a board concept.
+
+    The board is shown as "[item] fish sauce   (12 mentions)", and the reply is
+    asked to copy the concept text alone. A model that echoes the decoration is
+    right about the grouping and wrong about the shape, and that used to be
+    indistinguishable from naming a concept that does not exist. Strips a leading
+    [class] tag, a trailing "(N mentions)", surrounding quotes and case/space
+    noise. Deliberately does NOT fold diacritics or scripts: น้ำปลา and "fish
+    sauce" must still be two different keys here, because deciding they are the
+    same thing is the model's job, not the parser's.
+    """
+    s = str(s or "").strip().strip('"\'').strip()
+    if s.startswith("["):
+        close = s.find("]")
+        if close != -1:
+            s = s[close + 1:].strip()
+    if s.endswith(")"):
+        open_paren = s.rfind("(")
+        if open_paren != -1 and "mention" in s[open_paren:].lower():
+            s = s[:open_paren].strip()
+    return " ".join(s.lower().split())
+
+
 def review_merges(client, proposed):
     """Second opinion on each proposed merge. Returns the set of (primary, member) pairs
     that survive; anything not explicitly accepted is discarded, so a failed or
@@ -1240,19 +1302,31 @@ def review_merges(client, proposed):
               file=sys.stderr)
         return set()
 
+    # Same lenient resolution as the grouping reply, and for the same reason: a
+    # verdict that quotes the pair back with different surrounding punctuation is
+    # a real verdict, and silently dropping it REFUSES the merge (anything not
+    # explicitly accepted is discarded). Exact match still wins.
     asked = {(p, m) for m, p in proposed}
-    keep = set()
+    by_key = {(_merge_key(p), _merge_key(m)): (p, m) for p, m in asked}
+    keep, unmatched = set(), 0
     for v in data["verdicts"]:
         if not isinstance(v, dict):
             continue
         pair = (str(v.get("primary")), str(v.get("member")))
         if pair not in asked:
-            continue
+            pair = by_key.get((_merge_key(pair[0]), _merge_key(pair[1])))
+            if pair is None:
+                unmatched += 1
+                continue
         if v.get("same"):
             keep.add(pair)
         else:
             print(f"  merge REFUSED: {pair[1]!r} is not {pair[0]!r} — "
                   f"{str(v.get('reason') or '')[:100]}")
+    if unmatched:
+        print(f"  WARN merge review: {unmatched} verdict(s) named a pair that was "
+              f"never proposed — those merges stay refused", file=sys.stderr)
+    print(f"  merge review: {len(proposed)} proposed, {len(keep)} accepted")
     return keep
 
 
