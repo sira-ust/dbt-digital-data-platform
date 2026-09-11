@@ -64,7 +64,26 @@ parsed as (
         -- day in it, which at a month boundary moves revenue between months.
         -- Null for customer-app submits, which have no rep-day clock.
         rep_local_date,
-        upper({{ parse_kv_response('response', 'order_source') }})                   as order_channel,
+        -- order_source is the ORIGIN of the order, not the device that sent it:
+        -- a rep submitting from a PDA an order the customer started in the app
+        -- logs order_source:APP on source_code PDA-A. So the payload wins when
+        -- it says anything.
+        --
+        -- It is sometimes BLANK -- literally "order_source:," -- on real orders
+        -- with a real increment_id and a real total. 17 such rows, Feb-Sep 2026,
+        -- every one actor_type 'sales' on a PDA. They landed in neither
+        -- orders_keyed nor orders_received downstream, so rep 002's keyed count
+        -- silently undercounted a recurring account for seven months and
+        -- mart_rep_period_status failed its
+        -- "orders_keyed + orders_received = orders_submitted" test.
+        --
+        -- INFERRED, and only for that case: a sales submit from a PDA with no
+        -- stated origin was keyed by the rep. Anything else stays NULL rather
+        -- than being guessed at.
+        coalesce(
+            nullif(upper({{ parse_kv_response('response', 'order_source') }}), ''),
+            case when actor_type = 'sales' and app_name = 'PDA' then 'PDA' end
+        )                                                                            as order_channel,
         try_cast({{ parse_kv_response('response', 'grand_total') }} as double)        as grand_total,
         try_cast({{ parse_kv_response('response', 'subtotal') }} as double)           as subtotal,
         try_cast({{ parse_kv_response('response', 'total_item_count') }} as integer)  as total_item_count
@@ -75,7 +94,15 @@ parsed as (
 filtered as (
 
     select * from parsed
-    where increment_id is not null and increment_id <> ''
+    -- '(null)' is the LITERAL STRING the app writes when it has nothing to say.
+    -- One 2026-09-10 row arrived as
+    --   increment_id:(null),order_source:(null),grand_total:(null),...
+    -- which matched the `%increment_id:%` test in `submits`, is neither NULL nor
+    -- '', and so passed this filter and became an order with no number and no
+    -- value. It is not an order; it is the app logging a submit screen that
+    -- produced nothing.
+    where increment_id is not null
+      and increment_id not in ('', '(null)')
 
 ),
 
