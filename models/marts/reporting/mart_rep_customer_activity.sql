@@ -650,6 +650,48 @@ combined as (
         v.is_ambiguous
     from visit_only as v
 
+),
+
+-- ── did the APP settle which customer this was? ───────────────────────────
+-- int_rep_customer_presence answers a purely geometric question: were two live
+-- customers inside the geofence on the same fix? It cannot answer the question
+-- a reader actually has -- do we know which one he was in? -- because it is
+-- built independently of app activity on purpose, and 80% of GPS fixes carry no
+-- customer at all.
+--
+-- A scenario of 'on-site' means an app session for THIS customer overlapped THIS
+-- visit's window. That is the missing evidence: the rep had that customer's
+-- record open while standing inside its fence. ASI282 on 2026-09-08 is the clean
+-- case -- ASI284 is a DUPLICATE NAV record, same name, same suite, identical
+-- coordinates, so no distance test can ever separate them, but 424 events and an
+-- order against ASI282 settle it completely.
+--
+-- Scoped to the customer-DAY, so a 'visited, keyed elsewhere' row is resolved by
+-- its own on-site sibling. If he demonstrably worked the customer on site, the
+-- afternoon follow-up for that same customer is not in doubt either.
+--
+-- 'visit only, no app' can never be resolved this way, which is correct: that
+-- scenario means there was no app activity to weigh. Every one of rep 030's
+-- Clement St cluster rows keeps its flag.
+--
+-- Measured over 90 days, with the discarded-order fix in
+-- int_rep_customer_activity applied: 1,620 of 3,766 visit rows flagged (43%)
+-- becomes 550 (14.6%). Of the 1,070 demoted, 738 are on-site rows and 346 are
+-- their keyed-elsewhere siblings. What survives is 455 'visit only' rows and 107
+-- keyed-elsewhere rows with no on-site sibling -- exactly the cases where
+-- nothing ties the rep to that customer inside the visit.
+--
+-- BOTH are published. geofence_ambiguous is the raw geometry, unchanged from
+-- presence; is_ambiguous is the practical question. A consumer wanting the old
+-- behaviour reads geofence_ambiguous.
+resolved as (
+
+    select
+        c.*,
+        max(case when c.scenario = 'on-site' then 1 else 0 end)
+            over (partition by c.customer_day_key)                       as resolved_by_app
+    from combined as c
+
 )
 
 select
@@ -685,7 +727,16 @@ select
     -- how many of those events only have a customer because a BLE pairing let us
     -- inherit it. Compare against event_count before treating a row as exact.
     c.inherited_event_count,
-    c.is_ambiguous,
+    -- the raw geometric flag from presence: another LIVE customer sat inside the
+    -- geofence on at least one fix of this visit. Says nothing about whether we
+    -- know which one he was in.
+    c.is_ambiguous                                                       as geofence_ambiguous,
+    -- he had THIS customer's record open while inside its fence, so the geometry
+    -- no longer decides anything. See the `resolved` CTE above.
+    c.resolved_by_app = 1                                                as resolved_by_app,
+    -- two customers in range AND nothing in the app to separate them. This is
+    -- the one to filter on.
+    c.is_ambiguous and c.resolved_by_app = 0                             as is_ambiguous,
 
     -- the standard noise filter: the rep spent measurable time, sent/handled an
     -- order, or was physically there. False only when none of those hold.
@@ -696,6 +747,6 @@ select
         + c.paired_minutes > 0
      or c.orders_submitted > 0
      or coalesce(c.on_site_minutes, 0) > 0)                              as has_activity
-from combined as c
+from resolved as c
 left join reps as r
     on r.salesperson_code = c.sales_code

@@ -45,7 +45,67 @@
 -- declared by the app or inherited, and device_group treats a paired PDA + iPad
 -- as the ONE workstation it is, which is what keeps stint timing honest.
 
-with raw_events as (
+-- ── orders the app itself threw away ──────────────────────────────────────
+-- 08030000 Auto Delete Order fires when the app discards an order that never
+-- got a line on it. The event never reaches this model — l1 08 carries no
+-- feature_name, so the work-event filter below drops it — but the two
+-- Create Order events in front of it DO pass (09010000 on l1 09, 12010400 via
+-- feature_name), and two events are enough to open a session. That session then
+-- earns the customer an 'on-site' row in the mart and takes the visit's minutes
+-- with it.
+--
+-- Measured on rep 029 / JFO001 / 2026-09-07: Create Order 13:02:23, Create
+-- Order 13:02:25, Auto Delete 13:05:22 — and three seconds later he is back on
+-- TWE004, the store two doors down at 2425 Irving against JFO001's 2409, where
+-- he had been scanning barcodes since 12:54. J. And Food Market collected 15
+-- on-site minutes for a mis-tap. Not a one-off: that same pair repeats FIVE
+-- times for this rep between June and September.
+--
+-- Scoped to REP x CUSTOMER x DAY, not to the session, because session_seq is
+-- numbered further down this model and the auto-delete is already gone by then.
+-- Deliberately conservative — it fires only when that customer produced nothing
+-- productive all day, so a day mixing a mis-tap with real work keeps both. The
+-- cost of that choice is a morning mis-tap surviving on a customer genuinely
+-- worked in the afternoon; the real session dominates the row anyway.
+--
+-- Browsing is NOT counted as productive on purpose, but a browse-only day is
+-- still kept: the test requires every event to be order scaffolding, a location
+-- ping, or the auto-delete itself. Opening the catalog under a customer is weak
+-- evidence, not zero evidence.
+--
+-- Measured over 90 days: 480 customer-days qualify, 37 of them carry a visit
+-- row and 20 an 'on-site' row worth 617 minutes. 19 of those 20 have ZERO
+-- keying minutes and 14 sit inside an ambiguous geofence — so the minutes were
+-- being handed to a neighbour that the rep never opened. None of the
+-- rep-confirmed days move (032 on 2026-08-26 and 08-31, 029 on 2026-08-28):
+-- each auto-delete there sits alongside hundreds of real events.
+with discarded_order_days as (
+
+    select
+        sales_code,
+        customer_key,
+        rep_local_date
+    from {{ ref('int_events_enriched') }}
+    where actor_type   = 'sales'
+      and sales_code   is not null
+      and customer_key is not null
+    group by sales_code, customer_key, rep_local_date
+    having max(case when description_code = '08030000' then 1 else 0 end) = 1
+       -- nothing was added, removed, re-quantified or sent
+       and sum(case when is_add or is_remove or is_qty_change
+                     or (l1_code = '04' and response like '%increment_id:%')
+                    then 1 else 0 end) = 0
+       -- and nothing was scanned: you cannot scan a shelf remotely, so a scan
+       -- is presence evidence in its own right
+       and sum(case when description_code = '18010000' then 1 else 0 end) = 0
+       -- and nothing happened beyond opening the order and binning it
+       and sum(case when description_code
+                    not in ('09010000', '12010400', '01040100', '08030000')
+                    then 1 else 0 end) = 0
+
+),
+
+raw_events as (
 
     select
         entity_id,
@@ -103,16 +163,25 @@ with raw_events as (
             when l1_code = '04' and response like '%increment_id:%'
                 then {{ parse_kv_response('response', 'increment_id') }}
         end                                                              as increment_id
-    from {{ ref('int_events_enriched') }}
-    where actor_type   = 'sales'
-      and sales_code   is not null
-      and customer_key is not null
-      and event_at_utc is not null
+    from {{ ref('int_events_enriched') }} as src
+    where src.actor_type   = 'sales'
+      and src.sales_code   is not null
+      and src.customer_key is not null
+      and src.event_at_utc is not null
       and (
-            is_add or is_remove or is_qty_change
-            or feature_name is not null
-            or l1_code in ('04', '09')
+            src.is_add or src.is_remove or src.is_qty_change
+            or src.feature_name is not null
+            or src.l1_code in ('04', '09')
           )
+      -- see discarded_order_days above: drops the Create Order pair left behind
+      -- by an order the app auto-deleted, so a mis-tap cannot open a session
+      and not exists (
+          select 1
+          from discarded_order_days as d
+          where d.sales_code     = src.sales_code
+            and d.customer_key   = src.customer_key
+            and d.rep_local_date = src.rep_local_date
+      )
 
 ),
 
