@@ -252,7 +252,7 @@ models:
           On 2026-08-25 rep 030's NEW052 read 12:17-13:17 on-site and 12:18-13:21
           elsewhere: overlapping ranges that were four alternating runs flattened
           into two pairs. Read a span with segments > 1 as an envelope, not a
-          duration, and do not compare it against on_site_minutes.
+          duration, and do not compare it against on_site_worked_minutes.
       - name: pda_minutes
         description: Minutes keying on the PDA.
       - name: ipad_minutes
@@ -293,11 +293,20 @@ models:
           only 25,576). Measured in stints (unbroken runs on one device_group) in
           seconds and rounded once per device, so a PDA -> iPad -> PDA handoff is
           never billed to either and short bursts are not inflated.
-      - name: on_site_minutes
+      - name: on_site_worked_minutes
         description: >
-          Minutes physically at the customer, from GPS. Null/0 when the rep was
-          not there or there is no GPS. Attributed to the ON-SITE row only, and
-          matched against the visit window padded by
+          NOT time on site. The portion of the GPS visit that an app session
+          covered — "how long was he working this customer while there". For
+          time on site use visit_minutes.
+
+          Renamed from on_site_minutes on 2026-09-15. The old name read as time
+          on site, and int_rep_customer_presence uses that same name for the
+          visit DURATION, so one name carried two meanings across two models. A
+          consumer took the obvious reading and overstated a rep's week by 54%.
+
+          0 on every 'visited, keyed elsewhere' row by definition, and 0 on
+          'visit only, no app' rows because there was no session to cover
+          anything. Matched against the visit window padded by
           var('presence_edge_tolerance_minutes') on both edges — those edges are
           GPS SAMPLE times, not arrival and departure, and the device only
           reports every ~16 minutes.
@@ -309,6 +318,18 @@ models:
         description: Last work event in this scenario, rep local time.
       - name: orders_submitted
         description: >
+          Orders SENT from this scenario row. Keyed to the session portion as of
+          2026-09-15, so sum() is now safe: it previously keyed on the session
+          alone, and a session straddling the departure gave the same order to
+          both halves — 6,810 against 6,568 distinct over 90 days (+3.7%). The
+          fix moved 170 rows to zero and lost no customer-day an order.
+
+          A residual ~0.1% remains and is not a placement error: four order ids
+          genuinely appear twice — two resubmits logged in separate sessions
+          that scored different scenarios, and two submitted inside sessions
+          belonging to two DIFFERENT reps. count(distinct order_ids) is still
+          the only exactly-distinct total.
+
           Distinct orders in this scenario (EXACT — the submit event names its
           order). Confirmed by the dev team 2026-08-13 that the 04 codes fire on
           successful submission, never on opening or viewing.
@@ -320,6 +341,35 @@ models:
         description: The increment_ids in this scenario; NULL when none.
       - name: event_count
         description: Work events (cart edits, features, order create/send).
+      - name: customer_name
+        description: >
+          Display name from NAV. rep_name has always been on this model;
+          customer_name was not, so every consumer joined
+          stg_nav__customer_locations for the one field.
+      - name: visit_minutes
+        description: >
+          How long the rep was actually inside the geofence, summed across every
+          stop that customer-day. DIFFERENT from on_site_worked_minutes, which is only
+          the portion a device session covered — they differ on 31% of visit
+          rows (2,246 hours against 3,307 over 90 days). Use this for "how long
+          was he there" and on_site_worked_minutes for "how long was he
+          working". The difference is never an error — it is keyed-elsewhere
+          rows, whose overlap is 0 by definition, and multi-stop days. Zero
+          single-stop on-site rows disagree, and
+          tests/assert_on_site_worked_never_exceeds_the_visit.sql locks that.
+      - name: visit_stops
+        description: >
+          Separate stops at this customer that day, gap-split by
+          presence_visit_gap_minutes. >1 means arrived_at..departed_at is not one
+          continuous stretch — rep 030's SEV009 on 2026-09-08 spans 13:26-15:52
+          across three stops totalling 14 minutes.
+      - name: arrived_at
+        description: >
+          First GPS fix inside the geofence that day. A SAMPLE time, not the
+          moment he walked in: the device reports every 15-30 minutes, so he was
+          there before this.
+      - name: departed_at
+        description: Last GPS fix inside the geofence that day. Same sampling caveat.
       - name: geofence_ambiguous
         description: >
           Raw geometry, straight from int_rep_customer_presence: another LIVE

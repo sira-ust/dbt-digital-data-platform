@@ -196,22 +196,40 @@ session_bounds as (
 -- order_channel (PDA = rep keyed it, WEB/APP = customer placed it) lives on
 -- fct_orders, not the intermediate; verified consistent across every
 -- multi-order session found, so one value per session is still safe.
+-- KEYED ON THE SESSION PORTION, not the session. A session ends only on an idle
+-- gap, so it runs straight through the rep walking out; keyed on session_seq
+-- alone it handed the same increment_id to BOTH sides of the departure and
+-- orders_submitted counted it twice. That was ~3.7% of orders over 90 days
+-- (6,810 against 6,568 distinct) and a documented known issue every consumer
+-- worked around with count(distinct order_ids).
+--
+-- The submit fired once, and event_placement has already decided which side it
+-- fell on, so joining through it is exact rather than a heuristic. Rep 018 /
+-- SUP045 / 2026-09-08: built in store 15:09-15:57, sent 17:00:31 from the kerb,
+-- and the order now sits only on the keyed-elsewhere row.
+--
+-- Effect: 170 rows lose an order they never sent (67 of them on-site), and NO
+-- customer-day loses its only order row -- the order moves, it is never lost.
 session_orders as (
 
     select
         customer_day_key,
         session_seq,
+        was_on_site,
         array_agg(increment_id)                                          as increment_ids,
         max(order_channel)                                               as order_channel
     from (
         select distinct
-            e.customer_day_key, e.session_seq, e.increment_id, o.order_channel
+            e.customer_day_key, e.session_seq, p.was_on_site,
+            e.increment_id, o.order_channel
         from activity_events as e
+        join event_placement as p
+            on p.entity_id = e.entity_id
         left join {{ ref('fct_orders') }} as o
             on o.increment_id = e.increment_id
         where e.is_submit
     ) as submits
-    group by customer_day_key, session_seq
+    group by customer_day_key, session_seq, was_on_site
 
 ),
 
@@ -253,6 +271,7 @@ session_scenario as (
     left join session_orders as so
         on so.customer_day_key = b.customer_day_key
        and so.session_seq      = b.session_seq
+       and so.was_on_site      = b.was_on_site
     left join presence as v
         on v.customer_day_key = b.customer_day_key
     group by
@@ -460,7 +479,7 @@ by_scenario as (
         cast(round(sum(d.ipad_seconds)   / 60.0) as {{ dbt.type_int() }}) as ipad_minutes,
         cast(round(sum(d.tablet_seconds) / 60.0) as {{ dbt.type_int() }}) as android_tablet_minutes,
         cast(round(sum(d.paired_seconds) / 60.0) as {{ dbt.type_int() }}) as paired_minutes,
-        max(l.overlap_on_site_minutes)                                   as on_site_minutes,
+        max(l.overlap_on_site_minutes)                              as on_site_worked_minutes,
         {{ sort_array('array_agg(' ~ format_hhmm('l.session_start') ~ ')') }}   as opened_at,
         min(l.session_start)                                             as first_touch_local,
         max(l.session_end)                                               as last_touch_local,
@@ -602,6 +621,41 @@ visit_only as (
 
 ),
 
+-- ── the VISIT, as opposed to the overlap with an app session ─────────────
+-- on_site_minutes is the portion of the visit a session actually covered, which
+-- is the right number for "how long was he working this customer on site" and
+-- the WRONG one for "how long was he there". They differ on 31% of visit rows:
+-- 2,246 hours against 3,307 over 90 days. Rep 018 / SLA001 / 2026-09-09 reads
+-- 42 minutes here and 151 in presence.
+--
+-- Consumers were joining int_rep_customer_presence to recover this, and getting
+-- it wrong: fence minutes are a customer-DAY value, so summing them once per
+-- scenario row double-counts any customer worked both on site and after
+-- leaving. That inflated one rep's week by 54%. Published here at the grain
+-- people actually read, so the mistake is not available to make.
+visit_window as (
+
+    select
+        customer_day_key,
+        min(arrived_at)                                                  as arrived_at,
+        max(departed_at)                                                 as departed_at,
+        sum(on_site_minutes)                                             as visit_minutes,
+        count(*)                                                         as visit_stops
+    from presence
+    group by customer_day_key
+
+),
+
+-- rep_name has always been on this model; customer_name was not, so every
+-- consumer joined NAV for the one field.
+customers as (
+
+    select customer_key, max(customer_name)                              as customer_name
+    from {{ ref('stg_nav__customer_locations') }}
+    group by customer_key
+
+),
+
 -- one display name per territory code (guard against join fan-out)
 reps as (
 
@@ -619,7 +673,7 @@ combined as (
         a.scenario, a.sessions, a.segments,
         a.pda_minutes, a.ipad_minutes, a.android_tablet_minutes, a.paired_minutes,
         a.inherited_event_count,
-        a.on_site_minutes, a.opened_at,
+        a.on_site_worked_minutes, a.opened_at,
         a.first_touch_local, a.last_touch_local,
         coalesce(o.orders_submitted, 0)                                  as orders_submitted,
         coalesce(o.orders_keyed, 0)                                      as orders_keyed,
@@ -641,7 +695,9 @@ combined as (
         1                                                                as segments,
         0, 0, 0, 0,
         0                                                                as inherited_event_count,
-        v.on_site_minutes,
+        -- no app session at all, so no minutes were WORKED on site. The time he
+        -- was there lives in visit_minutes, which every row now carries.
+        0                                                                as on_site_worked_minutes,
         {{ null_string_array() }}                                        as opened_at,
         cast(null as timestamp), cast(null as timestamp),
         0, 0, 0,
@@ -699,6 +755,7 @@ select
     c.sales_code,
     r.rep_name,
     c.customer_key,
+    cu.customer_name,
     c.activity_date,
     c.scenario,
     c.sessions,
@@ -712,12 +769,24 @@ select
     c.paired_minutes,
     c.pda_minutes + c.ipad_minutes + c.android_tablet_minutes
         + c.paired_minutes                                               as keying_minutes,
-    c.on_site_minutes,
+    -- RENAMED from on_site_minutes, which read as "time on site" and is not:
+    -- it is the portion of the visit an app session covered. A consumer took it
+    -- the obvious way and overstated one rep's week by 54%. The presence model
+    -- has its OWN on_site_minutes meaning the visit duration -- one name, two
+    -- meanings, two models, which is what made the mistake so easy.
+    c.on_site_worked_minutes,
+    -- the visit itself, from GPS. See the visit_window CTE for why both exist.
+    v.visit_minutes,
+    v.visit_stops,
+    v.arrived_at,
+    v.departed_at,
 
     c.opened_at,
     c.first_touch_local,
     c.last_touch_local,
 
+    -- now keyed to the session PORTION, so this counts the orders this row
+    -- actually SENT and sum() is safe. See session_orders.
     c.orders_submitted,
     c.orders_keyed,
     c.orders_received,
@@ -743,10 +812,18 @@ select
     -- Do NOT filter on event_count instead — `event_count >= 4` discards 31% of
     -- all orders, because a submit landing with no preceding cart activity is a
     -- legitimate one-event row.
+    -- "physically there" now tests the VISIT, not the session overlap. It used
+    -- to read on_site_minutes, which is 0 on every keyed-elsewhere row by
+    -- definition -- so the test was really asking "did a session cover part of
+    -- the visit", not "was he there".
     (c.pda_minutes + c.ipad_minutes + c.android_tablet_minutes
         + c.paired_minutes > 0
      or c.orders_submitted > 0
-     or coalesce(c.on_site_minutes, 0) > 0)                              as has_activity
+     or coalesce(v.visit_minutes, 0) > 0)                                as has_activity
 from resolved as c
 left join reps as r
     on r.salesperson_code = c.sales_code
+left join customers as cu
+    on cu.customer_key = c.customer_key
+left join visit_window as v
+    on v.customer_day_key = c.customer_day_key
