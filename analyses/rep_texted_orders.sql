@@ -130,7 +130,11 @@ day_totals as (
         customer_key,
         activity_date,
         sum(orders_submitted)                                             as orders_submitted,
-        max(coalesce(on_site_minutes, 0))                                 as on_site_minutes,
+        -- visit_minutes, not on_site_worked_minutes (renamed from
+        -- on_site_minutes 2026-09-15). The indicator asks "was he AT the store
+        -- that day"; the worked column is only the part a session covered and
+        -- is 0 on every keyed-elsewhere row, which would have read as absence.
+        max(coalesce(visit_minutes, 0))                                   as on_site_minutes,
         max(case when scenario = 'unknown' then 0 else 1 end)             as gps_available
     from ust_databricks.ust_reporting.mart_rep_customer_activity
     where sales_code = '028'
