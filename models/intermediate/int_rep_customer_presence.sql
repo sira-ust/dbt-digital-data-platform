@@ -227,6 +227,8 @@ candidates as (
         f.app_customer_key,
         s.customer_key,
         s.is_active,
+        s.store_lat,
+        s.store_lon,
         s.owner_rep,
         {{ haversine_metres('f.latitude', 'f.longitude', 's.store_lat', 's.store_lon') }} as metres
     from speed_checked as f
@@ -300,7 +302,7 @@ matched as (
     select
         entity_id,
         sales_code, device_name, customer_key, owner_rep, event_at_utc, event_at_local,
-        rep_local_date, metres, candidate_count, pick
+        rep_local_date, metres, candidate_count, pick, store_lat, store_lon
     from ranked_candidates
 
 ),
@@ -367,7 +369,27 @@ bridged as (
     select
         l.entity_id,
         l.customer_key,
-        max(case when a.event_at_utc is not null then 1 else 0 end)       as activity_bridges
+        max(case when a.event_at_utc is not null then 1 else 0 end)       as activity_bridges,
+        -- ...AND DID GPS SAY HE WAS SOMEWHERE ELSE WHILE IT WAS SILENT?
+        --
+        -- The activity test alone asks only "was he still working this
+        -- customer", and answers yes to a couple of taps anywhere in the gap.
+        -- Rep 029 / BOS001 / 2026-09-14: fixes at 12:23 and 15:19, bridged by
+        -- three events at 15:18:50-15:19:11 -- the moment he came BACK. In
+        -- between, GPS put him 1,262 m away on Irving St with eleven fixes at
+        -- 2 m from TWE004. The visit read 187 minutes against a true 11.
+        --
+        -- Measured over 90 days: 205 of 1,503 visits over an hour contain a
+        -- visit to a customer 300 m+ away, holding 32,219 minutes.
+        --
+        -- Deliberately narrow, so the case the bridge was BUILT for still
+        -- works. NEW052 on 2026-08-25 is one errant fix 446 m out while the rep
+        -- stood in the store; it matched no other customer's geofence, so it
+        -- does not appear in `matched` and cannot trip this. Only a fix MATCHED
+        -- to another customer, and only one far enough away to be a different
+        -- block, counts as leaving -- the Noriega cluster is 136 m end to end,
+        -- so 300 m clears it comfortably.
+        max(case when x.entity_id is not null then 1 else 0 end)          as gps_left_the_area
     from lagged as l
     left join customer_activity as a
         on  a.sales_code     = l.sales_code
@@ -375,6 +397,15 @@ bridged as (
        and  a.rep_local_date = l.rep_local_date
        and  a.event_at_utc   > l.prev_at
        and  a.event_at_utc   < l.event_at_utc
+    left join matched as x
+        on  x.sales_code     = l.sales_code
+       and  x.rep_local_date = l.rep_local_date
+       and  x.event_at_utc   > l.prev_at
+       and  x.event_at_utc   < l.event_at_utc
+       and  x.customer_key  <> l.customer_key
+       and  {{ haversine_metres('l.store_lat', 'l.store_lon',
+                                'x.store_lat', 'x.store_lon') }}
+            > {{ var('presence_bridge_max_excursion_metres', 300) }}
     group by l.entity_id, l.customer_key
 
 ),
@@ -388,7 +419,7 @@ gapped as (
             when l.prev_at is null then 1
             when {{ dbt.datediff('l.prev_at', 'l.event_at_utc', 'minute') }}
                  >= {{ var('presence_visit_gap_minutes') }}
-             and b.activity_bridges = 0 then 1
+             and (b.activity_bridges = 0 or b.gps_left_the_area = 1) then 1
             else 0
         end                                                              as is_new_visit
     from lagged as l
