@@ -1,10 +1,16 @@
 -- The extract behind the field-coverage HTML. One row per contact, in the
--- shape the page's DATA array expects -- run it, export JSON, paste it in.
+-- shape the page's DATA array expects.
 --
--- dbt does NOT run analyses/. `dbt compile` renders this into target/compiled/
--- and you copy it into a SQL editor. Nothing here is materialised.
+-- PLAIN DATABRICKS SQL ON PURPOSE -- copy this whole file into a SQL editor and
+-- run it. No dbt compile, no Jinja. Table names are hardcoded rather than
+-- ref()'d precisely so that pasting it works. The cost is that a rename
+-- upstream will not be caught by `dbt compile`, so if this stops running, check
+-- mart_rep_customer_activity first.
 --
--- EDIT TWO THINGS: the sales_code list and the date range, both in `params`.
+-- Then export the result as JSON and paste it into the page's `const DATA`.
+--
+-- EDIT TWO THINGS: the sales_code list and the date range, both in `params`
+-- directly below.
 --
 -- FILTER ON sales_code, NEVER username. Rep 028 appears as both 'charliechang'
 -- and 'Charliechang' in the event log; keying on username silently drops rows.
@@ -23,7 +29,8 @@
 --
 -- FRESHNESS: the mart trails the event log by about a day. Check before you
 -- report on "today":
---     select max(activity_date) from {{ ref('mart_rep_customer_activity') }};
+--     select max(activity_date)
+--     from ust_databricks.ust_reporting.mart_rep_customer_activity;
 
 with params as (
 
@@ -37,7 +44,7 @@ with params as (
 contacts as (
 
     select m.*
-    from {{ ref('mart_rep_customer_activity') }} as m
+    from ust_databricks.ust_reporting.mart_rep_customer_activity as m
     cross join params as p
     where array_contains(p.reps, m.sales_code)
       and m.activity_date between p.from_date and p.to_date
@@ -49,7 +56,19 @@ contacts as (
 
 ),
 
--- ── money, the one thing still worth a join ───────────────────────────────
+-- one row per order id. Exploded in its own pass because a lateral view cannot
+-- be followed by a join in Spark.
+order_ids_flat as (
+
+    select
+        customer_day_key,
+        scenario,
+        explode(order_ids)                                            as increment_id
+    from contacts
+
+),
+
+-- money, the one thing still worth a join.
 -- Credited to the contact that SENT the order. orders_submitted has been keyed
 -- to the session portion since 2026-09-15, so a row carries an order only if
 -- its own submit fired inside it -- summing these is safe.
@@ -58,18 +77,6 @@ contacts as (
 -- cases. An order for 4 lines at 30 cases each reads 4. Cases cannot be joined
 -- here at all -- nothing links a Magento order number to the NAV lines that
 -- carry unit of measure once the order closes.
--- exploded in its own pass: a lateral view cannot be followed by a join in
--- Spark, and the unnest macro keeps this readable on DuckDB too
-order_lines_flat as (
-
-    select
-        customer_day_key,
-        scenario,
-        {{ unnest('order_ids') }}                                     as increment_id
-    from contacts
-
-),
-
 order_money as (
 
     select
@@ -77,15 +84,15 @@ order_money as (
         e.scenario,
         round(sum(o.grand_total), 2)                                  as order_value,
         sum(o.total_item_count)                                       as order_lines
-    from order_lines_flat as e
-    join {{ ref('fct_orders') }} as o
+    from order_ids_flat as e
+    join ust_databricks.ust_facts.fct_orders as o
         on o.increment_id = e.increment_id
     where e.increment_id is not null
     group by e.customer_day_key, e.scenario
 
 ),
 
--- ── did the customer order SOON AFTER a visit that captured nothing? ──────
+-- did the customer order SOON AFTER a visit that captured nothing?
 -- Half the "no order" visits are not barren: the order rides the next batch
 -- sync. The PDA queues submits and flushes them together -- rep 018 logged four
 -- orders for four customers at 13:25:43-44 on 2026-09-08, one device, one
@@ -96,29 +103,36 @@ next_order as (
         c.customer_day_key,
         min(o.submitted_date_local)                                   as next_order_date
     from contacts as c
-    join {{ ref('fct_orders') }} as o
+    join ust_databricks.ust_facts.fct_orders as o
         on  o.sales_code   = c.sales_code
         and o.customer_key = c.customer_key
         and o.submitted_date_local >  c.activity_date
-        and o.submitted_date_local <= {{ dbt.dateadd('day', 7, 'c.activity_date') }}
+        and o.submitted_date_local <= date_add(c.activity_date, 7)
     group by c.customer_day_key
 
 )
 
 select
     c.sales_code,
-    cast(c.activity_date as {{ dbt.type_string() }})                  as activity_date,
+    cast(c.activity_date as string)                                   as activity_date,
 
     -- TWO CLOCKS. first_touch_local is when he WORKED the customer on the
     -- device and is null on 'visit only, no app' by construction -- that
     -- scenario means there was no app activity to time. arrived_at is when he
     -- was physically there. Both are published raw below so a row's clock is
     -- visible rather than guessed.
-    {{ format_hhmm('coalesce(c.first_touch_local, c.arrived_at)') }}   as started,
-    {{ format_hhmm('coalesce(c.last_touch_local,  c.departed_at)') }}  as ended,
+    date_format(coalesce(c.first_touch_local, c.arrived_at),  'HH:mm') as started,
+    date_format(coalesce(c.last_touch_local,  c.departed_at), 'HH:mm') as ended,
 
     c.customer_key,
     c.customer_name,
+    c.city,
+    -- NAV's `county` field holds the STATE code in the US localisation, and is
+    -- aliased to `state` upstream. Filter country = 'US' before grouping on it:
+    -- 'CA' is California to 3,851 customers and Canada to 11, and three rows in
+    -- Thailand and the Philippines also carry state = 'CA'.
+    c.state,
+    c.country,
     c.scenario,
     c.scenario in ('on-site', 'visited, keyed elsewhere',
                    'visit only, no app')                              as is_visit,
@@ -150,14 +164,14 @@ select
     case when c.orders_submitted > 0 then 1 else 0 end                as submitted_here,
     coalesce(m.order_value, 0)                                        as order_value,
     coalesce(m.order_lines, 0)                                        as order_lines,
-    {{ dbt.datediff('c.activity_date', 'n.next_order_date', 'day') }} as days_to_order,
+    datediff(n.next_order_date, c.activity_date)                      as days_to_order,
 
     -- two live customers in range AND nothing in the app to separate them
     c.is_ambiguous,
 
     -- which clock this row is using
-    {{ format_hhmm('c.first_touch_local') }}                          as app_first_touch,
-    {{ format_hhmm('c.arrived_at') }}                                 as gps_arrived
+    date_format(c.first_touch_local, 'HH:mm')                         as app_first_touch,
+    date_format(c.arrived_at,        'HH:mm')                         as gps_arrived
 
 from contacts as c
 left join order_money as m

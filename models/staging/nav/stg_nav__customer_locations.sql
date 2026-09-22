@@ -43,6 +43,11 @@ select
 
     c.address,
     c.city,
+    -- state and country come through from stg_nav__customers, which aliases
+    -- NAV's county -> state (it holds the state code) and keeps country apart
+    -- from it so 'CA' is never ambiguous. See that model for the evidence.
+    c.state,
+    c.country,
     c.county,
     c.post_code,
 

@@ -119,15 +119,49 @@ combined as (
     left join orders as o
         on o.customer_key = e.customer_key and o.week_start = e.week_start
 
+),
+
+-- who the customer IS. customer_key alone forced every consumer to join NAV
+-- for a name, and geography was not reachable at all without knowing that
+-- state lives in NAV's `county` field.
+--
+-- state is that field, aliased in stg_nav__customers and verified against the
+-- Google geocode's formatted address: 7,203 US customers parse a state out of
+-- it and all 7,203 agree, zero disagreements.
+--
+-- country is carried alongside because 'CA' is California to 3,851 customers
+-- and Canada to 11. Filter country = 'US' before grouping on state, or three
+-- rows in Thailand and the Philippines report as California.
+--
+-- LEFT joined and max()'d: this model must keep a customer-week even when the
+-- customer has no geocode row, and must not fan out if that stops being one
+-- row per customer.
+customers as (
+
+    select
+        customer_key,
+        max(customer_name)                                               as customer_name,
+        max(city)                                                        as city,
+        max(state)                                                       as state,
+        max(country)                                                     as country
+    from {{ ref('stg_nav__customer_locations') }}
+    group by customer_key
+
 )
 
 select
-    *,
-    remove_gt_add = 1                                                    as remove_gt_add_flag,
+    b.*,
+    cu.customer_name,
+    cu.city,
+    cu.state,
+    cu.country,
+    b.remove_gt_add = 1                                                  as remove_gt_add_flag,
     -- streak over the trailing N observed weeks for this customer
-    sum(remove_gt_add) over (
-        partition by customer_key
-        order by week_start
+    sum(b.remove_gt_add) over (
+        partition by b.customer_key
+        order by b.week_start
         rows between {{ var('churn_consecutive_weeks') - 1 }} preceding and current row
     ) = {{ var('churn_consecutive_weeks') }}                             as churn_signal
-from combined
+from combined as b
+left join customers as cu
+    on cu.customer_key = b.customer_key

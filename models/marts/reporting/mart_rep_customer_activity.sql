@@ -650,7 +650,25 @@ visit_window as (
 -- consumer joined NAV for the one field.
 customers as (
 
-    select customer_key, max(customer_name)                              as customer_name
+    -- max() guards against join fan-out; stg_nav__customer_locations is one row
+    -- per customer, but this model must not be the place that discovers it if
+    -- that ever stops being true.
+    --
+    -- state is NAV's `county` field, which holds the STATE code in the US
+    -- localisation -- CA=3851, TX=328, FL=233 are states, not counties. It is
+    -- aliased in stg_nav__customers and verified against the Google geocode's
+    -- formatted address: 7,203 US customers parse a state out of it and all
+    -- 7,203 agree, zero disagreements.
+    --
+    -- country is carried too because 'CA' is California to 3,851 customers and
+    -- Canada to 11. Filter `country = 'US'` before grouping on state, or three
+    -- rows in Thailand and the Philippines will report as California.
+    select
+        customer_key,
+        max(customer_name)                                               as customer_name,
+        max(city)                                                        as city,
+        max(state)                                                       as state,
+        max(country)                                                     as country
     from {{ ref('stg_nav__customer_locations') }}
     group by customer_key
 
@@ -756,6 +774,9 @@ select
     r.rep_name,
     c.customer_key,
     cu.customer_name,
+    cu.city,
+    cu.state,
+    cu.country,
     c.activity_date,
     c.scenario,
     c.sessions,
