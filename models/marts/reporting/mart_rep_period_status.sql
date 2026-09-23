@@ -33,6 +33,21 @@
 -- one row per submitted order parsed from the submit payload and deduped on
 -- increment_id. No inference, no heuristics, nothing to caveat.
 --
+-- ONE SOURCE, DELIBERATELY: fct_orders and nothing else. That is what keeps the
+-- previous paragraph true, and it is why the ITEM MIX the business asks for
+-- ("16 items, $2,000, branded 40%, new item, promo item") is NOT in this table.
+-- fct_orders carries total_item_count and no line detail — the submit payload
+-- never listed the items — and the ids cannot be joined to anything that does:
+-- submit ids are M-prefixed, create-order ids are 032-prefixed, and the two
+-- spaces have 0/10,939 overlap. The only line-level truth is NAV's posted
+-- invoices, which are a different feed with a different leading edge and no
+-- dollar amounts at all. Mixing them into these rows would mean a mart whose
+-- columns are measured over different windows in different units, which is how
+-- a rep is told two true numbers that cannot both be right. The mix lives in
+-- mart_rep_period_item_mix instead, at the same rep x period grain, with its
+-- own as-of date — join on (sales_code, period_type, period_start) and read the
+-- two as-of dates rather than assuming they agree.
+--
 -- It carries NO store visits, on-site minutes, GPS, app time or device split,
 -- and no scenario labels from mart_rep_customer_activity: those rest on the
 -- geofence and idle-gap heuristics, which are not accurate enough yet to put in
@@ -202,6 +217,38 @@ period_metrics as (
         count(*)                                                         as orders_submitted,
         sum(case when o.order_channel = 'PDA'          then 1 else 0 end) as orders_keyed,
         sum(case when o.order_channel in ('WEB','APP') then 1 else 0 end) as orders_received,
+
+        -- ── the THREE-WAY channel split, with value ───────────────────────
+        -- orders_keyed / orders_received above are the two-way KEYED-vs-RECEIVED
+        -- view and they stay, because that is the distinction about the rep's
+        -- own effort. These are the three-way ORIGIN view the business asks for
+        -- out loud: "3 PDA orders, 2 app orders, 1 web order — PDA orders were
+        -- $123, app orders were $111". APP and WEB are separate here and folded
+        -- together there; both readings are legitimate and neither derives from
+        -- the other, so both are published.
+        --
+        -- orders_channel_other is NOT padding. order_channel is null when the
+        -- payload stated no origin and the PDA inference in fct_orders did not
+        -- apply — 17 such orders went unnoticed for seven months precisely
+        -- because they fell into neither of the two buckets above. A fourth
+        -- column that is normally 0 makes the next occurrence visible instead of
+        -- silent, and the four are tested to sum to orders_submitted.
+        sum(case when o.order_channel = 'PDA' then 1 else 0 end)         as orders_pda,
+        sum(case when o.order_channel = 'APP' then 1 else 0 end)         as orders_app,
+        sum(case when o.order_channel = 'WEB' then 1 else 0 end)         as orders_web,
+        sum(case when o.order_channel is null
+                   or o.order_channel not in ('PDA','APP','WEB')
+                 then 1 else 0 end)                                      as orders_channel_other,
+        -- Value per channel. NULL, not 0, when a channel saw no orders — a
+        -- channel with nothing sold has no value, and a 0 averages into a run
+        -- rate as though it were one. Same rule as order_value_total.
+        sum(case when o.order_channel = 'PDA' then o.grand_total end)    as order_value_pda,
+        sum(case when o.order_channel = 'APP' then o.grand_total end)    as order_value_app,
+        sum(case when o.order_channel = 'WEB' then o.grand_total end)    as order_value_web,
+        sum(case when o.order_channel is null
+                   or o.order_channel not in ('PDA','APP','WEB')
+                 then o.grand_total end)                                 as order_value_channel_other,
+
         count(distinct o.activity_date)                                  as days_with_orders,
         sum(o.grand_total)                                               as order_value_total,
         max(o.grand_total)                                               as order_value_largest,
@@ -213,6 +260,44 @@ period_metrics as (
     join day_periods as dp
         on dp.activity_date = o.activity_date
     group by o.sales_code, dp.period_type, dp.period_start
+
+),
+
+-- ── WHO the biggest order was from ───────────────────────────────────────
+-- "Your biggest order was $4,200 from ABC Market" is the sentence the business
+-- asked for, and order_value_largest alone cannot say the second half of it.
+--
+-- A SEPARATE CTE rather than an aggregate on period_metrics, because the
+-- customer is not an aggregate of the period — it is an attribute of one
+-- specific order, and there is no portable argmax. row_number() over the
+-- order rows picks that order; ties break on customer_key so the pick is
+-- reproducible across runs and across engines rather than being whichever row
+-- the engine returned first. A tie here is two orders of exactly equal value,
+-- which is rare and harmless either way.
+largest_order as (
+
+    select
+        sales_code,
+        period_type,
+        period_start,
+        customer_key                                                     as largest_order_customer_key,
+        activity_date                                                    as largest_order_date
+    from (
+        select
+            o.sales_code,
+            dp.period_type,
+            dp.period_start,
+            o.customer_key,
+            o.activity_date,
+            row_number() over (
+                partition by o.sales_code, dp.period_type, dp.period_start
+                order by o.grand_total desc, o.customer_key
+            )                                                            as _rn
+        from orders as o
+        join day_periods as dp
+            on dp.activity_date = o.activity_date
+    ) as ranked
+    where _rn = 1
 
 ),
 
@@ -229,6 +314,17 @@ assembled as (
         coalesce(m.orders_submitted, 0)                                  as orders_submitted,
         coalesce(m.orders_keyed, 0)                                      as orders_keyed,
         coalesce(m.orders_received, 0)                                   as orders_received,
+        coalesce(m.orders_pda, 0)                                        as orders_pda,
+        coalesce(m.orders_app, 0)                                        as orders_app,
+        coalesce(m.orders_web, 0)                                        as orders_web,
+        coalesce(m.orders_channel_other, 0)                              as orders_channel_other,
+        -- left NULL, like order_value_total — see period_metrics
+        m.order_value_pda,
+        m.order_value_app,
+        m.order_value_web,
+        m.order_value_channel_other,
+        lo.largest_order_customer_key,
+        lo.largest_order_date,
         coalesce(m.days_with_orders, 0)                                  as days_with_orders,
         -- null, not 0, when nothing was sold: a rep with no orders has no order
         -- value, and a 0 would average into a run rate as though it were one.
@@ -241,6 +337,9 @@ assembled as (
     left join period_metrics as m on m.sales_code   = s.sales_code
                                  and m.period_type  = s.period_type
                                  and m.period_start = s.period_start
+    left join largest_order  as lo on lo.sales_code   = s.sales_code
+                                  and lo.period_type  = s.period_type
+                                  and lo.period_start = s.period_start
 
 ),
 
@@ -321,6 +420,24 @@ select
     -- shows up as the two ceasing to sum.
     c.orders_keyed,
     c.orders_received,
+
+    -- ── the same orders, split three ways by ORIGIN ───────────────────────
+    -- "3 PDA orders, 2 app orders, 1 web order." APP and WEB are separate here
+    -- and folded into orders_received above; both readings are legitimate.
+    -- orders_channel_other is normally 0 and exists so that an order arriving
+    -- with no stated origin is visible rather than silently dropped from both
+    -- splits — which is exactly how 17 of them went unnoticed for seven months.
+    -- The four are tested to sum to orders_submitted.
+    c.orders_pda,
+    c.orders_app,
+    c.orders_web,
+    c.orders_channel_other,
+    -- Value per channel: "PDA orders were $123, app orders were $111."
+    -- NULL, not 0, for a channel with no orders in the period.
+    c.order_value_pda,
+    c.order_value_app,
+    c.order_value_web,
+    c.order_value_channel_other,
     -- days in the period on which the rep sent at least one order. The
     -- denominator for a per-day average — days_elapsed includes weekends. Always
     -- 0 or 1 when period_type = 'day'.
@@ -333,6 +450,14 @@ select
             then round(c.order_value_total / c.orders_submitted, 2)
     end                                                                  as order_value_avg,
     c.order_value_largest,
+    -- WHO that biggest order was from, so the answer is "$4,200 from ABC
+    -- Market" rather than "$4,200". The name is the thing to say out loud;
+    -- the key is carried for drill-through. Null customer_name with a non-null
+    -- key means the account is not in dim_customers — a data-quality fault
+    -- worth seeing, not a reason to drop the row.
+    c.largest_order_customer_key,
+    lc.customer_name                                                     as largest_order_customer_name,
+    c.largest_order_date,
     c.order_line_count,
 
     -- ── reach ─────────────────────────────────────────────────────────────
@@ -376,3 +501,5 @@ select
 from compared as c
 left join {{ ref('dim_reps') }} as r
     on r.sales_code = c.sales_code
+left join {{ ref('dim_customers') }} as lc
+    on lc.customer_key = c.largest_order_customer_key

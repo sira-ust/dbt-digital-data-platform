@@ -736,3 +736,274 @@ models:
           rather than merely overlapping — one fix matches several customers, so
           an identical fix set means one position seen through two geofences.
 
+
+  - name: int_customer_item_purchases
+    description: >
+      What each account actually bought, one row per CUSTOMER x ITEM x POSTING
+      DATE x UOM. Posted NAV invoice lines netted against posted credit-memo
+      lines. The base of every item-level sales-agent answer.
+
+      THE UOM IS PART OF THE GRAIN, deliberately. NAV records UOM as free TEXT,
+      not as the code item_unit_of_measure is keyed on, so there is no conversion
+      available: a line reading `6 CASE` and one reading `6 EA` are six of
+      genuinely different things and collapsing them produces "12", which is true
+      of nothing. Keeping UOM in the grain makes the ambiguity VISIBLE as two
+      rows instead of silently wrong as one.
+
+      NETTING IS BY POSTING DATE, not against the invoice being credited. NAV
+      does carry the link back (applies_to_invoice_no), so crediting the original
+      day is technically possible; it is not done because it would make this
+      table retroactively mutable — a return posted today would change a quantity
+      reported three months ago and everything derived from it. Posting-date
+      netting keeps history immutable and matches how the business reads its own
+      ledger.
+
+      NO AMOUNTS EXIST ANYWHERE IN THIS CHAIN. sales_invoice_line is eleven
+      columns and none is money. This is a UNIT history: how many, how often,
+      when — never how much.
+
+      WHY NOT item_ledger_entry, which is finer-grained and would need no
+      netting: this export of it has no entry_type column, so sales movements
+      cannot be told apart from receipts, transfers and adjustments, and its
+      quantity is signed across all of them. It is declared as a source and left
+      unused for exactly that reason.
+    columns:
+      - name: customer_key
+        description: The account that bought. NAV sell_to, joining to dim_customers.
+        tests: [not_null]
+      - name: item_no
+        description: The item. Joins to dim_items.
+        tests: [not_null]
+      - name: posting_date
+        description: The day it posted. Sales and returns are both keyed on this.
+        tests: [not_null]
+      - name: quantity_uom
+        description: >
+          Part of the grain — see the model description. Uppercased free text, not
+          a code.
+      - name: sold_quantity
+        description: Quantity invoiced on this item-day, in quantity_uom.
+      - name: returned_quantity
+        description: Quantity credited back on this item-day, POSITIVE.
+      - name: net_quantity
+        description: >
+          sold minus returned. CAN BE NEGATIVE — a return posting on a day with no
+          sale, including a day with no sale at all. That is not a bug; it is a
+          return posting on a day of its own. Downstream models asking "did they
+          buy on this day" must test sold_quantity > 0, NEVER this: a lone credit
+          memo is not a purchase, and treating it as one would reset an account's
+          "last bought" clock to the day it sent something back.
+      - name: invoice_count
+        description: >
+          DISTINCT invoices on this item-day, not lines: two lines of the same
+          item on one invoice are one purchase event.
+      - name: cr_memo_count
+        description: Distinct credit memos on this item-day.
+      - name: sales_code
+        description: >
+          The rep credited with the movement, taken at LINE level. min() where an
+          item-day spans documents credited to different reps — rare, but real
+          when an account changes hands mid-period.
+      - name: sales_code_count
+        description: >
+          How many distinct reps were credited on this item-day. Above 1 means
+          sales_code above is one of several, so a per-rep consumer can see that
+          this row is not cleanly one rep's rather than having it hidden.
+      - name: is_purchase_day
+        description: >
+          sold_quantity > 0. Exists so no downstream model has to re-derive the
+          rule, and so none gets it wrong by testing net_quantity instead.
+      - name: sold_quantity_base
+        description: Sold quantity in BASE units — addable across UOMs, unlike sold_quantity. Null before 2026-09-20.
+      - name: returned_quantity_base
+        description: Returned quantity in base units. Same coverage window.
+      - name: sold_value
+        description: >
+          Money sold on this item-day. PARTIAL COVERAGE: null before 2026-09-20
+          and permanently so. sum() ignores nulls, so a period straddling that
+          date returns only the valued part — compare valued_line_count with
+          line_count before quoting it.
+      - name: returned_value
+        description: Money credited back on this item-day. Same coverage window.
+      - name: net_value
+        description: sold_value minus returned_value. Can be negative on a day whose credits exceed its sales.
+      - name: line_count
+        description: Lines on this item-day, valued or not — the denominator for value coverage.
+      - name: valued_line_count
+        description: >
+          How many of those lines carry an amount. Below line_count means the
+          value columns describe only part of what moved that day.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [customer_key, item_no, posting_date, quantity_uom]
+      # a returns-only day is legitimate; a day with neither is not
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "sold_quantity > 0 or returned_quantity > 0"
+
+  - name: int_customer_item_cadence
+    description: >
+      One row per CUSTOMER x ITEM: how often this account buys this item, when
+      they last did, and when they are due again ON THEIR OWN RHYTHM.
+
+      THE RHYTHM IS DERIVED PER ACCOUNT-ITEM, and that is the point of the model.
+      A restaurant buying fish sauce every 3 weeks and a grocery buying it every
+      3 months are both healthy, and any fixed "overdue after N days" threshold
+      slanders one of them. The business note asking for "quarterly vs. monthly
+      customer (some customer might need to be on quarterly since we visit every
+      other 6 weeks)" is answered by this column rather than by a segmentation
+      somebody has to maintain.
+
+      THREE PURCHASES MINIMUM before a rhythm is published at all
+      (var account_item_min_purchases_for_cadence). Two purchases give exactly
+      one gap, and a median of one number is that number — an account that
+      happened to buy twice a fortnight apart would be declared a fortnightly
+      buyer and reported overdue three weeks later. Below the floor the cadence
+      columns are NULL and reorder_status reads 'rhythm unknown', which is a
+      usable answer where a fabricated rhythm is not.
+
+      COLLAPSES THE UOM that int_customer_item_purchases keeps in its grain, and
+      only the DATES survive that intact. "When did they last buy this" is
+      UOM-independent; "how many" is not. So cadence is computed across all UOMs
+      and QUANTITIES are restricted to the account's PRIMARY UOM, with
+      quantity_uom_count published so a consumer sees when that hid something.
+
+      MEASURED AGAINST THE NAV CLOCK (macros/nav_posted_today.sql), not the event
+      log's. Invoices post on their own schedule, days after an order is keyed
+      and whether or not anyone opened the app, so ageing a purchase against the
+      app's leading edge would skew every number here by the drift between two
+      independent feeds.
+    columns:
+      - name: customer_key
+        description: The account.
+        tests: [not_null]
+      - name: item_no
+        description: The item.
+        tests: [not_null]
+      - name: purchase_as_of_date
+        description: >
+          THE NAV CLOCK — the newest posted invoice date. Every age in this table
+          is measured against it. It is NOT rep_log_today(), and a mart carrying
+          both must publish both.
+      - name: times_purchased
+        description: >
+          Distinct days on which this account bought this item. Days carrying only
+          a credit memo are excluded: a return is not a purchase.
+        tests: [not_null]
+      - name: first_purchase_date
+        description: Earliest purchase on record in the posted-invoice export.
+      - name: last_purchase_date
+        description: Most recent purchase day.
+      - name: days_since_last_purchase
+        description: Days from last_purchase_date to purchase_as_of_date.
+      - name: median_days_between_purchases
+        description: >
+          THE ACCOUNT'S OWN RHYTHM for this item. NULL below the purchase floor
+          rather than computed from a single gap. An account with n purchases
+          contributes n-1 gaps — the first purchase has no predecessor and yields
+          a null the median ignores.
+      - name: avg_days_between_purchases
+        description: >
+          The mean gap. Published beside the median because a big divergence
+          between them is itself a signal that the buying is irregular.
+      - name: min_days_between_purchases
+        description: Shortest observed gap. Not floored by the purchase minimum.
+      - name: max_days_between_purchases
+        description: Longest observed gap — the honest upper bound on "normal" for this pair.
+      - name: expected_next_purchase_date
+        description: last_purchase_date + the pair's own median gap. Null when the rhythm is unknown.
+      - name: days_overdue
+        description: >
+          SIGNED: days_since_last_purchase minus the median gap. Negative means
+          due in that many days, which is itself a reason to call today.
+      - name: reorder_status
+        description: >
+          ONE reason per row, in precedence order, so a consumer reads out a cause
+          instead of re-deriving one from five columns. 'lapsed' fires at
+          var('account_item_lapsed_gap_multiple') times the account's own median
+          gap, so a quarterly buyer must miss roughly two quarters before anyone
+          says they stopped. 'due' opens slightly BEFORE the expected date
+          (account_item_due_window_pct) because a rep needs to call ahead of the
+          reorder. 'rhythm unknown' is an honest answer and is kept DISTINCT from
+          'not due': the first means we cannot tell, the second means we can and
+          they are fine.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['lapsed', 'overdue', 'due', 'not due', 'rhythm unknown']
+      - name: reorder_priority
+        description: >
+          1 = act first. Mirrors reorder_status exactly so `order by` gives the
+          pitch list without the consumer needing to know the precedence.
+      - name: quantity_uom_count
+        description: >
+          How many distinct UOMs this account has bought this item in. Above 1
+          means the quantity columns below cover only the commonest.
+      - name: primary_quantity_uom
+        description: >
+          The UOM bought on the most separate days. Ties break on quantity then
+          alphabetically, so the pick is deterministic across runs and engines.
+      - name: sold_quantity_primary_uom
+        description: >
+          Total bought, RESTRICTED to the primary UOM. Deliberately not a sum
+          across UOMs — NAV's UOM is free text with no conversion, so a cross-UOM
+          total is true of nothing.
+      - name: returned_quantity_primary_uom
+        description: Total returned in the primary UOM.
+      - name: net_quantity_primary_uom
+        description: Sold minus returned, primary UOM only.
+      - name: avg_quantity_per_purchase
+        description: >
+          sold_quantity_primary_uom / times_purchased — what a typical reorder
+          looks like, in the account's own UOM. QUANTITY ONLY; there is no price
+          to turn it into a value.
+      - name: invoice_count
+        description: Distinct invoices carrying this item for this account.
+      - name: cr_memo_count
+        description: Distinct credit memos carrying it.
+      - name: returned_quantity_all_uoms
+        description: >
+          Total returned across ALL UOMs. Mixed-UOM by construction, and named to
+          say so — used for a unit return RATE, which is the only kind available.
+      - name: last_return_date
+        description: Most recent day this account returned this item. Null if never.
+      - name: sales_code
+        description: The rep credited with this account's purchases of this item.
+      - name: sold_value
+        description: >
+          Total money this account has spent on this item. UOM-independent, so
+          unlike the quantity columns it is not restricted to the primary UOM —
+          but it covers a SHORTER PERIOD than every date column here, starting
+          2026-09-20. Compare valued_purchase_days with times_purchased.
+      - name: returned_value
+        description: Total credited back. Same coverage window.
+      - name: line_count
+        description: Lines across the whole relationship, valued or not.
+      - name: valued_line_count
+        description: How many carry an amount.
+      - name: valued_purchase_days
+        description: >
+          Purchase days carrying any value. EQUAL to times_purchased means the
+          money covers the whole relationship; lower means it covers only its
+          recent part. The column that stops a value total being read as though
+          it matched the purchase count.
+      - name: avg_value_per_purchase
+        description: >
+          sold_value / valued_purchase_days — divided by the VALUED days, not by
+          times_purchased, so it is not deflated by the unvalued history.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [customer_key, item_no]
+      # the purchase floor is what makes a published rhythm meaningful; if a
+      # rhythm ever appears below it, the floor has stopped being applied
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: >
+              median_days_between_purchases is null
+              or times_purchased >= 3
+      # every row exists because something was bought
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "times_purchased > 0"

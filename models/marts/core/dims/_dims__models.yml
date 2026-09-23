@@ -219,6 +219,23 @@ models:
           the account, which is UNKNOWN — not "delivers no day of the week".
       - name: appointment_required
         description: Delivery needs a booked appointment.
+      - name: is_retail
+        description: NAV flags the account as retail.
+      - name: is_wholesale
+        description: NAV flags the account as wholesale.
+      - name: is_food_service
+        description: NAV flags the account as food service.
+      - name: has_store_type
+        description: >
+          Whether ANY store type is set. THE HONESTY FLAG — three falses mean
+          UNKNOWN, not "none of the above". Of 3,742 active customers only ~1,750
+          carry a type (measured 2026-09-23), so roughly half the active book is
+          unclassified and must not be filtered out by anything using type.
+      - name: store_type
+        description: >
+          The same thing readable — "Retail", or "Retail, Food Service" where an
+          account carries two. NULL when nothing is set, so an assistant says
+          nothing rather than saying "none".
       - name: customer_group
         description: Customer group/segment.
       - name: customer_price_group
@@ -229,3 +246,214 @@ models:
         description: Delivery route as sent to the WMS.
       - name: m2_customer_id
         description: Magento customer entity id.
+
+  - name: dim_items
+    description: >
+      One row per item_no. The conformed item dimension: the name to say out
+      loud, what kind of thing it is, whether it may be sold at all, and whether
+      the warehouse can ship it today. int_jdawms_items has carried a note since
+      it was written calling itself "the future dim_items surface" — this is it,
+      and it is not a rename of that model but the NAV CATALOG joined to the WMS
+      WAREHOUSE view, which have never been in one place before.
+
+      SPINE IS NAV, LEFT-JOINING THE WMS, and the reverse would be wrong: NAV is
+      the catalog of what the company sells, while the WMS mirror covers
+      warehouse CABOT only, so an item shipping from an unmirrored site is a real
+      sellable item with no WMS row. has_wms_item says which case a row is, the
+      same way dim_customers.has_coordinates does for an ungeocodable address.
+      An item with no WMS row has stock that is UNKNOWN, not zero.
+
+      STOCK IS LAST NIGHT'S SNAPSHOT FOR ONE WAREHOUSE. "In stock" means CABOT
+      could ship it as of stock_snapshot_date, which is what a rep needs before
+      promising an item — but an item showing zero may still ship from a site the
+      replica does not mirror.
+
+      NO PRICE, ANYWHERE. NAV's item export carries no price column and there is
+      no price list in the replica, so this dimension cannot value anything. It
+      also has NO BRAND field, which is why the "branded sales share" the
+      business asks for is not computable — item_category_code and
+      product_group_code are the nearest available cuts.
+    columns:
+      - name: item_no
+        description: Item number — the PK. Same code as jdawms prtnum and the website sku.
+        tests: [not_null, unique]
+      - name: item_label
+        description: >
+          THE NAME TO READ OUT. NAV's full description, else its short
+          description, else the item number — so a spoken answer never says
+          "null". Never say the item number to a rep when this exists.
+        tests: [not_null]
+      - name: item_description
+        description: NAV's short label.
+      - name: item_full_description
+        description: NAV's richest label. Not guaranteed populated — read item_label.
+      - name: wms_item_name
+        description: >
+          The WAREHOUSE's name for the item, from prtdsc. Carried beside the NAV
+          names rather than folded into them: the two systems name items
+          differently, and a consumer comparing a report to the warehouse floor
+          needs to see both.
+      - name: item_category_code
+        description: NAV's own category taxonomy. NOT the website taxonomy in seed_categories.
+      - name: item_category_name
+        description: Category name, from nav item_category.
+      - name: product_group_code
+        description: Product group within the category.
+      - name: item_family_no
+        description: NAV item family.
+      - name: wms_item_family
+        description: WMS item family (prtfam). A different grouping from item_family_no.
+      - name: is_blocked
+        description: NAV blocks the item from transacting at all.
+      - name: is_sellable
+        description: >
+          is_blocked stated positively, because a filter written as
+          `not is_blocked` is how a blocked item ends up recommended.
+      - name: is_shown_on_web
+        description: Published to the website.
+      - name: unit_price
+        description: >
+          LIST price per base UOM — what an item costs when the account has never
+          bought it. For what they actually paid, use their own invoiced value.
+      - name: is_discontinued
+        description: >
+          Being phased out. NOT the same as blocked, which stops the item
+          transacting outright: a discontinued item still sells and may want
+          clearing, but should not anchor a long-term recommendation.
+      - name: is_focus_item
+        description: >
+          NAV focus flag. ONLY 5 ITEMS IN 7,573 CARRY IT and four of those have a
+          window from JULY 2017, so it is not being maintained. Carried for
+          completeness; do not build on it until the business says otherwise.
+      - name: focus_begin_date
+        description: Focus window start, with NAV blank sentinel 1753-01-01 converted to NULL.
+      - name: focus_end_date
+        description: Focus window end, blank sentinel nulled.
+      - name: new_begin_date
+        description: New-item window start, blank sentinel nulled. NULL on 335 of the 357 flagged items.
+      - name: new_end_date
+        description: >
+          New-item window end. NULL ON ALL 357 FLAGGED ITEMS, which is precisely
+          why nothing is ever "currently new" by its own window. The maintained
+          equivalent is Marked New Date / Removed New Date, which the ADF export
+          does not yet carry.
+      - name: is_focus_now
+        description: >
+          Focus flag AND today inside its window. FALSE FOR EVERY ITEM, because
+          the windows date from 2017. Computed correctly so it starts working the
+          day the business maintains the dates — until then read is_focus_item
+          and ignore this.
+      - name: is_new_now
+        description: >
+          New flag AND today inside its window. FALSE FOR EVERY ITEM, because
+          new_end_date is blank on all 357. Same reasoning as is_focus_now.
+      - name: promo_price
+        description: Promotional price. Null on virtually every live promotion — never render as free.
+      - name: promo_buy_qty
+        description: Buy quantity in the live offer.
+      - name: promo_free_qty
+        description: Free quantity in the live offer.
+      - name: has_promo_offer
+        description: A buy-X-get-Y pair is set — the part of a promotion a rep can actually say out loud.
+      - name: is_new_item
+        description: >
+          MANUAL BUYER FLAG with unconfirmed persistence — an item flagged new
+          may have been new two years ago. A pitch angle, not evidence.
+      - name: is_popular_item
+        description: >
+          MANUAL BUYER FLAG, explicitly "not a computed velocity measure" in the
+          source docs. For measured velocity read abc_class or the category
+          velocity flags. Never let this stand in for purchase history.
+      - name: is_app_banner
+        description: Featured in an app banner slot. Merchandising.
+      - name: is_on_promotion
+        description: >
+          A live promotion line covers this item as of stock_snapshot_date — the
+          same "today" the stock columns use, so the dimension cannot disagree
+          with itself about the date. The promotion has NO NAME: which of
+          promotion_line's two codes joins to the header is unresolved (see
+          stg_nav__promotion_lines).
+      - name: live_promotion_count
+        description: >
+          How many live promotions cover the item. Published because an item can
+          sit on several at once and this dimension must not fan out — the count
+          is how that stays visible.
+      - name: promo_begin_date
+        description: Earliest live promotion start covering the item.
+      - name: promo_end_date
+        description: Latest live promotion end. "On promotion until…" in a spoken answer.
+      - name: abc_class
+        description: >
+          The WMS's ITEM-level ABC class, used for cycle counting. A different
+          grain and intent from the category velocity flags below — the two
+          disagreeing is not an error.
+      - name: abc_class_description
+        description: Decoded ABC class label.
+      - name: velocity_zone
+        description: WMS velocity zone (velzon).
+      - name: category_is_fast_moving
+        description: NAV classes the item's CATEGORY as fast-moving. Category grain, not item.
+      - name: category_is_good_moving
+        description: Category classed good-moving.
+      - name: category_is_average_moving
+        description: Category classed average-moving.
+      - name: category_is_slow_moving
+        description: Category classed slow-moving.
+      - name: base_uom
+        description: NAV stocking UOM.
+      - name: wms_stock_uom
+        description: WMS stocking UOM. Compare with base_uom — they need not agree.
+      - name: wms_display_uom
+        description: WMS display UOM.
+      - name: basic_uom_size
+        description: Size descriptor, free text.
+      - name: size_unit
+        description: Unit for the size attributes.
+      - name: case_qty
+        description: Units per case.
+      - name: innerpack_qty
+        description: Units per inner pack.
+      - name: ea_qty
+        description: Each quantity.
+      - name: cs_per_pallet
+        description: Cases per pallet.
+      - name: gross_weight
+        description: Gross weight per base UOM. CONFIRM the unit.
+      - name: country_of_origin
+        description: Country of origin.
+      - name: upc_code
+        description: Primary UPC barcode.
+      - name: has_wms_item
+        description: >
+          THE HONESTY FLAG. False means the item has no row in the WMS mirror at
+          all, so its stock is UNKNOWN rather than zero and nothing may report it
+          as out of stock. The mirror covers warehouse CABOT only.
+      - name: stock_snapshot_date
+        description: >
+          The snapshot the stock columns come from — generated around 23:00 UTC,
+          so normally last night. NOT the same clock as rep_log_today() or
+          nav_posted_today(); a mart carrying more than one must publish each.
+      - name: shippable_qty
+        description: Quantity CABOT could ship as of stock_snapshot_date.
+      - name: on_hand_qty
+        description: Quantity physically on hand as of the same snapshot.
+      - name: stocking_warehouses
+        description: >
+          How many mirrored warehouses hold the item. 1 today (CABOT only);
+          published so the day the mirror gains a site, the change is visible.
+      - name: is_in_stock
+        description: >
+          THREE-VALUED: true / false / NULL, where NULL means the WMS mirror does
+          not cover this item. A consumer treating null as false will tell a rep
+          an item is unavailable when the truth is that we cannot see it.
+      - name: loaded_at
+        description: NAV ingestion watermark — pipeline run time (full load).
+    tests:
+      # The guard on the item_category fan-out. navrep.item_category does NOT
+      # honour the PK its source docs claim: joined raw it produced several rows
+      # per code and inflated this dimension 8.7x (200 items -> 1,744 rows), with
+      # nothing in the output looking obviously wrong. dim_items dedupes it; this
+      # test is what keeps that true.
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "not (is_in_stock and coalesce(shippable_qty, 0) <= 0)"

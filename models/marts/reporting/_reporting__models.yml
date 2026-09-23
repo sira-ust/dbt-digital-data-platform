@@ -1014,6 +1014,38 @@ models:
         description: Of those, keyed by the rep on the PDA.
       - name: orders_received
         description: Of those, placed by the customer on web or the app.
+      - name: orders_pda
+        description: >
+          The same orders split three ways by ORIGIN, as the business says them
+          out loud: "3 PDA orders, 2 app orders, 1 web order". APP and WEB are
+          SEPARATE here and folded together in orders_received above; both
+          readings are legitimate and neither derives from the other, so both are
+          published.
+      - name: orders_app
+        description: Of those, originating in the customer app.
+      - name: orders_web
+        description: Of those, originating on the website.
+      - name: orders_channel_other
+        description: >
+          Orders whose channel is null or unrecognised. NORMALLY 0, AND NOT
+          PADDING: order_channel is null when the payload stated no origin and
+          fct_orders' PDA inference did not apply, and 17 such orders went
+          unnoticed for seven months precisely because they fell into neither
+          keyed nor received. A fourth column that is normally zero makes the next
+          occurrence visible instead of silent. The four are tested to sum to
+          orders_submitted.
+      - name: order_value_pda
+        description: >
+          Value per channel — "PDA orders were $123, app orders were $111". NULL,
+          not 0, for a channel with no orders in the period: a channel that sold
+          nothing has no value, and a 0 averages into a run rate as though it were
+          one. Same rule as order_value_total.
+      - name: order_value_app
+        description: Value of app-origin orders. Null when there were none.
+      - name: order_value_web
+        description: Value of web-origin orders. Null when there were none.
+      - name: order_value_channel_other
+        description: Value of orders with no recognised channel. Normally null.
       - name: days_with_orders
         description: >
           Days in the period on which the rep sent at least one order. The
@@ -1028,6 +1060,20 @@ models:
         description: order_value_total / orders_submitted for the period.
       - name: order_value_largest
         description: Biggest single order in the period.
+      - name: largest_order_customer_key
+        description: >
+          The account behind order_value_largest, so the answer is "$4,200 from
+          ABC Market" rather than "$4,200". Picked by row_number over the period's
+          orders with ties broken on customer_key, so the pick is reproducible
+          across runs and engines — a tie is two orders of exactly equal value,
+          which is rare and harmless either way.
+      - name: largest_order_customer_name
+        description: >
+          That account's name — the half to say out loud. A null name beside a
+          non-null key means the account is missing from dim_customers, which is a
+          data-quality fault worth seeing rather than a reason to drop the row.
+      - name: largest_order_date
+        description: The rep-local day the largest order was submitted.
       - name: order_line_count
         description: Total item count across the period's orders.
       - name: accounts_ordered
@@ -1077,6 +1123,13 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "orders_keyed + orders_received = orders_submitted"
+      # the three-way ORIGIN split plus the unknown bucket must account for
+      # every order, or a channel has appeared that nothing is counting
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: >
+              orders_pda + orders_app + orders_web + orders_channel_other
+              = orders_submitted
       # exactly one current period per rep per period_type, or is_current cannot
       # be used as the month-to-date filter it is documented to be
       - dbt_utils.expression_is_true:
@@ -1144,6 +1197,38 @@ models:
         description: >
           Days from last_order_date to as_of_date. NULL, not a large number, when
           there is no order on record.
+      - name: last_invoiced_date
+        description: >
+          Most recent POSTED invoice for this rep-account. Every channel, full
+          history — the authoritative answer to "when did they last buy".
+      - name: first_invoiced_date
+        description: Earliest posted invoice on record.
+      - name: days_since_last_invoice
+        description: Measured against invoice_as_of_date, NAV's own leading edge.
+      - name: invoices_all_time
+        description: Posted invoices for this rep-account. COMPLETE over the whole export.
+      - name: invoices_recent
+        description: Posted invoices within var('account_item_recent_window_days').
+      - name: invoice_value_recent
+        description: >
+          Invoiced value in that window, net of credits. NULL before 2026-09-20
+          even where the COUNTS are populated — an account with invoices and no
+          invoiced value is the pipeline's limit, not a quiet account.
+      - name: invoice_value_all_time
+        description: Lifetime invoiced value, same coverage caveat.
+      - name: last_app_order_date
+        description: >
+          Most recent APP submit. Fresher than the invoice clock — same day — but
+          app channels only and no earlier than the event log's go-live.
+      - name: first_app_order_date
+        description: Earliest app submit on record.
+      - name: days_since_last_app_order
+        description: Measured against as_of_date, the event log's leading edge.
+      - name: invoice_as_of_date
+        description: >
+          NAV's leading edge — the newest posted invoice anywhere. A DIFFERENT
+          DATE from as_of_date, which is the event log's and is shared with every
+          other rep mart. The two feeds advance independently.
       - name: orders_all_time
         description: Orders on record for this rep-account in the observed window.
       - name: orders_recent
@@ -1210,3 +1295,909 @@ models:
             expression: >
               (last_order_date is null and days_since_last_order is null)
               or (last_order_date is not null and days_since_last_order is not null)
+
+  # ── THE ITEM-LEVEL SALES-AGENT MARTS ────────────────────────────────────────
+  # mart_account_item_history and mart_account_item_opportunities answer the
+  # "What should I sell them?" questions; mart_rep_period_item_mix answers "what
+  # were my sales made of". All three run on NAV POSTED INVOICES.
+  #
+  # READ THIS BEFORE QUOTING ANY NUMBER FROM THEM: NAV exports no amounts.
+  # sales_invoice_line is eleven columns and not one is money; the replica has no
+  # Cust_ Ledger Entry at all. So these are UNIT histories — how many, how often,
+  # when — and never how much. AR days, aging, credit limits and "which accounts
+  # are past their terms" have no source in this warehouse and cannot be
+  # approximated from anything in it.
+
+  - name: mart_account_item_history
+    description: >
+      ONE ROW PER ACCOUNT PER ITEM THEY HAVE BOUGHT. "What does this account
+      actually buy, what have they stopped buying, and what are they due to
+      reorder?" The item-level companion to mart_rep_account_status, which stops
+      at the account — that table answers "who should I call", this one answers
+      "and what do I say when they pick up".
+
+      TWO THINGS BEFORE READING A NUMBER.
+
+      (1) THERE ARE NO DOLLARS HERE AND NO WAY TO ADD THEM. This table says "they
+      buy 6 cases every 5 weeks", never "that is $400 a month". The only dollar
+      figure in the warehouse is fct_orders.grand_total, which is an ORDER TOTAL
+      from the app payload — it does not break down by item and cannot be
+      apportioned across these rows.
+
+      (2) TWO CLOCKS, AND THEY ARE DIFFERENT DATES. purchase_as_of_date is NAV's
+      leading edge; stock_snapshot_date is the warehouse's. They advance on
+      independent schedules, so they genuinely differ, and both are published
+      rather than one passed off as "today".
+
+      A ROW IS AN ACCOUNT-ITEM PAIR WITH AT LEAST ONE POSTED PURCHASE. Items
+      never bought are deliberately absent — that is
+      mart_account_item_opportunities.
+
+      HISTORY DEPTH IS THE ERP FEED'S, NOT THE EVENT LOG'S. This is the first
+      mart whose history does not start at var('event_log_go_live_date'); it
+      reaches back as far as the posted-invoice export does. So an account can
+      show purchases here and no orders at all in mart_rep_account_status, and
+      that is not a contradiction — different systems, different windows.
+    columns:
+      - name: customer_key
+        description: The account.
+        tests: [not_null]
+      - name: customer_name
+        description: The name to say out loud.
+      - name: owner_rep
+        description: The rep NAV says OWNS the account today.
+      - name: owner_rep_name
+        description: That rep's display name.
+      - name: selling_rep
+        description: >
+          The rep credited with this account's purchases of this item in NAV,
+          which is NOT necessarily owner_rep — a book can change hands. Published
+          beside it so the difference is visible rather than resolved into one
+          misleading column.
+      - name: customer_is_active
+        description: NAV active flag. Inactive does not mean "never contact".
+      - name: city
+        description: Account city.
+      - name: county
+        description: Account county/state.
+      - name: post_code
+        description: Account postal code.
+      - name: customer_group
+        description: NAV customer group. The basis for peer comparison in the opportunities mart.
+      - name: item_no
+        description: The item.
+        tests: [not_null]
+      - name: item_label
+        description: The item name to READ OUT. Never say the item number to a rep.
+      - name: item_category_code
+        description: NAV category code.
+      - name: item_category_name
+        description: NAV category name.
+      - name: product_group_code
+        description: NAV product group.
+      - name: abc_class
+        description: WMS item-level ABC class.
+      - name: purchase_as_of_date
+        description: >
+          NAV's leading edge — the newest posted invoice. Every purchase age here
+          is measured against it. An invoice that posted this morning is not in
+          here yet.
+      - name: stock_snapshot_date
+        description: >
+          The warehouse's leading edge — normally last night. A DIFFERENT date
+          from purchase_as_of_date; is_in_stock is true as of this one.
+      - name: first_purchase_date
+        description: Earliest purchase in the posted-invoice export.
+      - name: last_purchase_date
+        description: Most recent purchase day.
+      - name: days_since_last_purchase
+        description: Measured to purchase_as_of_date, not to the wall clock.
+      - name: times_purchased
+        description: Distinct days this account bought this item. Return-only days excluded.
+      - name: invoice_count
+        description: Distinct invoices carrying it.
+      - name: purchases_recent
+        description: >
+          Purchase days within var('account_item_recent_window_days') (90).
+          Matches rep_account_recent_window_days on purpose: this and
+          mart_rep_account_status are read side by side by the same assistant, and
+          two meanings of "recently" in one answer is how a rep stops trusting
+          both.
+      - name: median_days_between_purchases
+        description: >
+          THE ACCOUNT'S OWN RHYTHM for this item. NULL below
+          var('account_item_min_purchases_for_cadence') purchases, where a median
+          would be a single number wearing a statistic's clothes.
+      - name: avg_days_between_purchases
+        description: Mean gap. A big divergence from the median means irregular buying.
+      - name: min_days_between_purchases
+        description: Shortest observed gap.
+      - name: max_days_between_purchases
+        description: Longest observed gap.
+      - name: expected_next_purchase_date
+        description: last purchase + the pair's own median gap.
+      - name: days_overdue
+        description: SIGNED — negative means due in that many days, itself a reason to call.
+      - name: reorder_status
+        description: >
+          lapsed / overdue / due / not due / rhythm unknown. One reason per row.
+          'lapsed' IS the answer to "what have they stopped buying".
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['lapsed', 'overdue', 'due', 'not due', 'rhythm unknown']
+      - name: reorder_priority
+        description: 1 = act first. Mirrors reorder_status so `order by` gives the list.
+      - name: is_reorder_candidate
+        description: reorder_status is due, overdue or lapsed.
+      - name: has_stopped_buying
+        description: >
+          reorder_status = 'lapsed' — they have missed roughly
+          var('account_item_lapsed_gap_multiple') of their own cycles. Named
+          directly because it is the question the business asks in these words.
+      - name: primary_quantity_uom
+        description: The UOM this account usually buys this item in.
+      - name: quantity_uom_count
+        description: Above 1 means the quantity columns cover only the commonest UOM.
+      - name: sold_quantity_primary_uom
+        description: Total bought in the primary UOM. NOT a cross-UOM total.
+      - name: avg_quantity_per_purchase
+        description: What a typical reorder looks like, in the account's own UOM.
+      - name: net_quantity_primary_uom
+        description: Sold minus returned, primary UOM only.
+      - name: sold_quantity_recent_all_uoms
+        description: >
+          Quantity in the recent window, MIXED UOM by construction — named to say
+          so. Check quantity_uom_count before quoting it.
+      - name: cr_memo_count
+        description: Distinct credit memos for this account-item.
+      - name: returned_quantity_all_uoms
+        description: Total returned, mixed UOM.
+      - name: last_return_date
+        description: Most recent return. Null if never.
+      - name: return_rate_units
+        description: >
+          returned / sold, IN UNITS. The business rule is "any return over 2-3%
+          should alert" and it was stated in money — money does not exist in NAV's
+          posted tables, so this is the unit equivalent and must be presented as
+          such, not as a value rate. Numerator is all-UOM and denominator is
+          primary-UOM, so treat it as an indicator rather than an exact ratio
+          when quantity_uom_count > 1.
+      - name: return_rate_value
+        description: >
+          returned / sold IN MONEY — the rate the business actually asked for.
+          Both sides come from the same covered window, so unlike
+          return_rate_units this is like-for-like. Null where that window has no
+          data, rather than 0.
+      - name: sold_value
+        description: >
+          What this account has spent on this item. COVERS A SHORTER PERIOD than
+          every date column on this row — from 2026-09-20 only. Never present it
+          as though it matched times_purchased.
+      - name: returned_value
+        description: Money credited back. Same window.
+      - name: avg_value_per_purchase
+        description: What a typical reorder of this item is worth, over the valued days only.
+      - name: valued_purchase_days
+        description: >
+          Purchase days carrying value. Equal to times_purchased means the money
+          covers the whole relationship; lower means only its recent part.
+      - name: valued_line_count
+        description: Lines carrying an amount.
+      - name: line_count
+        description: Lines in total, valued or not — the denominator for coverage.
+      - name: is_in_stock
+        description: >
+          THREE-VALUED. null = the WMS mirror does not cover this item, so stock is
+          UNKNOWN rather than zero. A consumer treating null as false will tell a
+          rep an item is unavailable when the truth is we cannot see it.
+      - name: has_wms_item
+        description: Whether the WMS mirror covers this item at all.
+      - name: shippable_qty
+        description: What CABOT could ship as of stock_snapshot_date.
+      - name: is_on_promotion
+        description: >
+          On a live promotion as of stock_snapshot_date. MANUAL merchandising
+          context, useful because "you are due to reorder this and it is on promo"
+          is the sentence a rep wants. The promotion has no name.
+      - name: promo_end_date
+        description: Latest live promotion end, for an "on promotion until…" phrasing.
+      - name: is_new_item
+        description: MANUAL buyer flag with unconfirmed persistence. Not evidence.
+      - name: is_popular_item
+        description: MANUAL buyer flag, explicitly not a velocity measure.
+      - name: is_sellable
+        description: NAV permits the item to transact.
+      - name: is_blocked
+        description: NAV blocks it. Never pitch a blocked item.
+      - name: delivery_days
+        description: >
+          "Tue, Thu" — when the account accepts deliveries. An account that only
+          takes Tuesday deliveries has to be sold before Tuesday, so the reorder
+          date alone is not actionable without this.
+      - name: delivery_day_count
+        description: 0 means NAV has no pattern on file — UNKNOWN, not "never delivers".
+      - name: appointment_required
+        description: Delivery needs a booked appointment.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [customer_key, item_no]
+      # a history row exists because something was bought
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "times_purchased > 0"
+      # has_stopped_buying must never disagree with the status it summarises
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "has_stopped_buying = (reorder_status = 'lapsed')"
+      # the money can never cover more of the relationship than there is
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "valued_purchase_days <= times_purchased"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "valued_line_count <= line_count"
+      # a value total without any valued line is a contradiction
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "sold_value is null or valued_line_count > 0"
+
+  - name: mart_account_item_opportunities
+    description: >
+      THE PITCH LIST. One row per account per candidate item, ranked, capped at
+      var('account_item_opportunity_top_n'). "What are the 5-10 items I should
+      walk in and talk about?"
+
+      EVERY ROW CARRIES ITS OWN REASON AND THE EVIDENCE FOR IT.
+      opportunity_reason says why the item is on the list; opportunity_evidence
+      is the fact behind it, already phrased for a person. This is not
+      decoration: a voice agent reading a bare ranked list has to invent a
+      justification and it will, so the reason is supplied as data. Nothing here
+      is a score a rep cannot interrogate.
+
+      FIVE REASONS IN PRECEDENCE ORDER — reorder due, stopped buying, on
+      promotion, peers buy it, new or featured. The first three are MEASURED from
+      this account's own posted purchases; the last two rest on other stores'
+      behaviour or on a buyer's manual flag. is_evidence_based marks the
+      difference so an assistant can say "you are due for this" and "you might
+      try this" in different voices instead of reading all five in the same
+      confident one.
+
+      NO VALUE RANKING IS POSSIBLE. NAV's posted tables carry no amount, so these
+      candidates cannot be ranked by revenue, margin or basket value, and nothing
+      here should be described as the most valuable opportunity. It is the most
+      LIKELY one, on frequency and recency. A rep asking "which is worth most"
+      has to be told we cannot see it.
+
+      STOCK GATES THE LIST: is_in_stock = false is excluded outright, but items
+      with NO WMS ROW are KEPT because their stock is unknown rather than zero.
+      stock_is_known flags them. Blocked items are excluded unconditionally.
+
+      THE CAP IS A CEILING, NOT A TARGET. An account with three good candidates
+      gets three rows; padding to ten with weak suggestions is how a rep learns
+      to ignore the list.
+    columns:
+      - name: customer_key
+        description: The account to pitch to.
+        tests: [not_null]
+      - name: customer_name
+        description: The account name to say out loud.
+      - name: owner_rep
+        description: The rep who owns the account in NAV.
+      - name: owner_rep_name
+        description: That rep's display name.
+      - name: customer_is_active
+        description: NAV active flag.
+      - name: city
+        description: Account city.
+      - name: county
+        description: Account county/state.
+      - name: customer_group
+        description: NAV customer group — the peer set for the 'peers buy it' reason.
+      - name: item_no
+        description: The item to pitch.
+        tests: [not_null]
+      - name: item_label
+        description: The item name to READ OUT.
+      - name: item_category_code
+        description: NAV category code.
+      - name: item_category_name
+        description: NAV category name.
+      - name: abc_class
+        description: WMS item-level ABC class.
+      - name: opportunity_rank
+        description: >
+          1 = lead with this. Ranked by reason precedence, then by how many
+          reasons the item met, then most overdue, then most frequently bought.
+          Every tiebreak is a measured quantity, so the order is reproducible and
+          a rep can be told why one item came before another.
+        tests: [not_null]
+      - name: opportunity_reason
+        description: Why this item is on the list. One reason per row — the strongest it met.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['reorder due', 'stopped buying', 'on promotion', 'peers buy it', 'new or featured']
+      - name: reason_count
+        description: >
+          How many of the three behaviour-based reasons the item met. A candidate
+          that is both overdue AND on promotion is a better call than one merely
+          overdue, and this is how that survives collapsing to a single reason.
+      - name: is_evidence_based
+        description: >
+          TRUE = this account's own posted purchases justify the suggestion.
+          FALSE = it rests on other accounts' behaviour or a buyer's manual flag.
+          Say these two differently.
+      - name: opportunity_evidence
+        description: >
+          The fact behind the reason, already phrased for a person ("bought 7
+          times, last 68 days ago, usually every 31"). Assembled in the model so
+          every reading of the row makes the same claim. Note what it never
+          contains: a value, a price or a margin — none exist in the source.
+      - name: times_purchased
+        description: Purchase days for this account-item. Null for reasons 4 and 5.
+      - name: last_purchase_date
+        description: Most recent purchase. Null for never-bought candidates.
+      - name: days_since_last_purchase
+        description: Measured to the NAV clock.
+      - name: median_days_between_purchases
+        description: The account's own rhythm for this item.
+      - name: expected_next_purchase_date
+        description: When they are due on that rhythm.
+      - name: days_overdue
+        description: Signed — negative means due shortly.
+      - name: avg_quantity_per_purchase
+        description: >
+          What a reorder typically looks like, in the account's own UOM. QUANTITY
+          ONLY — there is no price to turn it into a value.
+      - name: primary_quantity_uom
+        description: The UOM that quantity is in.
+      - name: avg_value_per_purchase
+        description: >
+          What a typical reorder of this item is worth to this account. CONTEXT,
+          not the basis of the ranking — it is null wherever the account's recent
+          purchases predate the 2026-09-20 value export, and null for both
+          reasons that rest on no purchase history, so ranking on it would sort
+          by export recency rather than by opportunity.
+      - name: peer_account_count
+        description: >
+          For 'peers buy it': how many other accounts in the same NAV
+          customer_group buy this item. Needs at least
+          var('account_item_peer_min_accounts') before the claim is made, because
+          below that it rests on too few stores to be worth saying out loud. Null
+          for every other reason.
+      - name: stock_is_known
+        description: >
+          FALSE means the WMS mirror does not cover this item; it survived the
+          stock gate because unknown is not zero. Tell the rep that rather than
+          promising availability.
+      - name: is_in_stock
+        description: True, or null where stock is unknown. Never false — those are excluded.
+      - name: shippable_qty
+        description: What CABOT could ship as of stock_snapshot_date.
+      - name: stock_snapshot_date
+        description: The warehouse clock these stock columns are true as of.
+      - name: is_on_promotion
+        description: On a live promotion now. The promotion has no name — see stg_nav__promotion_lines.
+      - name: promo_end_date
+        description: Latest live promotion end, for an "on promotion until…" phrasing.
+      - name: is_new_item
+        description: MANUAL buyer flag, unconfirmed persistence.
+      - name: is_popular_item
+        description: MANUAL buyer flag, not a velocity measure.
+      - name: has_promo_offer
+        description: >
+          A buy-X-get-Y offer is set on this live promotion. When true the
+          evidence line reads it out; when false only the promo end date is
+          available, because NAV sets no price on any promotion live today.
+      - name: promo_buy_qty
+        description: Buy quantity in that offer.
+      - name: promo_free_qty
+        description: Free quantity in that offer.
+      - name: promo_price
+        description: Promotional price. Almost always null — NAV does not maintain it. Never render null as free.
+      - name: unit_price
+        description: >
+          LIST price, so a never-bought candidate can still be priced. Where
+          avg_value_per_purchase exists it is the better number, being what this
+          account actually paid.
+      - name: is_discontinued
+        description: >
+          Being phased out. NOT excluded from the list — a discontinued item can
+          still sell and may want clearing — but a rep should know before pitching.
+      - name: delivery_days
+        description: When the account accepts deliveries — the practical deadline for the call.
+      - name: delivery_day_count
+        description: 0 means no pattern on file, which is unknown.
+      - name: appointment_required
+        description: Delivery needs a booked appointment.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [customer_key, item_no]
+      # the cap is a ceiling; exceeding it means the rank window broke
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "opportunity_rank >= 1 and opportunity_rank <= 10"
+      # an item known to be out of stock is never an opportunity
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "coalesce(is_in_stock, true)"
+      # the three behaviour-based reasons must carry their evidence, and the two
+      # weak ones must not claim it
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: >
+              is_evidence_based
+              = (opportunity_reason in ('reorder due', 'stopped buying', 'on promotion'))
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: >
+              opportunity_reason <> 'peers buy it'
+              or peer_account_count >= 3
+
+  - name: mart_rep_period_item_mix
+    description: >
+      ONE ROW PER REP PER PERIOD: what a rep's sales were MADE OF — which
+      categories, how much was promoted, new or popular stock, how much came
+      back. The companion to mart_rep_period_status at the same grain, joined on
+      (sales_code, period_type, period_start).
+
+      THEY ARE SEPARATE MODELS ON PURPOSE AND THEY WILL NOT AGREE.
+      mart_rep_period_status is the mysql event log via fct_orders: DOLLARS,
+      order grain, history from var('event_log_go_live_date'), as-of
+      rep_log_today(). This is NAV posted invoices: UNITS ONLY, line grain,
+      history as deep as the ERP export, as-of nav_posted_today(). Invoices post
+      days after an order is keyed, so an order keyed on the 30th appears in the
+      rep's March value and in April's invoiced mix. Neither is wrong; they
+      measure different events. Publishing them as one row would hide that, and a
+      rep told "you sold $40k, 38% of it promo" would reasonably assume the 38%
+      was 38% of the $40k. IT IS NOT.
+
+      EVERY SHARE HERE IS A SHARE OF LINES, NEVER OF VALUE. NAV's posted tables
+      carry no amount, so "branded sales is 40%" is not computable as a share of
+      revenue by anything in this warehouse. What is computable is the share of
+      INVOICE LINES, and the columns are named `line_share` precisely so a
+      consumer cannot read one as the other. A rep selling a few high-value cases
+      and many cheap ones has a line share that looks nothing like a value share.
+
+      "BRANDED" IS NOT A COLUMN THE WAREHOUSE HAS. NAV's item master has no brand
+      field in the 33 columns ADF exports and there is no brand table. The nearest
+      cuts are item_category_code and product_group_code. Answering the branded
+      question needs a brand column added to the export or a business-maintained
+      seed; nothing here approximates it, because an unauditable approximation of
+      a brand split is worse than an honest absence.
+
+      ALWAYS FILTER ON period_type, or a query counts the same lines five times.
+    columns:
+      - name: sales_code
+        description: The rep's territory code.
+        tests: [not_null]
+      - name: rep_name
+        description: The rep's display name.
+      - name: period_type
+        description: day / week / month / quarter / year. ALWAYS filter on this.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['day', 'week', 'month', 'quarter', 'year']
+      - name: period_start
+        description: First day of the period.
+        tests: [not_null]
+      - name: period_end
+        description: Last day of the period.
+      - name: as_of_date
+        description: >
+          THE NAV CLOCK — the newest posted invoice date. It lags the event log's
+          leading edge by however long invoicing takes, so this table and
+          mart_rep_period_status describe periods complete to DIFFERENT dates. Say
+          which one an answer came from.
+      - name: is_current
+        description: as_of_date falls inside this period.
+      - name: invoice_documents
+        description: Distinct posted invoices credited to the rep in the period.
+      - name: invoice_lines
+        description: >
+          Distinct item-invoices — the denominator of every share below. Two lines
+          of one item on one invoice count once.
+      - name: distinct_items
+        description: Distinct items sold in the period.
+      - name: distinct_categories
+        description: Distinct NAV categories sold.
+      - name: accounts_invoiced
+        description: >
+          DISTINCT accounts invoiced. NOT summable across periods — an account
+          invoiced in two weeks is one account for the month. Ask for the longer
+          period_type instead.
+      - name: lines_per_invoice
+        description: Average lines per invoice — basket breadth, in lines not value.
+      - name: promo_lines
+        description: Lines whose item is on a live promotion NOW (see the caveat on shares).
+      - name: new_item_lines
+        description: Lines whose item carries the manual new flag now.
+      - name: popular_item_lines
+        description: Lines whose item carries the manual popular flag now.
+      - name: fast_category_lines
+        description: Lines in a category NAV classes fast-moving.
+      - name: slow_category_lines
+        description: Lines in a category NAV classes slow-moving.
+      - name: unknown_item_lines
+        description: >
+          Lines whose item is not in dim_items at all. Normally 0; non-zero means
+          posted invoices reference items the NAV item master does not carry, so
+          every share understates its numerator by up to this many lines. A
+          denominator caveat, not a metric — published rather than filtered so the
+          fault is visible.
+      - name: promo_line_share
+        description: >
+          promo_lines / invoice_lines. A SHARE OF LINES, NOT OF REVENUE. Read 0.38
+          as "38% of the lines he invoiced were items we currently promote". NOTE
+          the flags are TODAY'S values, not the item's state on the posting date —
+          the merchandising flags have no history and are overwritten in place, so
+          a promo share for a period months ago answers "how much of that was
+          stock we promote now", which is a useful question but not the one it
+          looks like.
+      - name: new_item_line_share
+        description: Share of lines flagged new. Same current-state caveat.
+      - name: popular_item_line_share
+        description: Share of lines flagged popular. Same caveat.
+      - name: fast_category_line_share
+        description: Share of lines in fast-moving categories.
+      - name: slow_category_line_share
+        description: Share of lines in slow-moving categories.
+      - name: cr_memo_documents
+        description: Distinct credit memos against the rep in the period.
+      - name: returned_lines
+        description: Lines with a return posted in the period.
+      - name: return_line_rate
+        description: >
+          returned_lines / invoice_lines. The business rule "any return over 2-3%
+          should alert" was stated in money and money does not exist here, so this
+          is the LINE equivalent and must be presented as such. A rep returning
+          one expensive case and one cheap one scores the same on this.
+      - name: sold_quantity_mixed_uom
+        description: >
+          Quantity summed ACROSS UOMs — the one place in this chain that does it,
+          which is why the name says so. At rep-period grain it is a workload
+          measure ("how many units did he move"), not a quantity of anything in
+          particular. Check distinct_quantity_uoms before quoting it.
+      - name: returned_quantity_mixed_uom
+        description: Returned quantity, same mixed-UOM caveat.
+      - name: distinct_quantity_uoms
+        description: >
+          Above 1, the two quantity columns add cases to eaches. This is the check
+          that makes them interpretable.
+      - name: sales_value
+        description: >
+          Invoiced value for the period. INVOICED, not ordered — different from
+          mart_rep_period_status.order_value_total, which is what the rep
+          submitted. They differ by cuts, short-ships and posting lag. Only
+          covers lines exported from 2026-09-20.
+      - name: returned_value
+        description: Value credited back in the period.
+      - name: source_lines
+        description: >
+          Underlying invoice lines in the period. NOT invoice_lines, which counts
+          item-days — one item-day can hold several source lines. This is the
+          denominator for value_coverage.
+      - name: valued_lines
+        description: Source lines carrying an amount.
+      - name: value_coverage
+        description: >
+          valued_lines / source_lines. 1.0 means the value columns cover the
+          whole period; 0.2 means they describe a fifth of it. CHECK THIS BEFORE
+          QUOTING ANY VALUE SHARE.
+      - name: promo_value_share
+        description: >
+          Share of invoiced DOLLARS on items currently promoted — the shape of
+          the figure the business asked for. Differs from promo_line_share
+          whenever promoted items are priced unlike the rest, which is the point
+          of publishing both.
+      - name: new_item_value_share
+        description: Share of invoiced dollars on items flagged new. Same current-state caveat as the line shares.
+      - name: popular_item_value_share
+        description: Share of invoiced dollars on items flagged popular.
+      - name: return_value_rate
+        description: >
+          returned_value / sales_value — the money version of return_line_rate,
+          and the one matching the "over 2-3%" rule as stated. Only meaningful
+          where value_coverage is high.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [sales_code, period_type, period_start]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "period_start <= period_end"
+      # shares are shares: the numerator can never exceed the denominator
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "promo_lines <= invoice_lines"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "new_item_lines <= invoice_lines"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "returned_lines <= invoice_lines"
+      # value coverage is a share of the period's lines, so it cannot exceed 1
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "valued_lines <= source_lines"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "promo_value_share is null or promo_value_share between 0 and 1"
+      # an invoice carries at least one line
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "invoice_lines > 0"
+
+  - name: mart_rep_nearby_accounts
+    description: >
+      ONE ROW PER REP x ANCHOR ACCOUNT x NEARBY ACCOUNT THAT NEEDS ATTENTION.
+      "I'm at ABC Market — who else round here has gone quiet?"
+
+      A "WHILE YOU'RE THERE" LIST, not a neighbour list. It carries only
+      accounts mart_rep_account_status has already flagged (attention_priority
+      <= 2: never ordered, or overdue), because a complete neighbour list would
+      make a rep read past the healthy accounts to find the one worth a detour.
+
+      THE ANCHOR IS WHERE THE REP IS; nearby is what they could add to the trip.
+      Every account in the rep's book gets to be an anchor, since the assistant
+      does not know today's route — it is asked "who's near X" and looks X up.
+      An account appearing as both an anchor and somebody else's neighbour is
+      correct, not double counting.
+
+      BOTH SIDES NEED A COORDINATE, and 12% of customers have none. An account
+      with no resolvable address is ABSENT here entirely, as anchor and as
+      neighbour. Absent means NOT KNOWABLE, never "nothing nearby" — an
+      assistant must not say "there is nobody near you" on the strength of an
+      empty result.
+
+      DISTANCE IS STRAIGHT-LINE, NOT DRIVING DISTANCE. Two stores 800 m apart
+      across a freeway with no crossing are 800 m here and fifteen minutes apart
+      in a van. A shortlist, not an itinerary.
+
+      NO VISIT HISTORY IS USED. "Needs attention" is the ORDER clock only,
+      inherited from mart_rep_account_status, which stays off visit data because
+      the geofence and idle-gap heuristics are not accurate enough to tell a rep
+      he has not called on someone. A neighbour flagged here may have been
+      visited last week; what it says is that they have not ORDERED.
+    columns:
+      - name: sales_code
+        description: The rep whose book both accounts belong to. Both sides are scoped to the same rep, so this never suggests calling on a colleague's account.
+        tests: [not_null]
+      - name: rep_name
+        description: The rep's display name.
+      - name: anchor_customer_key
+        description: The account the rep is at, or heading to — the one the assistant was asked about.
+        tests: [not_null]
+      - name: anchor_customer_name
+        description: That account's name, for a spoken answer.
+      - name: anchor_city
+        description: Anchor account city.
+      - name: anchor_county
+        description: Anchor account county/state.
+      - name: nearby_rank
+        description: >
+          1 = suggest this one first. Ordered by URGENCY then distance, not
+          closest-first: an account that has never ordered is worth 3 km more
+          than one that is merely overdue is worth 300 m. Capped at
+          var('rep_nearby_top_n').
+        tests: [not_null]
+      - name: nearby_customer_key
+        description: The account worth adding to the trip. Never equal to anchor_customer_key.
+        tests: [not_null]
+      - name: nearby_customer_name
+        description: Its name — the half to say out loud.
+      - name: nearby_city
+        description: Nearby account city.
+      - name: distance_metres
+        description: >
+          Great-circle distance between the two accounts, rounded to the metre.
+          Rounded because the coordinates are geocoded addresses and sub-metre
+          precision would be false confidence. Never exceeds
+          var('rep_nearby_radius_metres').
+      - name: distance_km
+        description: The same distance in kilometres to 2dp, for a spoken answer.
+      - name: attention_reason
+        description: >
+          Why the neighbour is on the list — 'no order on record' or 'order
+          overdue'. Carried through from mart_rep_account_status unchanged, so
+          the two tables can never disagree about why an account needs a call.
+      - name: attention_priority
+        description: 1 = never ordered, 2 = overdue. Nothing above 2 appears here.
+      - name: last_order_date
+        description: The neighbour's most recent order.
+      - name: days_since_last_order
+        description: >
+          NULL means nothing on record since the order feed began — NOT "never
+          ordered in the history of the company", and not a large number either.
+      - name: orders_recent
+        description: The neighbour's orders in the recent window.
+      - name: order_value_recent
+        description: The neighbour's order value in the recent window.
+      - name: customer_is_active
+        description: NAV active flag on the neighbour.
+      - name: delivery_days
+        description: >
+          "Tue, Thu" — a neighbour that only takes Thursday deliveries is not
+          worth a Friday detour.
+      - name: delivery_day_count
+        description: 0 means NAV has no pattern on file, which is unknown rather than "never delivers".
+      - name: appointment_required
+        description: The neighbour needs a booked appointment — worth knowing before turning up.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [sales_code, anchor_customer_key, nearby_customer_key]
+      # an account is never its own neighbour
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "anchor_customer_key <> nearby_customer_key"
+      # the radius is the contract; a row outside it means the haversine filter
+      # stopped agreeing with the bounding-box prefilter
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "distance_metres <= 5000"
+      # only accounts that need a call belong on a "while you're there" list
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "attention_priority <= 2"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "nearby_rank >= 1 and nearby_rank <= 5"
+
+  - name: mart_account_period_status
+    description: >
+      ONE ROW PER ACCOUNT PER PERIOD — what this customer bought, what came
+      back, and whether the returns are out of line. The table behind one
+      specific business request: "last month sales for customer ABC $1k, last
+      month return from ABC is $200. Any return over 2-3% should give some type
+      of alert." Nothing else answers at that grain — mart_rep_period_item_mix
+      is per REP and mart_account_item_history is per account per ITEM.
+
+      ALWAYS FILTER ON period_type (day / week / month / quarter / year), or a
+      query sums the same invoices five times over.
+
+      NO ZERO-FILL, unlike mart_rep_period_status. A customer-period with no
+      invoices produces no row, because zero-filling 7,242 customers across five
+      period grains would generate millions of rows describing nothing. An
+      absent row means the account bought nothing in that period.
+
+      RETURNS COUNT IN THE PERIOD THEY POST, not the period of the invoice they
+      credit — which is what "last month's returns" means, and which keeps this
+      table immutable. fct_invoices does the opposite, attaching each credit to
+      the invoice it credits, because it answers a different question. The two
+      will not agree on a period total and are not supposed to.
+
+      VALUE IS PARTIAL, COUNTS ARE COMPLETE. invoice_value is NULL before
+      2026-09-20; invoice_count and the dates span the whole export. The alert
+      cannot fire on older periods at all, which is why
+      return_rate_is_measurable exists.
+    columns:
+      - name: customer_key
+        description: The account.
+        tests: [not_null]
+      - name: customer_name
+        description: The name to say out loud.
+      - name: owner_rep
+        description: The rep NAV says owns the account today.
+      - name: owner_rep_name
+        description: That rep's display name.
+      - name: customer_is_active
+        description: NAV active flag.
+      - name: city
+        description: Account city.
+      - name: county
+        description: Account county/state.
+      - name: customer_group
+        description: NAV customer group.
+      - name: store_type
+        description: Retail / Wholesale / Food Service where set. NULL for roughly half the book — unknown, not "none".
+      - name: selling_rep
+        description: >
+          The rep credited with these invoices, which is NOT necessarily
+          owner_rep — a book can change hands. Both are published.
+      - name: sales_code_count
+        description: Above 1 means the period's invoices are credited to more than one rep.
+      - name: period_type
+        description: day / week / month / quarter / year. ALWAYS filter on this.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['day', 'week', 'month', 'quarter', 'year']
+      - name: period_start
+        description: First day of the period.
+        tests: [not_null]
+      - name: period_end
+        description: Last day of the period.
+      - name: as_of_date
+        description: >
+          NAV's leading edge — the newest posted invoice. NOT the event log's
+          clock; this table is fed entirely by posted invoices.
+      - name: is_current
+        description: as_of_date falls inside this period.
+      - name: invoice_count
+        description: Posted invoices in the period. COMPLETE over the whole export.
+      - name: days_with_invoices
+        description: Days in the period on which the account was invoiced.
+      - name: first_invoice_date
+        description: Earliest invoice in the period.
+      - name: last_invoice_date
+        description: Latest invoice in the period.
+      - name: line_count
+        description: Invoice lines across the period.
+      - name: item_count_mixed
+        description: >
+          Item counts summed across invoices, so an item bought on two invoices
+          counts twice. Named to say so — there is no distinct-item count at
+          this grain without re-reading the lines.
+      - name: invoice_value
+        description: >
+          Gross invoiced value for the period. NULL before 2026-09-20 and never
+          zero-filled. Gross deliberately: returns are subtracted once, by the
+          posting-date aggregate, not twice.
+      - name: valued_invoice_count
+        description: Invoices carrying an amount.
+      - name: value_coverage
+        description: valued_invoice_count / invoice_count. Below 1 means invoice_value describes only part of the period.
+      - name: invoice_value_avg
+        description: Average value per VALUED invoice, so it is not deflated by unvalued ones.
+      - name: returned_value
+        description: >
+          Value credited back IN THIS PERIOD. Coalesced to zero, and here that
+          is right: the row exists because the account was invoiced, so no
+          credit row genuinely means nothing came back.
+      - name: returned_quantity
+        description: Quantity credited back in the period, mixed UOM.
+      - name: days_with_returns
+        description: Days in the period on which a credit posted.
+      - name: return_rate_value
+        description: >
+          returned_value / invoice_value — the rate the business asked for, by
+          value. CAN EXCEED 1 where credits in a period exceed that period's
+          sales, which happens when a credit lands against an earlier period's
+          invoice. That is a real signal, not an error.
+      - name: return_rate_is_measurable
+        description: >
+          THE HONESTY FLAG, and it is load-bearing. False means the period has
+          no exported value so no rate can be computed — which is NOT the same
+          as returns being within tolerance. An assistant must never read a
+          quiet alert as a clean bill of health on a period we cannot see.
+      - name: returns_over_threshold
+        description: >
+          Return rate above var('account_return_rate_alert_pct') (0.03). FALSE
+          when the rate is not measurable, so always read it beside
+          return_rate_is_measurable.
+      - name: prev_invoice_value
+        description: >
+          Value the STRICTLY preceding period achieved. Joined on
+          prev_period_start rather than lag(), because lag() returns the previous
+          period WITH A ROW, which after a gap is not last month. NULL means no
+          comparison available, never flat.
+      - name: prev_invoice_count
+        description: Invoices in the strictly-preceding period.
+      - name: prev_returned_value
+        description: Value credited back in the strictly-preceding period.
+      - name: invoice_value_change_pct
+        description: (this period - previous) / previous, as a fraction. Null where there is no previous row or it was zero.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [customer_key, period_type, period_start]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "period_start <= period_end"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "invoice_count > 0"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "valued_invoice_count <= invoice_count"
+      # the alert must never fire on a period whose value we cannot see
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "not returns_over_threshold or return_rate_is_measurable"
