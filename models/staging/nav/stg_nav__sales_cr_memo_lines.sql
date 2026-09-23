@@ -107,6 +107,22 @@ select
 
     cast(loaddate as timestamp)                                            as loaded_at
 from source
-where cr_memo_item_no     is not null
-  and sell_to_customer_no is not null
-  and posting_date        is not null
+-- ── EMPTY STRING, NOT NULL. This filter reads the CLEANED value ───────────
+-- Same fault as the invoice side: NAV writes '' rather than NULL, so a filter
+-- on the raw column let blanks through to become NULL downstream -- 49,913 rows
+-- on item_no and 142 on customer_key.
+--
+-- WHAT IS DROPPED HERE IS NOT COMMENT TEXT, and that is the difference from the
+-- invoice side. 49,913 of 121,564 credit lines (41%) carry no item because they
+-- are CHARGE credits: CRV Charge, Pallet Charge, Freight-Out Charge, Sales
+-- Discount. Ten of them carry an amount, totalling $40,344.23.
+--
+-- They are excluded because this model is ITEM-GRAIN and a credit with no item
+-- cannot sit in a customer-x-item table. THE CONSEQUENCE, and it is real: any
+-- return figure built on this excludes freight and charge credits, so a
+-- customer-level return RATE understates what was actually credited back. That
+-- is a known limitation, not an oversight -- see mart_account_period_status,
+-- which says so where the rate is published.
+where nullif(trim(cast(cr_memo_item_no     as {{ dbt.type_string() }})), '') is not null
+  and nullif(trim(cast(sell_to_customer_no as {{ dbt.type_string() }})), '') is not null
+  and posting_date is not null

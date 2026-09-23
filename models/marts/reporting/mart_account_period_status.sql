@@ -37,6 +37,19 @@
 -- are right for their own question; the two will not agree on a period total
 -- and are not supposed to.
 --
+-- ═══ CHARGE CREDITS ARE NOT COUNTED IN returned_value ══════════════════════
+-- Returns come through int_customer_item_purchases, which is item-grain, and
+-- 41% of NAV's credit-memo lines carry no item at all: CRV Charge, Pallet
+-- Charge, Freight-Out Charge, Sales Discount. Those cannot sit in a
+-- customer-x-item table and are dropped in staging.
+--
+-- So returned_value is what came back as GOODS. A customer credited for freight
+-- or a pallet charge shows nothing here, and return_rate_value is understated
+-- against the total sum credited to them. For the "any return over 2-3%" alert
+-- that is arguably the right reading -- the business means goods coming back,
+-- not a freight adjustment -- but it is a choice, and anyone reconciling this
+-- against an AR statement needs to know it was made.
+--
 -- ═══ VALUE IS PARTIAL; COUNTS ARE COMPLETE ═════════════════════════════════
 -- ADF began exporting line amounts on 2026-09-20 and history is never
 -- revisited, so invoice_value is NULL for older periods while invoice_count and

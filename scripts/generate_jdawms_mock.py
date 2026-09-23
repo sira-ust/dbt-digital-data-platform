@@ -525,6 +525,55 @@ for _i, _r in enumerate(_returns):
         **_line_value(_qty, _r_days := max(0, (NOW - _r["posting_date"]).days)),
     })
 
+# ── COMMENT AND CHARGE LINES: the empty strings NAV actually writes ────────
+# NAV does not write NULL into item_no / sell_to_customer_no -- it writes ''.
+# The mock produced neither until 2026-09-23, so a staging filter that tested
+# the RAW column for null passed every local test and then failed on Databricks
+# against 722,527 rows. Reproducing the blanks is what makes that filter
+# testable at all.
+#
+# Two shapes, because the real table has two:
+#   invoice   printed comment lines -- 715,497 of the 722,535 blanks in NAV are
+#             literally 'www.ustrading.com/NEW' or '**BROWSE NEW ITEMS ONLINE**'
+#             and carry no value
+#   credit    CHARGE credits -- CRV, pallet, freight, discount. These DO carry
+#             value ($40,344.23 over 10 lines), which is why dropping them has a
+#             consequence the invoice side does not have
+for _i in range(40):
+    _doc = _inv_lin[_i % len(_inv_lin)]["document_no"]
+    _inv_lin.append({
+        "document_no": _doc,
+        "line_no": 900 + _i,
+        "sell_to_customer_no": "",
+        "item_no": "",
+        "salesperson_code": "",
+        "posting_date": NOW - timedelta(days=rng.randint(1, 400)),
+        "quantity": 0.0,
+        "unit_of_measure": "",
+        "unit_of_measure_code": "",
+        "qty_per_unit_of_measure": None,
+        "unit_price": None,
+        "line_amount": None,
+        "amount": None,
+    })
+
+for _i in range(30):
+    _crm_lin.append({
+        "document_no": f"CRMC{_i:05d}",
+        "invoice_no": None,
+        "sell_to_customer_no": "" if _i % 5 == 0 else rng.choice(NAV_CUSTOMERS),
+        "cr_memo_item_no": "",
+        "salesperson_code": rng.choice(NAV_REPS),
+        "posting_date": NOW - timedelta(days=rng.randint(1, 120)),
+        "quantity": 1.0,
+        "unit_of_measure": "",
+        "unit_of_measure_code": "",
+        "qty_per_unit_of_measure": None,
+        "unit_price": round(rng.uniform(20, 900), 2),
+        "line_amount": round(rng.uniform(20, 900), 2),
+        "amount": round(rng.uniform(20, 900), 2),
+    })
+
 ROWCOUNTS["sales_invoice_header"] = len(_inv_hdr)
 ROWCOUNTS["sales_invoice_line"] = len(_inv_lin)
 ROWCOUNTS["sales_cr_memo_header"] = len(_crm_lin)
