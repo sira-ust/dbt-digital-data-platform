@@ -837,10 +837,24 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [customer_key, item_no, posting_date, quantity_uom]
-      # a returns-only day is legitimate; a day with neither is not
+      # EVERY ROW CAME FROM AT LEAST ONE LINE. That is the real invariant.
+      #
+      # This used to assert `sold_quantity > 0 or returned_quantity > 0`, and it
+      # failed on 2,440,702 rows the first time it met production. The assertion
+      # was wrong, not the data: 2,490,061 invoice lines carry quantity = 0 on
+      # real items -- MOGU LYCHEE NATA DE COCO, DF SWEET SOY SAUCE -- because the
+      # item was invoiced and NOTHING SHIPPED. A cut line, or one that went out of
+      # stock between order and pick. A further 4,473 lines are negative.
+      #
+      # Those rows are kept deliberately. "Invoiced but shipped nothing" is a
+      # real event and arguably a useful one; dropping it would hide every cut
+      # line in the warehouse. is_purchase_day (sold_quantity > 0) is what
+      # separates it from an actual sale, and int_customer_item_cadence already
+      # gates its gap series on the same rule, so no rhythm is polluted by a day
+      # on which nothing moved.
       - dbt_utils.expression_is_true:
           arguments:
-            expression: "sold_quantity > 0 or returned_quantity > 0"
+            expression: "line_count > 0"
 
   - name: int_customer_item_cadence
     description: >

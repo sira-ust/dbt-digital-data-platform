@@ -416,7 +416,13 @@ for _cust in NAV_CUSTOMERS[:NAV_ACTIVE_CUSTOMERS]:
                 "rep": _rep,
                 "days_ago": _day,
                 "uom": _uom,
-                "qty": rng.randint(1, 24),
+                # ZERO IS A REAL QUANTITY. 2,490,061 invoice lines in NAV
+                # carry quantity = 0 -- invoiced, nothing shipped, because the
+                # line was cut or went out of stock. The mock emitted only
+                # positive quantities, so a test asserting "every item-day sold
+                # or returned something" passed locally and failed on 2,440,702
+                # production rows. ~13% here matches the measured share.
+                "qty": 0 if rng.random() < 0.13 else rng.randint(1, 24),
             })
             # jitter, so gaps vary around the cadence instead of being exact —
             # a perfectly regular series makes median == every gap and hides

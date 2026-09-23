@@ -23,6 +23,18 @@
 -- ago, and every figure derived from it. Posting-date netting keeps history
 -- immutable and matches how the business already reads its own ledger.
 --
+-- ZERO-QUANTITY LINES ARE REAL AND ARE KEPT. 2,490,061 invoice lines carry
+-- quantity = 0 against a real item (measured 2026-09-23) -- the item was
+-- invoiced and nothing shipped, because it was cut or went out of stock between
+-- order and pick. 4,473 more are negative. So an item-day can exist with
+-- sold_quantity = 0 and no return against it at all, and 2,438,623 of them do.
+--
+-- They are kept because "invoiced, shipped nothing" is a real event and a
+-- useful one: it is every cut line in the warehouse. is_purchase_day is what
+-- separates them from an actual sale, and int_customer_item_cadence gates its
+-- gap series on the same rule, so no reorder rhythm is polluted by a day on
+-- which nothing moved.
+--
 -- THE CONSEQUENCE, and it must not be hidden: net_quantity CAN BE NEGATIVE on a
 -- day whose returns exceed its sales, including days with no sale at all. That
 -- is not a bug; it is a return posting on a day of its own. Downstream models
