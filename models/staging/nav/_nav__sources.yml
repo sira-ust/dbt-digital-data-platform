@@ -162,6 +162,25 @@ sources:
             description: "Shipping zone — coexists with shipping_zone above. Candidate join to state_zone.zone_code; CONFIRM which of the two is live."
           - name: customer_group
             description: "Customer group/segment. CONFIRM whether this is a NAV grouping or a Magento customer-group mirror."
+          # ── added to the ADF export 2026-09-20 ──────────────────────────
+          - name: customer_retail
+            description: "Boolean (0/1) — retail account. One of three store-type flags; see customer_food_service for the coverage caveat."
+          - name: customer_wholesale
+            description: "Boolean (0/1) — wholesale account."
+          - name: customer_food_service
+            description: >
+              Boolean (0/1) — food-service account. THE THREE ARE NOT MUTUALLY
+              EXCLUSIVE AND NOT COMPLETE: measured 2026-09-23, of 3,742 active
+              customers only ~1,750 carry any type at all, 76 carry two and one
+              carries three. So "no type" covers roughly half the active book and
+              means UNKNOWN, not "none of the above".
+          - name: budgeted_amount
+            description: >
+              ZERO ON ALL 7,242 CUSTOMERS — verified against NAV itself on
+              2026-09-23, so this is the source's own state and not an ingestion
+              fault. It was pulled as a candidate for the "individual store
+              target" the business asked about; it is not one. Do not build on it
+              without checking it has started being maintained.
           - name: loaddate
             description: "Ingestion watermark — set to the pipeline run time. Full load, so this advances every run regardless of whether the row changed."
 
@@ -265,6 +284,31 @@ sources:
             description: "Packaging attribute."
           - name: full_description
             description: "Full item name — the richest label available. Prefer over description for anything user-facing."
+          # ── added to the ADF export 2026-09-20 ──────────────────────────
+          - name: unit_price
+            description: "List price per base UOM. The only price in the warehouse for an item an account has never bought."
+          - name: discontinued
+            description: "Boolean (0/1) — item is being phased out. Distinct from blocked, which stops it transacting outright."
+          - name: focus_item
+            description: >
+              Boolean (0/1) — flagged as a focus item. ONLY 5 ITEMS CARRY IT, and
+              four of those have a window from JULY 2017 (see focus_begin_date).
+              The flag is not being maintained; treat it as unusable until the
+              business says otherwise.
+          - name: focus_begin_date
+            description: "Focus window start. NAV writes an unset date as 1753-01-01, not NULL. Measured 2026-09-23: the populated ones all read 2017-07-01."
+          - name: focus_end_date
+            description: "Focus window end. All 2017-07-31 where set."
+          - name: new_begin_date
+            description: >
+              New-item window start. BLANK (1753-01-01) on 335 of the 357 flagged
+              items, so it cannot gate anything. Marked New Date is the column
+              that is actually maintained — not currently exported.
+          - name: new_end_date
+            description: >
+              New-item window end. BLANK ON ALL 357 FLAGGED ITEMS, which is why
+              no item is ever "currently new" by its own window. This column is
+              carried for completeness and must not be used as a gate.
           - name: loaddate
             description: "Ingestion watermark — pipeline run time (full load)."
 
@@ -482,6 +526,17 @@ sources:
             description: "Holiday year for the occasion link."
           - name: discontinued
             description: "Boolean (0/1) — line discontinued."
+          # ── added to the ADF export 2026-09-20 ──────────────────────────
+          - name: sprice
+            description: >
+              Promotional price. ZERO ON 12,606 OF 12,967 LINES, and — the part
+              that matters — zero on ALL 86 promotions live today (measured
+              2026-09-23). Treat 0 as NOT SET, never as free. The offer is
+              carried by promo_buy_qty / promo_free_qty instead.
+          - name: promo_buy_qty
+            description: "Buy quantity in a buy-X-get-Y-free offer. Set on 27 of the 86 live promo lines — the mechanic that IS maintained."
+          - name: promo_free_qty
+            description: "Free quantity in the same offer. Pairs with promo_buy_qty."
           - name: released
             description: "Boolean (0/1) — line released/active. With discontinued, the lifecycle gate on whether a promo line counts."
           - name: loaddate
@@ -753,5 +808,389 @@ sources:
             description: "Target quantity. CONFIRM the UOM before comparing to sales_line.quantity."
           - name: order_quota_qty
             description: "A second quota measure — CONFIRM how it differs from quota_quantity (plausibly order-count vs unit target, but do not assume)."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
+
+      # ═══ posted documents ══════════════════════════════════════════════════
+      # THE SALES HISTORY. sales_header / sales_line above are OPEN documents
+      # only and shrink as orders complete; these are where an order LANDS when
+      # it posts, and they are the only complete record of what a customer
+      # actually bought. They were present in the replica
+      # (data/uc_schema_snapshot.csv) before being declared here — the note on
+      # sales_header saying the posted tables "need to be added to the ADF export
+      # first" was out of date; the export already carries them.
+      #
+      # THE ONE THING TO INTERNALISE: NOT ONE OF THESE CARRIES AN AMOUNT.
+      # sales_invoice_line is eleven columns — item, quantity, UOM, salesperson,
+      # posting date — with no unit price, no line amount and no invoice total,
+      # and sales_invoice_header has no total either. So posted history answers
+      # WHAT and HOW MANY, never HOW MUCH. Every dollar figure in this warehouse
+      # comes from fct_orders.grand_total, which is parsed from the app submit
+      # payload and therefore starts at var('event_log_go_live_date') and covers
+      # app-channel orders only.
+      #
+      # Adding value means asking the ADF owner for the amount columns NAV
+      # already holds on these tables: Sales Invoice Line [Unit Price],
+      # [Line Amount], [Amount] and Sales Invoice Header [Amount],
+      # [Amount Including VAT]. The marts downstream are shaped so those arrive
+      # as extra columns, not as a remodelling.
+      #
+      # STILL ABSENT, and not obtainable from anything listed here:
+      # Cust_ Ledger Entry. Without it there is no open balance, no due date, no
+      # aging and no credit limit — so average AR days, the bounce-check warning
+      # and "which accounts are past their terms" have NO source in this
+      # warehouse at all. That is an ADF request, not a modelling problem.
+
+      - name: sales_invoice_header
+        description: >
+          POSTED sales invoices — one row per document_no. The completed-order
+          record sales_header cannot provide, and the spine of sales history.
+          Carries the customer, the salesperson, order and posting dates and the
+          physical shipment attributes. CARRIES NO AMOUNT — see the block comment
+          above.
+        config:
+          external_location: "read_parquet('data/mock/navrep/sales_invoice_header.parquet')"
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: document_no
+            description: "Posted invoice number — the PK. A different number space from sales_header.document_no; an order is renumbered when it posts, so the two do NOT join."
+          - name: bill_to_customer_no
+            description: "Customer billed. Joins to customer.customer_no. NOTE this is BILL-TO — the line table's equivalent is sell_to_customer_no, and for a chain billing centrally the two differ. Prefer the line's sell_to for 'which store bought it'."
+          - name: bill_to_name
+            description: "Bill-to name."
+          - name: bill_to_name_2
+            description: "Bill-to name, second line."
+          - name: bill_to_address
+            description: "Bill-to street address."
+          - name: bill_to_city
+            description: "Bill-to city."
+          - name: ship_to_name
+            description: "Ship-to name — the store that received it."
+          - name: ship_to_address
+            description: "Ship-to street address."
+          - name: ship_to_city
+            description: "Ship-to city."
+          - name: order_date
+            description: "Date the original order was placed. Against posting_date, the order-to-invoice lag."
+          - name: posting_date
+            description: "GL posting date — when the invoice hit the books. THE DATE TO USE for sales history: it is the only date present on both the invoice lines and the credit-memo lines, so netting returns against sales needs both keyed on it."
+          - name: shipment_date
+            description: "Date shipped."
+          - name: order_pick_date
+            description: "Date the order was picked in the warehouse."
+          - name: shipment_method_code
+            description: "Shipment method."
+          - name: customer_posting_group
+            description: "Customer posting group snapshotted onto the invoice."
+          - name: salesperson_code
+            description: "Salesperson credited with the invoice. Joins to dim_reps.sales_code. Also present on the LINE, and the line's value is the one to trust for per-rep item history — a line can be credited differently from its header."
+          - name: gen_bus_posting_group
+            description: "General business posting group."
+          - name: bill_to_post_code
+            description: "Bill-to postal code."
+          - name: bill_to_country_region_code
+            description: "Bill-to country/region."
+          - name: sell_to_post_code
+            description: "Sell-to postal code."
+          - name: sell_to_county
+            description: "Sell-to county/state."
+          - name: ship_to_post_code
+            description: "Ship-to postal code."
+          - name: ship_to_county
+            description: "Ship-to county/state."
+          - name: responsibility_center
+            description: "Responsibility centre owning the invoice."
+          - name: order_weight
+            description: "Invoiced order weight."
+          - name: order_cubage
+            description: "Invoiced order cube."
+          - name: pallet_count_total
+            description: "Total pallets."
+          - name: ust_ship_to_code
+            description: "UST-specific ship-to code (a customisation). Candidate link to a customer's specific delivery address."
+          - name: override_pallet_count
+            description: "Manual pallet-count override."
+          # ── added to the ADF export 2026-09-20 ──────────────────────────
+          # Same partial coverage as the value columns on sales_invoice_line:
+          # only rows exported from 2026-09-20 onward carry these.
+          - name: due_date
+            description: "When payment falls due. THE past-terms test, against the invoice's own terms rather than a company-wide assumption. NULL before 2026-09-20."
+          - name: pda_order_no
+            description: "Order number from the PDA channel, when the order came that way. NULL for web orders AND for orders keyed straight into NAV — so null is not 'not PDA', it is 'PDA number absent'."
+          - name: m2_order_no
+            description: "Magento order number, when the order originated on the website. Mutually exclusive with pda_order_no in practice; both null means neither channel stamped it."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
+
+      - name: sales_invoice_line
+        description: >
+          POSTED sales invoice lines — grain document_no + line_no. THE
+          ITEM-LEVEL PURCHASE HISTORY: which customer bought which item, how many,
+          when, and which rep sold it. The sales-agent questions about "what each
+          account actually buys, item by item" and "what they've stopped buying"
+          rest on this table.
+
+          ELEVEN COLUMNS, AND NO MONEY. quantity is the only measure. There is no
+          unit price and no line amount, so everything built on this is a UNIT
+          history — "they buy 6 cases of X a month", never "they spend $400 a
+          month on X". Nothing downstream may imply otherwise.
+
+          QUANTITY IS IN unit_of_measure, WHICH VARIES BY LINE. A quantity of 6
+          may be 6 cases or 6 eaches; item_unit_of_measure (item_no + uom_code)
+          is what would normalise them, and until a model does, quantities must
+          not be summed across lines with different UOMs without saying so.
+        config:
+          external_location: "read_parquet('data/mock/navrep/sales_invoice_line.parquet')"
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: document_no
+            description: "Posted invoice this line belongs to. Joins to sales_invoice_header.document_no."
+          - name: line_no
+            description: "Line number within the invoice. With document_no, the PK."
+          - name: sell_to_customer_no
+            description: "The customer that bought it, denormalised onto the line. Joins to customer.customer_no and thus straight to customer_key. PREFER THIS over the header's bill_to_customer_no for account-level history: a chain billed centrally still sells to individual stores."
+          - name: item_no
+            description: "Item bought. Joins to item.item_no and to jdawms prtmst.prtnum. NOTE there is no line_type column here (unlike sales_line and sales_cr_memo_line), so nothing distinguishes an item line from a charge or comment line — a non-item code arriving here simply fails to join to the item master, and join coverage is the only guard."
+          - name: description
+            description: "Item description snapshotted at invoice time. Useful for historical naming; prefer item.full_description for anything shown to a user today."
+          - name: quantity
+            description: "Quantity invoiced, in unit_of_measure. THE ONLY MEASURE ON THIS TABLE. Positive on a sale; returns live on sales_cr_memo_line and must be subtracted, not expected as negatives here."
+          - name: unit_of_measure
+            description: "UOM as TEXT, not a code — so it does not join cleanly to item_unit_of_measure.uom_code without normalisation. CONFIRM the value set before normalising quantities across lines."
+          - name: salesperson_code
+            description: "Salesperson credited with this line. Joins to dim_reps.sales_code. Line-level, so it beats the header value for attributing item history to a rep."
+          - name: posting_date
+            description: "Posting date, denormalised onto the line — so line-grain history needs no header join. This is the purchase date."
+          # ── added to the ADF export 2026-09-20 ──────────────────────────
+          # COVERAGE IS PARTIAL AND WILL STAY THAT WAY. These columns only exist
+          # on rows exported from 2026-09-20 onward. The blob's historical seed
+          # file still carries the old column list, and the daily exports are
+          # DELTAS — a few thousand lines a day — so nothing re-reads history.
+          # Measured 2026-09-23: 19,654,620 of 19,696,349 invoice lines have a
+          # NULL amount, and only a re-export of the seed will change that.
+          #
+          # So a dollar figure is available for recent invoices and NOT for older
+          # ones. Anything summing these must say which window it covers; a total
+          # that silently spans both is a real number added to a lot of nulls.
+          - name: amount
+            description: "Line value NET of line discount — the posted amount. NULL before 2026-09-20; see the block above. This is the column to sum for revenue."
+          - name: line_amount
+            description: "Line value BEFORE invoice discount. At or above amount. Published alongside so a discount can be seen rather than inferred."
+          - name: unit_price
+            description: "Price per unit_of_measure_code. Useful for pricing an item the account has not bought; for what they actually paid, prefer amount / quantity."
+          - name: qty_per_unit_of_measure
+            description: >
+              THE CONVERSION FACTOR, and the fix for the UOM problem. Base units
+              per unit_of_measure_code — so a CASE line at quantity 6 is
+              6 x this many base units. Snapshotted at invoice time, which is
+              better than today's value in item_unit_of_measure: it reflects the
+              pack size as it was when the sale happened.
+          - name: unit_of_measure_code
+            description: "UOM as a CODE, joining to item_unit_of_measure.uom_code. The free-text unit_of_measure above does not join cleanly; prefer this."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
+
+      - name: sales_cr_memo_header
+        description: >
+          POSTED credit memos — one row per document_no. The return/credit side of
+          posted sales, and what any "net of returns" figure has to subtract.
+          applies_to_doc_no links back to the invoice being credited, which is
+          what makes a per-invoice return rate possible. CARRIES NO AMOUNT except
+          freight_amount.
+        config:
+          external_location: "read_parquet('data/mock/navrep/sales_cr_memo_header.parquet')"
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: document_no
+            description: "Credit memo number — the PK."
+          - name: bill_to_customer_no
+            description: "Customer credited. Joins to customer.customer_no."
+          - name: bill_to_name
+            description: "Bill-to name."
+          - name: bill_to_address
+            description: "Bill-to street address."
+          - name: bill_to_city
+            description: "Bill-to city."
+          - name: ship_to_name
+            description: "Ship-to name."
+          - name: posting_date
+            description: "Posting date of the credit. The date to net returns against sales on."
+          - name: posting_description
+            description: "Free-text posting description — often the only statement of WHY the credit was raised, since the coded reason sits on the line."
+          - name: shipment_method_code
+            description: "Shipment method."
+          - name: location_code
+            description: "Location the return came back to."
+          - name: customer_posting_group
+            description: "Customer posting group."
+          - name: applies_to_doc_no
+            description: "The invoice this credit applies to. Joins to sales_invoice_header.document_no — the link that makes a per-invoice return rate computable. Expect nulls on standalone credits, which then net only at customer level."
+          - name: gen_bus_posting_group
+            description: "General business posting group."
+          - name: bill_to_post_code
+            description: "Bill-to postal code."
+          - name: bill_to_county
+            description: "Bill-to county/state."
+          - name: bill_to_country_region_code
+            description: "Bill-to country/region."
+          - name: external_document_no
+            description: "Customer's own reference for the return."
+          - name: responsibility_center
+            description: "Responsibility centre."
+          - name: freight_option
+            description: "Freight handling on the credit."
+          - name: freight_amount
+            description: "Freight amount credited. THE ONLY MONETARY COLUMN on any posted table in this replica — and it is freight, not merchandise, so it cannot stand in for invoice value."
+          - name: freight_amount_per_pound
+            description: "Freight amount per pound."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
+
+      - name: sales_cr_memo_line
+        description: >
+          POSTED credit memo lines — the items returned, with quantity and a
+          return reason. Subtract these from sales_invoice_line for net units
+          sold. NOTE THE COLUMN NAME: the item is cr_memo_item_no here, not
+          item_no, and line_type gates which rows are real product returns.
+        config:
+          external_location: "read_parquet('data/mock/navrep/sales_cr_memo_line.parquet')"
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: document_no
+            description: "Credit memo this line belongs to. Joins to sales_cr_memo_header.document_no."
+          - name: sell_to_customer_no
+            description: "Customer returning. Joins to customer.customer_no."
+          - name: line_type
+            description: "NAV [Type] — same enum caveat as sales_line.line_type. CONFIRM the integer for Item before treating a row as a product return; charge and comment lines share this table."
+          - name: cr_memo_item_no
+            description: "Item returned. NOTE THE NAME — cr_memo_item_no, not item_no, and an item number only when line_type is Item. Joins to item.item_no."
+          - name: location_code
+            description: "Location the stock returned to."
+          - name: posting_group
+            description: "Posting group on the line."
+          - name: shipment_date
+            description: "Original shipment date."
+          - name: description
+            description: "Item description snapshotted at credit time."
+          - name: unit_of_measure
+            description: "UOM as text. Same normalisation caveat as sales_invoice_line — and the two must agree before a return quantity is subtracted from a sale quantity."
+          - name: quantity
+            description: "Quantity returned, POSITIVE. Subtract it; do not expect it signed."
+          - name: gross_weight
+            description: "Line gross weight."
+          - name: shortcut_dimension_1_code
+            description: "NAV shortcut dimension 1."
+          - name: shortcut_dimension_2_code
+            description: "NAV shortcut dimension 2."
+          - name: gen_bus_posting_group
+            description: "General business posting group."
+          - name: gen_prod_posting_group
+            description: "General product posting group."
+          - name: responsibility_center
+            description: "Responsibility centre."
+          - name: item_category_code
+            description: "Category snapshotted onto the line."
+          - name: product_group_code
+            description: "Product group snapshotted onto the line."
+          - name: return_reason_code
+            description: "NAV return reason code. Candidate for a seed value map — ask the dev team for the code list, as with sales_line.ust_return_reason."
+          - name: is_frozen_item
+            description: "Boolean (0/1) — frozen item."
+          - name: size
+            description: "Size descriptor."
+          - name: salesperson_code
+            description: "Salesperson on the credit. Joins to dim_reps.sales_code."
+          - name: crv_charge
+            description: "CRV (container redemption value) charge flag/amount — CONFIRM which."
+          - name: invoice_no
+            description: "The invoice being credited, at LINE level. Compare with the header's applies_to_doc_no; where both are populated they should agree."
+          - name: posting_date
+            description: "Posting date, denormalised onto the line."
+          # ── added to the ADF export 2026-09-20 ──────────────────────────
+          # COVERAGE IS PARTIAL AND WILL STAY THAT WAY. These columns only exist
+          # on rows exported from 2026-09-20 onward. The blob's historical seed
+          # file still carries the old column list, and the daily exports are
+          # DELTAS — a few thousand lines a day — so nothing re-reads history.
+          # Measured 2026-09-23: 19,654,620 of 19,696,349 invoice lines have a
+          # NULL amount, and only a re-export of the seed will change that.
+          #
+          # So a dollar figure is available for recent invoices and NOT for older
+          # ones. Anything summing these must say which window it covers; a total
+          # that silently spans both is a real number added to a lot of nulls.
+          - name: amount
+            description: "Line value NET of line discount — the posted amount. NULL before 2026-09-20; see the block above. This is the column to sum for revenue."
+          - name: line_amount
+            description: "Line value BEFORE invoice discount. At or above amount. Published alongside so a discount can be seen rather than inferred."
+          - name: unit_price
+            description: "Price per unit_of_measure_code. Useful for pricing an item the account has not bought; for what they actually paid, prefer amount / quantity."
+          - name: qty_per_unit_of_measure
+            description: >
+              THE CONVERSION FACTOR, and the fix for the UOM problem. Base units
+              per unit_of_measure_code — so a CASE line at quantity 6 is
+              6 x this many base units. Snapshotted at invoice time, which is
+              better than today's value in item_unit_of_measure: it reflects the
+              pack size as it was when the sale happened.
+          - name: unit_of_measure_code
+            description: "UOM as a CODE, joining to item_unit_of_measure.uom_code. The free-text unit_of_measure above does not join cleanly; prefer this."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
+
+      - name: item_ledger_entry
+        description: >
+          NAV item ledger — every posted inventory movement, one row per entry_no.
+          The lowest-grain movement record in the replica, and an ALTERNATIVE
+          route to purchase history: sales entries carry source_no (the customer),
+          item_no, posting_date, quantity and salesperson_code.
+
+          NOT USED as the history spine here, deliberately. This export has no
+          entry_type / document_type column, so sales movements cannot be
+          separated from receipts, transfers and adjustments — and quantity is
+          signed across all of them, so summing it per customer mixes shipments
+          with everything else. sales_invoice_line says "a customer bought this"
+          unambiguously; this table needs a column the export does not carry
+          before it can. Declared so it is visible in lineage and so the missing
+          entry_type can be requested.
+        config:
+          external_location: "read_parquet('data/mock/navrep/item_ledger_entry.parquet')"
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: entry_no
+            description: "Ledger entry number — the PK."
+          - name: item_no
+            description: "Item moved. Joins to item.item_no."
+          - name: posting_date
+            description: "Posting date of the movement."
+          - name: source_no
+            description: "The counterparty — a customer number on a sales movement, a vendor on a purchase. WITHOUT entry_type there is no way to tell which, so joining it to customer.customer_no silently keeps only the rows that happen to match."
+          - name: location_code
+            description: "Location the movement occurred at."
+          - name: quantity
+            description: "Signed quantity — negative on an outbound sale, positive on a receipt. Mixing entry types therefore nets to something meaningless."
+          - name: invoiced_quantity
+            description: "Quantity invoiced against the movement."
+          - name: unit_of_measure_code
+            description: "UOM CODE — unlike the invoice and credit-memo lines, which carry UOM as free text. This one joins cleanly to item_unit_of_measure.uom_code."
+          - name: item_category_code
+            description: "Category snapshotted onto the entry."
+          - name: product_group_code
+            description: "Product group snapshotted onto the entry."
+          - name: salesperson_code
+            description: "Salesperson on the movement."
+          - name: shipment_date
+            description: "Shipment date."
+          - name: customer_city
+            description: "Customer city, denormalised."
+          - name: customer_state
+            description: "Customer state, denormalised."
           - name: loaddate
             description: "Ingestion watermark — pipeline run time (full load)."

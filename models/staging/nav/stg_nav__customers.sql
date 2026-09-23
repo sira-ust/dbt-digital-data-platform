@@ -77,6 +77,26 @@ select
     -- is stored 0/1; 1 genuinely means "yes, an appointment is needed".
     (coalesce(cast(appointment_required as {{ dbt.type_int() }}), 0) = 1)  as appointment_required,
 
+    -- ── store type. PARTIAL, AND NOT MUTUALLY EXCLUSIVE ──────────────────
+    -- Measured against NAV 2026-09-23: of 3,742 active customers only ~1,750
+    -- carry any type, 76 carry two and one carries three. So an account with no
+    -- type is UNKNOWN, not "none of the above", and roughly half the active
+    -- book is in that state. has_store_type is published so a consumer can tell
+    -- the two apart instead of reading three falses as a classification.
+    (coalesce(cast(customer_retail       as {{ dbt.type_int() }}), 0) = 1)  as is_retail,
+    (coalesce(cast(customer_wholesale    as {{ dbt.type_int() }}), 0) = 1)  as is_wholesale,
+    (coalesce(cast(customer_food_service as {{ dbt.type_int() }}), 0) = 1)  as is_food_service,
+    (  coalesce(cast(customer_retail       as {{ dbt.type_int() }}), 0)
+     + coalesce(cast(customer_wholesale    as {{ dbt.type_int() }}), 0)
+     + coalesce(cast(customer_food_service as {{ dbt.type_int() }}), 0) > 0) as has_store_type,
+    -- readable, for a spoken answer. NULL where nothing is set, so an assistant
+    -- says nothing rather than saying "none".
+    nullif(concat_ws(', ',
+        case when coalesce(cast(customer_retail       as {{ dbt.type_int() }}), 0) = 1 then 'Retail' end,
+        case when coalesce(cast(customer_wholesale    as {{ dbt.type_int() }}), 0) = 1 then 'Wholesale' end,
+        case when coalesce(cast(customer_food_service as {{ dbt.type_int() }}), 0) = 1 then 'Food Service' end
+    ), '')                                                                 as store_type,
+
     nullif(trim(cast(customer_group        as {{ dbt.type_string() }})), '') as customer_group,
     nullif(trim(cast(customer_price_group  as {{ dbt.type_string() }})), '') as customer_price_group,
     nullif(trim(cast(payment_terms_code    as {{ dbt.type_string() }})), '') as payment_terms_code,

@@ -36,7 +36,7 @@ sources:
           and the staging model unnests it. Databricks reads the pre-flattened
           temp_system_events table (one row per event); staging skips the unnest.
         config:
-          external_location: "read_json_auto('data/mock/mysql/raw_api/system/event/log/raw_log.json')"
+          external_location: "read_json_auto('data/mock/mysql/raw_api/system/event/log/*.json')"
           loaded_at_field: created_at
           freshness:
             warn_after: {count: 24, period: hour}

@@ -44,6 +44,16 @@ reps as (
 
 select
     c.customer_key,
+    -- THE NAME IS NOT A KEY. 222 of 3,742 active customers share a name with
+    -- another account: "ASIAN MARKET" is 22 different accounts, and "LEE'S
+    -- SANDWICHES" in SAN JOSE is still 3. Anything resolving a spoken name to
+    -- an account MUST disambiguate on city, post_code, address or owner_rep —
+    -- all carried below for exactly that reason — and ask when it cannot.
+    --
+    -- A normalised search column was tried here and removed: uppercasing and
+    -- stripping punctuation took the colliding groups from 85 to 92, so it made
+    -- the ambiguity worse while solving a matching problem that a consumer
+    -- writing upper()/like handles on its own.
     c.customer_name,
     c.customer_name_2,
 
@@ -105,6 +115,23 @@ select
      + case when c.accepts_sunday    then 1 else 0 end)                  as delivery_day_count,
 
     c.appointment_required,
+
+    -- ── store type. HALF THE BOOK HAS NONE ────────────────────────────────
+    -- NAV's own retail / wholesale / food-service flags. They are neither
+    -- exclusive nor complete: of 3,742 active customers only ~1,750 carry any
+    -- type, 76 carry two and one carries all three (measured 2026-09-23).
+    --
+    -- has_store_type is the honesty flag and it is load-bearing. Three falses
+    -- mean UNKNOWN, not "none of the above", so a recommendation that filters
+    -- on type must keep untyped accounts rather than silently dropping half the
+    -- book. store_type is the readable form and is NULL when nothing is set, so
+    -- an assistant says nothing instead of saying "none".
+    c.is_retail,
+    c.is_wholesale,
+    c.is_food_service,
+    c.has_store_type,
+    c.store_type,
+
     c.customer_group,
     c.customer_price_group,
     c.payment_terms_code,

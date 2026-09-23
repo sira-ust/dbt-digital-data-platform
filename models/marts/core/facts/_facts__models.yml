@@ -254,3 +254,124 @@ models:
           mention_count on the board.
       - name: confidence
         description: LLM confidence 0.0–1.0.
+
+  - name: fct_invoices
+    description: >
+      ONE ROW PER POSTED SALES INVOICE — what was actually sold, as it landed in
+      the ledger, net of the credits raised against it. The PDF asked for this
+      by name: "it might be better to get from final information which is sales
+      invoice schema... we might have to check against returns that related to
+      that invoice as well".
+
+      IT DOES NOT REPLACE fct_orders. That fact is what a rep SUBMITTED, from the
+      app event log — same-day but app channels only, history from
+      var('event_log_go_live_date'). This is what was INVOICED — every channel
+      including phone and email, history across the whole ERP export, but
+      lagging posting. They will never tie out: orders get cut, short-shipped or
+      posted days later, and an invoice may cover several orders or part of one.
+      Say which you mean.
+
+      THE CUSTOMER COMES FROM THE LINES. The header is bill_to and would credit
+      a chain's head office for every branch; the lines are sell_to.
+      sell_to_customer_count exposes the rare invoice spanning more than one.
+
+      VALUE IS PARTIAL AND PERMANENTLY SO — null before 2026-09-20, because ADF
+      began exporting amounts then and the historical seed is never revisited.
+      Dates, line counts and item counts are complete throughout; only money is
+      recent. Nothing is coalesced to zero.
+
+      RETURNS ARE NETTED BY THE CREDIT'S OWN LINK, not by posting date, because
+      the question is what this invoice ended up being worth. THE CONSEQUENCE:
+      net_value is RETROACTIVELY MUTABLE — a credit posted today changes an
+      invoice dated three months ago. For a stable historical series use
+      int_customer_item_purchases, which nets by posting date and never rewrites
+      the past.
+    columns:
+      - name: invoice_no
+        description: Posted invoice number — the grain.
+        tests: [not_null, unique]
+      - name: customer_key
+        description: The account that bought, from the lines' sell_to. Joins to dim_customers.
+        tests: [not_null]
+      - name: customer_name
+        description: That account's name, for a spoken answer.
+      - name: sell_to_customer_count
+        description: Above 1 means the invoice spans accounts and customer_key is one of several. Rare; published rather than hidden.
+      - name: sales_code
+        description: Rep credited with the lines.
+      - name: rep_name
+        description: That rep's display name.
+      - name: sales_code_count
+        description: Above 1 means the invoice's lines are credited to more than one rep.
+      - name: posting_date
+        description: When the invoice hit the books.
+      - name: order_date
+        description: When the customer asked.
+      - name: days_order_to_post
+        description: Fulfilment lag. Negative would mean an order_date after posting — a data fault worth seeing.
+      - name: shipment_date
+        description: When it shipped.
+      - name: due_date
+        description: When payment falls due. NULL before 2026-09-20.
+      - name: has_due_date
+        description: Separates "not past terms" from "cannot tell".
+      - name: order_channel
+        description: "PDA / WEB / null. Null means keyed straight into NAV, or predates the export change — has_channel tells them apart."
+      - name: has_channel
+        description: Whether a channel key was stamped on this invoice at all.
+      - name: pda_order_no
+        description: PDA order number where set.
+      - name: m2_order_no
+        description: Magento order number where set.
+      - name: line_count
+        description: Lines on the invoice. Complete over the whole history, unlike the value columns.
+      - name: item_count
+        description: Distinct items. "16 items, $2,000" is this beside invoice_value.
+      - name: quantity_mixed_uom
+        description: Quantity summed ACROSS UOMs — cases added to eaches. Named to say so; quantity_base is the comparable one.
+      - name: quantity_base
+        description: Quantity in base units, addable across UOMs. Null outside the conversion's coverage window.
+      - name: invoice_value
+        description: >
+          Sum of the line amounts. NULL before 2026-09-20 and never zero-filled —
+          an invoice with no exported amount has no value, and a zero would
+          average into every figure downstream as though the goods were free.
+      - name: valued_line_count
+        description: Lines carrying an amount.
+      - name: has_value
+        description: THE FILTER for any revenue sum over this table.
+      - name: value_coverage
+        description: valued_line_count / line_count. Below 1 means invoice_value describes only part of what was sold.
+      - name: cr_memo_count
+        description: Credit memos raised against this invoice.
+      - name: returned_quantity
+        description: Quantity credited back.
+      - name: returned_value
+        description: Value credited back.
+      - name: last_credit_date
+        description: Most recent credit against this invoice.
+      - name: has_return
+        description: Whether anything was credited back.
+      - name: net_value
+        description: >
+          invoice_value minus returned_value. NULL wherever invoice_value is —
+          an unvalued invoice minus a valued credit is not a number anyone should
+          act on. RETROACTIVELY MUTABLE; see the model description.
+      - name: return_rate_value
+        description: >
+          returned_value / invoice_value — the 2-3% alert the business asked for,
+          per invoice. Null rather than 0 where either side lacks value.
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "line_count > 0"
+      # a credit can equal an invoice but should not exceed it
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "net_value is null or net_value <= invoice_value"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "value_coverage is null or value_coverage between 0 and 1"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "valued_line_count <= line_count"

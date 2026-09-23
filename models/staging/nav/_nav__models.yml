@@ -65,6 +65,23 @@ models:
           which is unknown rather than "delivers no day".
       - name: appointment_required
         description: Delivery needs a booked appointment. 1 genuinely means yes here.
+      - name: is_retail
+        description: NAV flags the account as retail.
+      - name: is_wholesale
+        description: NAV flags the account as wholesale.
+      - name: is_food_service
+        description: NAV flags the account as food service.
+      - name: has_store_type
+        description: >
+          Whether ANY store type is set. THE HONESTY FLAG — three falses mean
+          UNKNOWN, not "none of the above". Of 3,742 active customers only ~1,750
+          carry a type (measured 2026-09-23), so roughly half the active book is
+          unclassified and must not be filtered out by anything using type.
+      - name: store_type
+        description: >
+          The same thing readable — "Retail", or "Retail, Food Service" where an
+          account carries two. NULL when nothing is set, so an assistant says
+          nothing rather than saying "none".
       - name: customer_group
         description: Customer group/segment. CONFIRM whether NAV grouping or a Magento mirror.
       - name: customer_price_group
@@ -139,3 +156,493 @@ models:
           actually resolved.
       - name: geocoded_at
         description: When the coordinate was resolved.
+
+  # ── POSTED SALES HISTORY ────────────────────────────────────────────────────
+  # The three models below stage NAV's POSTED documents — the completed-order
+  # record that sales_header / sales_line (open documents only) cannot provide.
+  # They are the foundation of the item-level sales-agent questions.
+  #
+  # ONE FACT GOVERNS ALL OF THEM: NAV exports no amounts. Every model here is a
+  # UNIT history. See the block comment in _nav__sources.yml for the exact ADF
+  # columns to request, and for why Cust_ Ledger Entry (AR, aging, credit) has
+  # no substitute anywhere in this warehouse.
+
+  - name: stg_nav__items
+    description: >
+      The NAV item master, one row per item_no — the CATALOG side of an item,
+      where int_jdawms_items is the WAREHOUSE side. Cast, trim, and the 0/1
+      merchandising flags turned into booleans. No filtering: blocked and
+      non-web items stay, because "why can I not sell this" is a question a rep
+      asks and an inner join upstream cannot answer. item_no is the same SKU
+      code as jdawms prtmst.prtnum and the website sku (confirmed exact), so no
+      normalisation. dim_items is where this and the WMS side are joined.
+    columns:
+      - name: item_no
+        description: Item number — the PK. Same code as jdawms prtnum and the website sku.
+        tests: [not_null, unique]
+      - name: item_description
+        description: NAV's short label, shown in a list.
+      - name: item_full_description
+        description: >
+          NAV's "richest label available" per the source docs. Preferred for
+          anything user-facing, but NOT guaranteed populated — read item_label
+          instead of coalescing at every call site.
+      - name: item_label
+        description: >
+          THE NAME TO SAY OUT LOUD. full_description, else description, else the
+          item number, so a spoken answer never says "null". This is the column
+          every downstream mart carries forward.
+        tests: [not_null]
+      - name: item_body_description
+        description: Long marketing copy. Rarely useful in a report; carried for completeness.
+      - name: item_category_code
+        description: >
+          NAV's OWN category taxonomy, joining to nav item_category. NOT the
+          website taxonomy in seed_categories — the two numbering systems are
+          unrelated and the source docs say they must never be merged.
+      - name: product_group_code
+        description: Product group within the category.
+      - name: item_family_no
+        description: >
+          Item family grouping. The real family key; local dev.duckdb carries
+          only synthetic families, so family analysis needs the databricks target.
+      - name: unit_price
+        description: >
+          LIST price per base UOM — what an item costs when the account has never
+          bought it. For what they actually paid, use their own invoiced value.
+      - name: is_discontinued
+        description: >
+          Being phased out. NOT the same as blocked, which stops the item
+          transacting outright: a discontinued item still sells and may want
+          clearing, but should not anchor a long-term recommendation.
+      - name: is_focus_item
+        description: >
+          NAV focus flag. ONLY 5 ITEMS IN 7,573 CARRY IT and four of those have a
+          window from JULY 2017, so it is not being maintained. Carried for
+          completeness; do not build on it until the business says otherwise.
+      - name: focus_begin_date
+        description: Focus window start, with NAV blank sentinel 1753-01-01 converted to NULL.
+      - name: focus_end_date
+        description: Focus window end, blank sentinel nulled.
+      - name: new_begin_date
+        description: New-item window start, blank sentinel nulled. NULL on 335 of the 357 flagged items.
+      - name: new_end_date
+        description: >
+          New-item window end. NULL ON ALL 357 FLAGGED ITEMS, which is precisely
+          why nothing is ever "currently new" by its own window. The maintained
+          equivalent is Marked New Date / Removed New Date, which the ADF export
+          does not yet carry.
+      - name: is_new_item
+        description: >
+          MANUAL BUYER FLAG, not a derived age. How long it persists is
+          unconfirmed in the source docs, so an item flagged new may have been
+          new two years ago. Use it as a pitch angle, never as evidence of
+          anything.
+      - name: is_popular_item
+        description: >
+          MANUAL BUYER FLAG. The source docs are explicit that this is "not a
+          computed velocity measure" — it is what a buyer chose to highlight. For
+          measured velocity use abc_class (item grain, WMS) or the category
+          velocity flags (category grain, NAV), both on dim_items.
+      - name: is_shown_on_web
+        description: Item is published to the website — the ERP-side gate on web assortment.
+      - name: is_app_banner
+        description: Feature this item in an app banner slot. Merchandising, not inventory.
+      - name: is_blocked
+        description: >
+          NAV blocks the item from transacting at all. The one flag here that is
+          not merchandising, and the gate on whether an item may be recommended.
+      - name: is_sellable
+        description: >
+          is_blocked stated positively. Both are published because a filter
+          written as `not is_blocked` is how a blocked item ends up pitched.
+      - name: base_uom
+        description: Stocking UOM all NAV quantities are expressed in.
+      - name: basic_uom_size
+        description: Size descriptor for the base UOM, as free text — not a number.
+      - name: size_unit
+        description: Unit for the size attributes (oz, g, ml).
+      - name: case_qty
+        description: Units per case.
+      - name: innerpack_qty
+        description: Units per inner pack.
+      - name: ea_qty
+        description: Each quantity. Normally 1 unless the item is sold as a multiple — CONFIRM.
+      - name: cs_per_pallet
+        description: Cases per pallet. Expected to equal hi x ti in the source.
+      - name: gross_weight
+        description: Gross weight per base UOM. CONFIRM the unit (lb vs kg) — not encoded.
+      - name: country_of_origin
+        description: Country of origin.
+      - name: upc_code
+        description: Primary UPC barcode.
+      - name: attribute_flavor
+        description: Flavour attribute.
+      - name: attribute_size_other
+        description: Size/other attribute.
+      - name: attribute_package
+        description: Packaging attribute.
+      - name: loaded_at
+        description: Ingestion watermark — pipeline run time (full load), so it advances every run.
+
+  - name: stg_nav__sales_invoice_lines
+    description: >
+      POSTED sales invoice lines, one row per document_no + line_no. THE SALES
+      HISTORY: which customer bought which item, how many, when, and which rep
+      sold it. Rows with no item, no customer or no posting date are dropped —
+      they cannot participate in a history and would only widen a downstream
+      join.
+
+      NO AMOUNT EXISTS. The source table is eleven columns and not one is money.
+      quantity is the only measure, so everything built on this is a UNIT
+      history. A consumer asking for the value of an account's purchases must be
+      told NAV does not export it.
+
+      QUANTITY IS NOT UOM-NORMALISED and this model does not try: NAV gives UOM
+      as free TEXT, not as the code item_unit_of_measure is keyed on, so 6 CASE
+      and 6 EA both arrive as quantity = 6. quantity_uom is carried verbatim and
+      every downstream aggregate keeps it in the grain so the ambiguity stays
+      visible as two rows rather than silently wrong as one.
+    columns:
+      - name: invoice_no
+        description: >
+          Posted invoice number. A DIFFERENT number space from
+          sales_header.document_no — an order is renumbered when it posts, so the
+          two do not join.
+        tests: [not_null]
+      - name: line_no
+        description: Line number within the invoice. With invoice_no, the PK.
+        tests: [not_null]
+      - name: customer_key
+        description: >
+          The customer that bought it — NAV's sell_to, not the header's bill_to.
+          For a chain billed centrally the two differ and account history has to
+          follow the store. Joins straight to dim_customers.customer_key.
+        tests: [not_null]
+      - name: item_no
+        description: >
+          Item bought. Joins to stg_nav__items.item_no. NOTE this table has no
+          line_type column at all, unlike sales_line and sales_cr_memo_line, so
+          nothing distinguishes an item line from a freight charge — a non-item
+          code simply fails to join to the item master, and join coverage is the
+          only guard available.
+        tests: [not_null]
+      - name: item_description_at_sale
+        description: >
+          Item description snapshotted at invoice time. Useful for historical
+          naming; prefer dim_items.item_label for anything shown to a user today.
+      - name: sales_code
+        description: >
+          The rep credited with THIS LINE. Line-level, so it beats the header's
+          value — a line can be credited differently from its document. Joins to
+          dim_reps.sales_code.
+      - name: posting_date
+        description: >
+          The purchase date. Cast to a date because NAV posts to a day and the
+          time component is an export artefact. This is the date to net returns
+          against sales on — it is the only one present on both tables.
+        tests: [not_null]
+      - name: quantity
+        description: >
+          Quantity invoiced, in quantity_uom. THE ONLY MEASURE ON THIS TABLE.
+          Positive on a sale; returns live on stg_nav__sales_cr_memo_lines and
+          must be subtracted, not expected as negatives here.
+      - name: quantity_uom
+        description: >
+          UOM as free TEXT, uppercased so 'Case' and 'CASE' do not become two
+          grains. Does NOT join cleanly to item_unit_of_measure.uom_code — that
+          mapping is unconfirmed, and until it lands quantities must not be
+          summed across differing UOMs.
+      - name: line_value
+        description: >
+          Line value NET of line discount — the money. SPARSE: null on every row
+          exported before 2026-09-20 and permanently so, because the blob's
+          historical seed carries the old column list and the daily exports are
+          deltas. 19,654,620 of 19,696,349 invoice lines had no amount when
+          measured on 2026-09-23. Never coalesced to zero: a line with no
+          exported amount has no value, and a zero would average into every
+          revenue figure downstream as though the goods were free.
+      - name: line_value_gross
+        description: Line value BEFORE invoice discount. At or above line_value; the gap is the discount.
+      - name: unit_price
+        description: Price per quantity_uom_code. For what the account actually paid, prefer line_value / quantity.
+      - name: has_value
+        description: >
+          Whether this row carries an amount at all. THE FILTER for any revenue
+          sum — totalling line_value without it adds real money to a great deal
+          of nothing and reports the result as a period total.
+      - name: quantity_uom_code
+        description: >
+          UOM as a CODE, joining to item_unit_of_measure.uom_code — unlike
+          quantity_uom, which is free text and joins to nothing. Same coverage
+          window as the value columns.
+      - name: qty_per_uom
+        description: >
+          THE CONVERSION FACTOR: base units per quantity_uom_code. Snapshotted at
+          invoice time, so it reflects the pack size as it was at the sale rather
+          than as it is today.
+      - name: quantity_base
+        description: >
+          quantity restated in BASE units, so a CASE line and an EA line of the
+          same item are finally comparable. Null outside the coverage window,
+          which is why the (item_no, quantity_uom) grain downstream still earns
+          its keep for older rows.
+      - name: loaded_at
+        description: Ingestion watermark — pipeline run time (full load).
+
+  - name: stg_nav__sales_cr_memo_lines
+    description: >
+      POSTED credit memo lines — the RETURN side of posted sales. Shaped to match
+      stg_nav__sales_invoice_lines column for column (customer_key, item_no,
+      sales_code, posting_date, quantity, quantity_uom) so
+      int_customer_item_purchases can union and net the two without a per-source
+      case expression. The source does not make that easy — its item column is
+      called cr_memo_item_no — and doing the rename once here is why nothing
+      downstream has to remember it.
+
+      QUANTITY STAYS POSITIVE. The sign is applied by the netting model, because
+      "how much came back" is a useful number in its own right and a pre-negated
+      column makes it read as negative in every report that touches it.
+
+      line_type IS NOT FILTERED ON. The NAV [Type] enum is marked CONFIRM in the
+      source docs — nobody has verified which integer means Item — and guessing
+      would either drop real returns or admit freight credits as product returns.
+      The column is carried through and the item-master join downstream is the
+      gate. Once the enum is confirmed, filter in this model and nothing
+      downstream changes.
+    columns:
+      - name: cr_memo_no
+        description: Credit memo number.
+        tests: [not_null]
+      - name: applies_to_invoice_no
+        description: >
+          The invoice being credited, taken from the LINE (the header has its own
+          applies_to_doc_no and the two should agree where both are populated).
+          The line one survives a credit spanning invoices. EXPECT NULLS: a
+          standalone credit references no invoice and can only net at customer
+          level.
+      - name: customer_key
+        description: Customer returning. Joins to dim_customers.customer_key.
+        tests: [not_null]
+      - name: item_no
+        description: >
+          Item returned — renamed here from the source's cr_memo_item_no, once,
+          so the rest of the project sees the same column name as the invoice
+          side. An item number only when line_type is Item.
+        tests: [not_null]
+      - name: item_description_at_return
+        description: Item description snapshotted at credit time.
+      - name: sales_code
+        description: Salesperson on the credit. Joins to dim_reps.sales_code.
+      - name: posting_date
+        description: Posting date of the credit. The date returns net against sales on.
+        tests: [not_null]
+      - name: quantity
+        description: >
+          Quantity returned, POSITIVE. Subtract it downstream; do not expect it
+          signed. There is no returned VALUE anywhere — no posted NAV table
+          carries an amount, so a return rate is computable in units only.
+      - name: quantity_uom
+        description: >
+          UOM as free text, uppercased. Must agree with the invoice side's
+          quantity_uom before a return is subtracted from a sale.
+      - name: line_value
+        description: >
+          Line value NET of line discount — the money. SPARSE: null on every row
+          exported before 2026-09-20 and permanently so, because the blob's
+          historical seed carries the old column list and the daily exports are
+          deltas. 19,654,620 of 19,696,349 invoice lines had no amount when
+          measured on 2026-09-23. Never coalesced to zero: a line with no
+          exported amount has no value, and a zero would average into every
+          revenue figure downstream as though the goods were free.
+      - name: line_value_gross
+        description: Line value BEFORE invoice discount. At or above line_value; the gap is the discount.
+      - name: unit_price
+        description: Price per quantity_uom_code. For what the account actually paid, prefer line_value / quantity.
+      - name: has_value
+        description: >
+          Whether this row carries an amount at all. THE FILTER for any revenue
+          sum — totalling line_value without it adds real money to a great deal
+          of nothing and reports the result as a period total.
+      - name: quantity_uom_code
+        description: >
+          UOM as a CODE, joining to item_unit_of_measure.uom_code — unlike
+          quantity_uom, which is free text and joins to nothing. Same coverage
+          window as the value columns.
+      - name: qty_per_uom
+        description: >
+          THE CONVERSION FACTOR: base units per quantity_uom_code. Snapshotted at
+          invoice time, so it reflects the pack size as it was at the sale rather
+          than as it is today.
+      - name: quantity_base
+        description: >
+          quantity restated in BASE units, so a CASE line and an EA line of the
+          same item are finally comparable. Null outside the coverage window,
+          which is why the (item_no, quantity_uom) grain downstream still earns
+          its keep for older rows.
+      - name: line_type
+        description: >
+          NAV [Type], carried through UNFILTERED because the enum is unconfirmed.
+          Charge and comment lines share this table with real product returns.
+      - name: return_reason_code
+        description: NAV return reason code. Candidate for a seed value map — the code list is not available yet.
+      - name: item_category_code
+        description: Category snapshotted onto the line.
+      - name: product_group_code
+        description: Product group snapshotted onto the line.
+      - name: is_frozen_item
+        description: Frozen item.
+      - name: location_code
+        description: Location the stock returned to.
+      - name: loaded_at
+        description: Ingestion watermark — pipeline run time (full load).
+
+  - name: stg_nav__promotion_lines
+    description: >
+      Items on promotion, one row per promotion line. DOES NOT JOIN TO
+      promotion_header, and that is the design decision worth knowing:
+      promotion_line carries TWO promotion codes (promotion_code and promo_code)
+      which the source docs confirm are genuinely distinct NAV fields, with only
+      one being the real join to the header — and nobody has resolved which.
+      Joining on a guess would attach the wrong name and window to live
+      promotions, which is worse than having no name.
+
+      So this model uses the LINE'S OWN promo window, which is present on every
+      row, and carries both codes unrenamed for whoever resolves the question.
+      THE CONSEQUENCE: promotions here have a window and an item but NO NAME. An
+      assistant can say "this is on promotion until the 30th"; it cannot say
+      which promotion. That closes the moment the dev team confirms the key.
+
+      DEV WARNING: data/mock/navrep/promotion_line.parquet is synthetic filler
+      whose released / discontinued arrive as arbitrary integers (2, 9, 85)
+      rather than 0/1, so is_live_promo_line is meaningless on the duckdb target
+      and the promotion side of the recommendation marts looks empty in local
+      dev. It is correct against the real replica.
+    columns:
+      - name: promotion_code
+        description: "NAV [Promotion Code]. One of the two candidate joins to promotion_header — unresolved. CONFIRM."
+      - name: promo_code
+        description: "NAV [Promo Code]. The other candidate, likelier on name alone. CONFIRM before joining either."
+      - name: item_no
+        description: Item on promotion. Joins to stg_nav__items.item_no.
+        tests: [not_null]
+      - name: promotion_group_code
+        description: Grouping within the promotion. CONFIRM meaning.
+      - name: promo_price
+        description: >
+          Promotional price, with NAV zero converted to NULL because zero means
+          NOT SET. Zero on 12,606 of 12,967 lines and on ALL 86 promotions live
+          today, so this is null far more often than not — and rendering a null
+          as free is the one thing a rep must never be told.
+      - name: promo_buy_qty
+        description: Buy quantity in a buy-X-get-Y-free offer. Zero nulled.
+      - name: promo_free_qty
+        description: Free quantity in the same offer.
+      - name: has_promo_offer
+        description: >
+          Both halves of the buy/free pair are set. THE MECHANIC IS WHAT NAV
+          MAINTAINS — 27 of the 86 live promo lines carry it, against zero with a
+          price — so this, not promo_price, is what makes a promotion worth
+          reading out.
+      - name: promo_begin_date
+        description: >
+          The LINE's promotion start, not the header's. The source docs warn the
+          two may differ, and the line window is both the safer reading and the
+          one needing no header join.
+      - name: promo_end_date
+        description: The LINE's promotion end.
+      - name: campaign_target_qty
+        description: Target quantity for the campaign.
+      - name: is_new_on_promotion
+        description: Newly added to the promotion.
+      - name: is_released
+        description: Promotion line released. Half of the lifecycle gate.
+      - name: is_discontinued
+        description: Promotion line discontinued. The other half.
+      - name: is_live_promo_line
+        description: >
+          released AND NOT discontinued. Both flags matter and either alone
+          admits lines that are not live, so the combination is published rather
+          than left to every consumer to remember. Still needs a date test
+          against the promo window to mean "on offer today" — dim_items does that.
+      - name: holiday_occasion
+        description: Occasion this promotion serves.
+      - name: holiday_year
+        description: Holiday year for the occasion link.
+      - name: loaded_at
+        description: Ingestion watermark — pipeline run time (full load).
+
+  - name: stg_nav__sales_invoice_headers
+    description: >
+      POSTED sales invoices, one row per document_no. Cast and trim only.
+
+      THE HEADER IS BILL-TO; THE LINES ARE SELL-TO, and for account-level work
+      the lines win. A chain billed centrally has one bill_to across many
+      stores, so attributing an invoice to bill_to_customer_key would credit the
+      head office for every branch's purchases. fct_invoices takes its customer
+      from the LINES and uses this table for dates, channel and shipment
+      attributes only.
+
+      NO INVOICE TOTAL EXISTS HERE, and that is not an export omission: NAV
+      computes document totals as FlowFields, calculated on read and never
+      stored, so there is no column for ADF to select. An invoice's value is the
+      sum of its lines.
+
+      DUE DATE AND THE CHANNEL KEYS ARE SPARSE — they joined the export on
+      2026-09-20 and sit on 119 of 507,871 rows. has_due_date and has_channel
+      exist so a consumer can tell "not past terms" from "cannot tell".
+    columns:
+      - name: invoice_no
+        description: Posted invoice number — the PK.
+        tests: [not_null, unique]
+      - name: bill_to_customer_key
+        description: Who was billed. NOT who bought — use the line's sell_to for that.
+      - name: bill_to_name
+        description: Bill-to name.
+      - name: ship_to_name
+        description: Ship-to name — the store that received it.
+      - name: ship_to_city
+        description: Ship-to city.
+      - name: sales_code
+        description: Rep credited with the DOCUMENT. The line carries its own and the line's wins for per-rep work.
+      - name: order_date
+        description: When the customer asked. Against posting_date, the fulfilment lag.
+      - name: posting_date
+        description: When the invoice hit the books. The date sales history is keyed on.
+      - name: shipment_date
+        description: When it shipped.
+      - name: order_pick_date
+        description: When the warehouse picked it.
+      - name: due_date
+        description: >
+          When payment falls due — the past-terms test, against the invoice's own
+          terms rather than a company-wide assumption. NULL before 2026-09-20.
+      - name: has_due_date
+        description: >
+          Whether a due date exists at all. Separates "not past terms" from
+          "cannot tell", which a collections prompt must never confuse.
+      - name: pda_order_no
+        description: Order number from the PDA channel, where the order came that way.
+      - name: m2_order_no
+        description: Magento order number, where it originated on the website.
+      - name: has_channel
+        description: >
+          Either channel key is set. Null order_channel means the order was keyed
+          straight into NAV — a real and common case — OR that the invoice
+          predates the export change. This tells them apart.
+      - name: order_channel
+        description: "PDA / WEB, derived from whichever key is set. Null where neither is."
+      - name: shipment_method_code
+        description: Shipment method.
+      - name: customer_posting_group
+        description: Customer posting group snapshotted onto the invoice.
+      - name: responsibility_center
+        description: Responsibility centre.
+      - name: order_weight
+        description: Invoiced weight.
+      - name: order_cubage
+        description: Invoiced cube.
+      - name: pallet_count_total
+        description: Total pallets.
+      - name: loaded_at
+        description: Ingestion watermark.

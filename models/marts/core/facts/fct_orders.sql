@@ -116,23 +116,35 @@ numbered as (
 
 )
 
+-- NAMES ARE DENORMALISED ONTO THIS FACT so a consumer can filter by "ABC
+-- Market" without joining, which is what a voice assistant writing its own SQL
+-- needs. ONE CAVEAT, and it is specific to this model: fct_orders is
+-- INCREMENTAL, so a name is frozen as it was when the row was first merged.
+-- Only rows inside the 3-day reprocessing window pick up a rename. Renames are
+-- rare and the display name is never wrong for long, but dim_customers and
+-- dim_reps remain authoritative — join to them when the current name matters.
+-- fct_invoices has no such caveat: it is a full rebuild.
 select
-    increment_id,
-    customer_key,
-    actor_type,
-    source_code,
-    app_name,
-    sales_code,
-    username,
-    submitted_at,
+    o.increment_id,
+    o.customer_key,
+    c.customer_name,
+    o.actor_type,
+    o.source_code,
+    o.app_name,
+    o.sales_code,
+    r.rep_name,
+    o.username,
+    o.submitted_at,
     -- UTC date. Correct for company-wide totals, WRONG for anything keyed on a
     -- rep's day, week or month -- use submitted_date_local for those.
-    cast(submitted_at as date)                                          as submitted_date,
-    rep_local_date                                                      as submitted_date_local,
-    order_channel,
-    grand_total,
-    subtotal,
-    grand_total - subtotal                                              as freight_and_adj,
-    total_item_count
-from numbered
-where _rn = 1
+    cast(o.submitted_at as date)                                        as submitted_date,
+    o.rep_local_date                                                    as submitted_date_local,
+    o.order_channel,
+    o.grand_total,
+    o.subtotal,
+    o.grand_total - o.subtotal                                          as freight_and_adj,
+    o.total_item_count
+from numbered as o
+left join {{ ref('dim_customers') }} as c on c.customer_key = o.customer_key
+left join {{ ref('dim_reps') }}      as r on r.sales_code   = o.sales_code
+where o._rn = 1

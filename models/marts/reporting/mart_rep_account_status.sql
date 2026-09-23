@@ -12,12 +12,35 @@
 -- question the order data can answer exactly — who has gone quiet on revenue —
 -- and stays silent on coverage rather than guessing at it.
 --
--- SPINE is a union of two senses of "the rep's account":
---   owned    NAV assigns the account to this rep (dim_customers.owner_rep)
---   ordered  this rep has actually sold to it
--- Neither alone is right. An owned account that has never ordered is exactly
--- the row a to-do list exists to surface, and a rep can legitimately sell to a
+-- SPINE is a union of three senses of "the rep's account":
+--   owned     NAV assigns the account to this rep (dim_customers.owner_rep)
+--   invoiced  this rep has posted sales to it
+--   ordered   this rep submitted an app order for it
+-- None alone is right. An owned account that has never bought is exactly the
+-- row a to-do list exists to surface, and a rep can legitimately sell to a
 -- colleague's account. is_owned_by_rep says which case a row is.
+--
+-- ═══ TWO ORDER CLOCKS, AND THE INVOICE ONE IS AUTHORITATIVE ════════════════
+-- This table used to date accounts from fct_orders alone — app submit events,
+-- app channels only, history starting at var('event_log_go_live_date'). That
+-- made an account that orders by phone or email and is invoiced normally read
+-- "no order on record": attention priority 1, straight to the top of the call
+-- list. A rep would be told to chase a customer who bought last week.
+--
+-- Posted invoices fix it. fct_invoices covers EVERY channel and reaches back
+-- across the whole ERP export, so it is the real answer to "how long since this
+-- account last ordered".
+--
+-- BOTH ARE PUBLISHED, because they answer different questions. Invoices lag
+-- posting by days; app orders are same-day but partial. last_order_date is the
+-- LATER of the two — the most recent evidence from either feed — and the
+-- components sit beside it so any figure can be traced to its source.
+--
+-- VALUE IS NOT THE SAME AS COVERAGE. invoice_value_recent is null before
+-- 2026-09-20 (ADF began exporting amounts then and history is never
+-- revisited), while the invoice DATES and COUNTS are complete throughout. An
+-- account can therefore show invoices and no invoiced value, and that is the
+-- pipeline's limit, not a quiet account.
 --
 -- WHAT NULL MEANS, and it is not zero. A null last_order_date means NOTHING ON
 -- RECORD in the observed window, which starts at var('event_log_go_live_date')
@@ -41,6 +64,7 @@ with accounts as (
         county,
         post_code,
         owner_rep,
+        owner_rep_name,
         is_active                                                        as customer_is_active,
         delivery_days,
         delivery_day_count,
@@ -75,6 +99,34 @@ order_history as (
 
 ),
 
+-- POSTED SALES, the authoritative order clock. Every channel, full history.
+-- Dated on posting_date, which is NAV's own clock and NOT the rep-local day
+-- the app orders above use — see the header on why both are published.
+invoice_history as (
+
+    select
+        sales_code,
+        customer_key,
+        max(posting_date)                                                as last_invoiced_date,
+        min(posting_date)                                                as first_invoiced_date,
+        count(*)                                                         as invoices_all_time,
+        sum(case when posting_date >= {{ dbt.dateadd('day', -recent_days,
+                        nav_posted_today()) }} then 1 else 0 end)        as invoices_recent,
+        -- VALUE, NOT COUNT, is the sparse one. Null before 2026-09-20 and
+        -- permanently so; sum() ignores nulls, so this covers only the valued
+        -- part of the window. The counts above are complete.
+        sum(case when posting_date >= {{ dbt.dateadd('day', -recent_days,
+                        nav_posted_today()) }}
+                 then net_value end)                                     as invoice_value_recent,
+        sum(net_value)                                                   as invoice_value_all_time
+    from {{ ref('fct_invoices') }}
+    where sales_code   is not null
+      and customer_key is not null
+      and posting_date is not null
+    group by sales_code, customer_key
+
+),
+
 spine as (
 
     select owner_rep as sales_code, customer_key
@@ -84,6 +136,10 @@ spine as (
     union
 
     select sales_code, customer_key from order_history
+
+    union
+
+    select sales_code, customer_key from invoice_history
 
 ),
 
@@ -97,12 +153,26 @@ assembled as (
         a.county,
         a.post_code,
         a.owner_rep,
+        a.owner_rep_name,
         -- NAV ownership, not "who last sold to it".
         (a.owner_rep = s.sales_code)                                     as is_owned_by_rep,
         a.customer_is_active,
 
-        o.first_order_date,
-        o.last_order_date,
+        o.first_order_date                                               as first_app_order_date,
+        o.last_order_date                                                as last_app_order_date,
+        v.first_invoiced_date,
+        v.last_invoiced_date,
+        -- THE AUTHORITATIVE CLOCK: the later of the two feeds. An account that
+        -- ordered in the app yesterday and was last invoiced in March reads as
+        -- one day, which is the truthful answer to "how long since they ordered".
+        greatest(
+            coalesce(v.last_invoiced_date, o.last_order_date),
+            coalesce(o.last_order_date,    v.last_invoiced_date)
+        )                                                                as last_order_date,
+        coalesce(v.invoices_all_time, 0)                                 as invoices_all_time,
+        coalesce(v.invoices_recent, 0)                                   as invoices_recent,
+        v.invoice_value_recent,
+        v.invoice_value_all_time,
         coalesce(o.orders_all_time, 0)                                   as orders_all_time,
         coalesce(o.orders_recent, 0)                                     as orders_recent,
         o.order_value_all_time,
@@ -119,9 +189,11 @@ assembled as (
         a.appointment_required,
         a.customer_group
     from spine as s
-    left join accounts      as a on a.customer_key = s.customer_key
-    left join order_history as o on o.sales_code   = s.sales_code
-                                and o.customer_key = s.customer_key
+    left join accounts        as a on a.customer_key = s.customer_key
+    left join order_history   as o on o.sales_code   = s.sales_code
+                                  and o.customer_key = s.customer_key
+    left join invoice_history as v on v.sales_code   = s.sales_code
+                                  and v.customer_key = s.customer_key
 
 ),
 
@@ -132,7 +204,18 @@ aged as (
     select
         d.*,
         {{ rep_log_today() }}                                            as as_of_date,
-        {{ dbt.datediff('last_order_date', rep_log_today(), 'day') }}    as days_since_last_order
+        {{ nav_posted_today() }}                                         as invoice_as_of_date,
+        -- Each age against ITS OWN feed's leading edge; the unified one against
+        -- whichever feed has reached further, since that is the warehouse's
+        -- best "today". Using the event log's edge alone would report an
+        -- invoice posted after it as a NEGATIVE age.
+        {{ dbt.datediff('last_invoiced_date', nav_posted_today(), 'day') }}
+                                                                         as days_since_last_invoice,
+        {{ dbt.datediff('last_app_order_date', rep_log_today(), 'day') }}
+                                                                         as days_since_last_app_order,
+        {{ dbt.datediff('last_order_date',
+             'greatest(' ~ rep_log_today() ~ ', ' ~ nav_posted_today() ~ ')',
+             'day') }}                                                   as days_since_last_order
     from assembled as d
 
 )
@@ -147,14 +230,38 @@ select
     a.post_code,
 
     a.owner_rep,
+    -- the OWNING rep's name. Distinct from rep_name above, which is the rep
+    -- whose list this row appears on — they differ whenever a rep sells to a
+    -- colleague's account, and a spoken answer needs to be able to say so.
+    a.owner_rep_name,
     a.is_owned_by_rep,
     a.customer_is_active,
 
     -- ── the order clock ───────────────────────────────────────────────────
     -- NULL = nothing on record since var('event_log_go_live_date'), NOT "never".
-    a.first_order_date,
+    -- THE AUTHORITATIVE CLOCK: the later of the invoice and app-order feeds.
     a.last_order_date,
     a.days_since_last_order,
+
+    -- ── posted sales. Every channel, full history ─────────────────────────
+    a.first_invoiced_date,
+    a.last_invoiced_date,
+    a.days_since_last_invoice,
+    a.invoices_all_time,
+    a.invoices_recent,
+    -- VALUE is null before 2026-09-20 even where the COUNTS are populated —
+    -- ADF began exporting amounts then and history is never revisited. An
+    -- account with invoices and no invoiced value is a pipeline limit, not a
+    -- quiet account.
+    a.invoice_value_recent,
+    a.invoice_value_all_time,
+
+    -- ── app orders. Same-day, but app channels only and from the event log's
+    --    go-live. Kept beside the invoice clock rather than replaced: it is
+    --    the fresher of the two and answers "did they order today".
+    a.first_app_order_date,
+    a.last_app_order_date,
+    a.days_since_last_app_order,
     a.orders_all_time,
     a.orders_recent,
     a.order_value_all_time,
@@ -171,7 +278,10 @@ select
     a.appointment_required,
     a.customer_group,
 
+    -- TWO LEADING EDGES, because two feeds. as_of_date is the event log's and
+    -- is shared with every other rep mart; invoice_as_of_date is NAV's.
     a.as_of_date,
+    a.invoice_as_of_date,
 
     -- ── the to-do verdict ─────────────────────────────────────────────────
     -- ONE reason per account, in precedence order, so an assistant reads out a
@@ -189,14 +299,19 @@ from (
         g.*,
         case
             when not coalesce(g.customer_is_active, false)      then 'inactive account'
-            when g.orders_all_time = 0                          then 'no order on record'
+            -- BOTH feeds, deliberately. Keyed on app orders alone this said
+            -- "no order on record" for every account that buys by phone or
+            -- email — the false to-do item this rebase exists to remove.
+            when g.invoices_all_time = 0
+             and g.orders_all_time   = 0                         then 'no order on record'
             when g.days_since_last_order
                  > {{ var('rep_account_order_overdue_days') }}  then 'order overdue'
             else 'ok'
         end                                                              as attention_reason,
         case
             when not coalesce(g.customer_is_active, false)      then 9
-            when g.orders_all_time = 0                          then 1
+            when g.invoices_all_time = 0
+             and g.orders_all_time   = 0                         then 1
             when g.days_since_last_order
                  > {{ var('rep_account_order_overdue_days') }}  then 2
             else 5
