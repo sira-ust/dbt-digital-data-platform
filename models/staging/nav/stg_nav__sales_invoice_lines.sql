@@ -105,9 +105,19 @@ select
 
     cast(loaddate as timestamp)                                            as loaded_at
 from source
--- A line with no item, no customer or no date cannot contribute to a purchase
--- history and would only widen a left join downstream. Dropped here rather than
--- silently at the first join, so the count is visible in one place.
-where item_no             is not null
-  and sell_to_customer_no is not null
-  and posting_date        is not null
+-- ── EMPTY STRING, NOT NULL. This filter reads the CLEANED value ───────────
+-- NAV never writes NULL into these columns; it writes ''. The first version of
+-- this filter tested the RAW column for null, so every blank row sailed through
+-- and then became NULL via the nullif above -- 722,527 rows failing the
+-- not_null test on customer_key, and 722,535 on item_no, none of which the
+-- 200-row dev mock could produce. Test the same expression the column is built
+-- from, or the filter and the output disagree.
+--
+-- WHAT IS ACTUALLY DROPPED, measured 2026-09-23: 722,535 of 19,696,349 lines
+-- (3.7%). 715,497 of those are two literal strings -- 'www.ustrading.com/NEW'
+-- and '**BROWSE NEW ITEMS ONLINE**' -- printed comment lines, not sales. Of the
+-- whole set only 238 carry an amount at all and they total $0.00, so nothing of
+-- value leaves with them.
+where nullif(trim(cast(item_no             as {{ dbt.type_string() }})), '') is not null
+  and nullif(trim(cast(sell_to_customer_no as {{ dbt.type_string() }})), '') is not null
+  and posting_date is not null
