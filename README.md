@@ -116,7 +116,6 @@ intermediate/         int_events_decoded         decode 8-digit code, event_time
                       int_jdawms_items           WMS item master (prtmst + prtdsc names / ABC / velocity)
                       int_jdawms_items_active    active subset of the item master
                       int_jdawms_inventory_daily daily on-hand / shippable per item × warehouse
-                      int_jdawms_sale_picks_daily daily picks / sales
                       int_jdawms_stock_weekly    weekly stock levels
         │
 marts/core/dims/      dim_reps                   one row per sales territory code — the rep entity
@@ -361,7 +360,7 @@ mention_id by latest loaded_at, so overlapping weekly drops self-reconcile.
 │       │                               #   from this repo — so nothing here references it
 │       ├── job.yml                     # daily dbt job bundle
 │       └── geocode_weekly_job.yml      # weekly geocode job bundle
-├── analyses/                           # demand_missed_opportunity · demand_promote_candidates · demand_restock_risk
+├── analyses/                           # rep_week_pull · rep_week_pull_v2 · rep_texted_orders · social_trending_by_week
 ├── seeds/
 ├── macros/
 ├── tests/
