@@ -212,12 +212,36 @@ session_bounds as (
 -- customer-day loses its only order row -- the order moves, it is never lost.
 session_orders as (
 
+    -- ONE ROW PER CHANNEL, not max(). order_channel is a property of the ORDER,
+    -- and max() is a lexicographic coin-toss when a portion holds two:
+    -- max('APP','PDA') = 'PDA' and max('PDA','WEB') = 'WEB', so whichever way a
+    -- session is mixed one of its orders is filed under the other's scenario.
+    -- Measured over the 90 days to 2026-09-26: 52 of 6,041 order-bearing rows
+    -- (0.86%) are mixed. Worst single case is rep 032 / GOL030 / 2026-09-21,
+    -- where $38,245 of a $43,898 row is the CUSTOMER ordering on the app but
+    -- reads as the rep keying it remotely.
+    --
+    -- Splitting means a customer-day can now produce BOTH a
+    -- 'customer ordered online' row and a rep-keyed one, which is what actually
+    -- happened. channel_rank decides which of them owns the session's MEASURES
+    -- -- see the gate in the aggregation below. Without it the session_device
+    -- join fires once per channel and the day reports its minutes twice.
     select
         customer_day_key,
         session_seq,
         was_on_site,
+        order_channel,
         array_agg(increment_id)                                          as increment_ids,
-        max(order_channel)                                               as order_channel
+        -- device time belongs to the REP's own work, so a PDA portion is
+        -- primary; a customer-placed order that merely landed during his
+        -- session takes its orders and none of his minutes.
+        row_number() over (
+            partition by customer_day_key, session_seq, was_on_site
+            order by case when order_channel = 'PDA'  then 0
+                          when order_channel is null  then 1
+                          else 2 end,
+                     order_channel
+        )                                                                as channel_rank
     from (
         select distinct
             e.customer_day_key, e.session_seq, p.was_on_site,
@@ -229,7 +253,7 @@ session_orders as (
             on o.increment_id = e.increment_id
         where e.is_submit
     ) as submits
-    group by customer_day_key, session_seq, was_on_site
+    group by customer_day_key, session_seq, was_on_site, order_channel
 
 ),
 
@@ -239,6 +263,10 @@ session_scenario as (
         b.*,
         so.increment_ids,
         so.order_channel,
+        -- 1 for the portion's primary channel, and for portions with no order at
+        -- all; >1 for the extra rows the channel split creates. Only rank 1
+        -- carries the session's minutes and events.
+        coalesce(so.channel_rank, 1)                                      as channel_rank,
         -- was THIS PORTION of the session inside a visit? Decided per event in
         -- event_placement, so a session straddling the departure contributes one
         -- on-site row and one 'keyed elsewhere' row instead of being labelled
@@ -279,7 +307,7 @@ session_scenario as (
         b.session_seq, b.was_on_site, b.session_start, b.session_end,
         b.event_count, b.inherited_event_count, b.segments,
         b.item_count, b.browse_count, b.typed_count, b.median_sec_per_item,
-        so.increment_ids, so.order_channel
+        so.increment_ids, so.order_channel, so.channel_rank
 
 ),
 
@@ -471,26 +499,41 @@ by_scenario as (
         l.customer_key,
         l.activity_date,
         l.scenario,
-        count(*)                                                         as sessions,
+        -- ── THE channel_rank GATE ───────────────────────────────────────────
+        -- A session portion holding two order channels now produces TWO labelled
+        -- rows with DIFFERENT scenarios, so they land in different groups here.
+        -- Every measure below therefore has to be claimed by exactly one of
+        -- them or the customer-day reports it twice. Rank 1 (the rep-keyed
+        -- portion, or the only one) keeps the sitting, its events and its device
+        -- minutes; the extra row carries only its orders, which is the honest
+        -- reading -- a customer placing an order on the web did not consume the
+        -- rep's minutes. Affects 52 rows per 90 days; on every other row
+        -- channel_rank is 1 and these expressions are unchanged.
+        count(case when l.channel_rank = 1 then 1 end)                   as sessions,
         -- >1 means the time range below is NOT one continuous stretch
-        sum(l.segments)                                                  as segments,
+        sum(case when l.channel_rank = 1 then l.segments else 0 end)     as segments,
         -- rounded per DEVICE, not per stint, so the columns sum to keying_minutes
         cast(round(sum(d.pda_seconds)    / 60.0) as {{ dbt.type_int() }}) as pda_minutes,
         cast(round(sum(d.ipad_seconds)   / 60.0) as {{ dbt.type_int() }}) as ipad_minutes,
         cast(round(sum(d.tablet_seconds) / 60.0) as {{ dbt.type_int() }}) as android_tablet_minutes,
         cast(round(sum(d.paired_seconds) / 60.0) as {{ dbt.type_int() }}) as paired_minutes,
-        max(l.overlap_on_site_minutes)                              as on_site_worked_minutes,
+        max(case when l.channel_rank = 1
+                 then l.overlap_on_site_minutes else 0 end)              as on_site_worked_minutes,
         {{ sort_array('array_agg(' ~ format_hhmm('l.session_start') ~ ')') }}   as opened_at,
         min(l.session_start)                                             as first_touch_local,
         max(l.session_end)                                               as last_touch_local,
-        sum(l.event_count)                                               as event_count,
-        sum(l.inherited_event_count)                                     as inherited_event_count,
+        sum(case when l.channel_rank = 1 then l.event_count else 0 end)  as event_count,
+        sum(case when l.channel_rank = 1
+                 then l.inherited_event_count else 0 end)                as inherited_event_count,
         max(l.is_ambiguous) = 1                                          as is_ambiguous
     from labelled as l
     left join session_device as d
         on d.customer_day_key = l.customer_day_key
        and d.session_seq      = l.session_seq
        and d.was_on_site      = l.was_on_site
+       -- part of the gate: without this the same device row joins once per
+       -- channel and pda_minutes/ipad_minutes double for that customer-day.
+       and l.channel_rank     = 1
     group by l.customer_day_key, l.sales_code, l.customer_key, l.activity_date, l.scenario
 
 ),
