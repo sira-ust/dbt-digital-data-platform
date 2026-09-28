@@ -74,6 +74,9 @@ with fixes as (
         e.latitude,
         e.longitude,
         e.customer_key                                                   as app_customer_key,
+        -- needed downstream to tell a real Location-Success from an event that
+        -- may be replaying the device's last cached position -- see stale_fixes.
+        e.description_code,
         e.rep_local_date,
         -- shared clock from int_events_enriched. This model and
         -- int_rep_customer_activity MUST read a visit and the session inside it
@@ -140,10 +143,74 @@ local_fixes as (
         f.latitude,
         f.longitude,
         f.app_customer_key,
+        f.description_code,
         f.rep_local_date,
         f.event_at_local
     from fixes as f
     where f.event_at_local is not null
+
+),
+
+-- ── step 1.5: DROP CACHED POSITIONS BEFORE SEQUENCING ─────────────────────
+-- The comment on `fixes` is right that non-01040100 events are fresh at the
+-- MEDIAN (Login 0 m, Create Order 2 m, Catalog View 14 m). This is the TAIL:
+-- sometimes one of them replays the device's last known fix instead, and the
+-- speed filter below cannot catch it -- it catches the wrong row.
+--
+-- Rep 030, Honeywell ee3477, 2026-09-22, measured:
+--   5023363  15:38:51  02030101 login   37.99004,-121.32290        0.0 mph
+--   5023365  15:38:54  01040100 ping    37.69266,-122.17904   61,239.7 mph
+-- The login carries yesterday's ANGKOR coordinate, identical to within a metre
+-- to that device's last fix 22 hours earlier, so its implied speed is ZERO and
+-- it sails through. The genuine ping three seconds later then has to explain
+-- 82 km, fails at 61,239 mph, and is DISCARDED. Two separate harms: presence
+-- invents a visit to ANG015 on a day the rep was 82 km away, and a real
+-- location reading is thrown out.
+--
+-- The resolution is ordering, not a new source: a 01040100 ping cannot be
+-- cached, so when one disagrees with a non-ping event from the same device
+-- seconds earlier, the ping is right. Drop the non-ping fix and the ping's own
+-- speed check then measures from the previous REAL position and passes.
+--
+-- Deliberately narrow. It only ever removes a non-01040100 fix, only when a
+-- ping from the SAME DEVICE within presence_stale_window_seconds sits more than
+-- presence_stale_min_metres away.
+--
+-- THE THRESHOLD IS NOT ARBITRARY. Distance from each non-ping fix to the nearest
+-- ping within 120 s, measured over the 90 days to 2026-09-26 (16,071 of 48,759
+-- non-ping fixes have a ping close enough in time to check at all; the rest are
+-- left alone, since absence of a comparison is not evidence):
+--       <= 50 m   15,096   fresh -- the population the `fixes` comment measured
+--     50-500 m       372   plausible drift, KEPT
+--    500 m-2 km      179   DROPPED
+--      2-50 km       401   DROPPED
+--       > 50 km       23   DROPPED
+-- Two populations with a clear valley between them, and 500 m sits in it. GPS
+-- error is tens of metres, not kilometres, so nothing in the dropped 603 is
+-- explainable as drift. Over 90 days that is 742 fixes, ~8 a day.
+stale_fixes as (
+
+    select distinct f.entity_id
+    from local_fixes as f
+    join local_fixes as p
+        on  p.sales_code       = f.sales_code
+        and p.device_name      = f.device_name
+        and p.description_code = '01040100'
+        and abs({{ dbt.datediff('p.event_at_utc', 'f.event_at_utc', 'second') }})
+            <= {{ var('presence_stale_window_seconds') }}
+    where f.description_code <> '01040100'
+      and {{ haversine_metres('f.latitude', 'f.longitude', 'p.latitude', 'p.longitude') }}
+          > {{ var('presence_stale_min_metres') }}
+
+),
+
+fresh_fixes as (
+
+    select f.*
+    from local_fixes as f
+    left join stale_fixes as x
+        on x.entity_id = f.entity_id
+    where x.entity_id is null
 
 ),
 
@@ -161,7 +228,7 @@ sequenced as (
         lag(event_at_utc) over (
             partition by sales_code, device_name order by event_at_utc, entity_id
         )                                                                as prev_at
-    from local_fixes
+    from fresh_fixes
 
 ),
 

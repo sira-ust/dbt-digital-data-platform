@@ -74,6 +74,13 @@ vars:
   # that this now admits. See presence_max_drive_through_mph below to gate those.
   presence_min_dwell_minutes: 0
   presence_max_mph: 80             # a faster hop is bad data, not travel
+  # A non-01040100 event sometimes replays the device's last cached position.
+  # If a real ping from the SAME device lands within this many seconds and
+  # more than presence_stale_min_metres away, the non-ping fix is the stale
+  # one and is dropped before the speed check. Observed medians for those
+  # events are 0-14 m, so 500 m only ever catches a cache replay.
+  presence_stale_window_seconds: 120
+  presence_stale_min_metres: 500
   # the company address, marked OFF001 in Annie's process. It is a row in the
   # customer table, so without this it becomes every rep's most-visited store.
   office_latitude: 37.6449309

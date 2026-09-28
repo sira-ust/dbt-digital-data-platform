@@ -243,7 +243,13 @@ models:
                          "visited, keyed elsewhere", "customer ordered online",
                          "visit only, no app", "unknown"]
       - name: sessions
-        description: Separate sittings on this customer in this scenario. 0 for visit-only rows.
+        description: >
+          Separate sittings on this customer in this scenario. 0 for visit-only
+          rows, and 0 on the extra row a mixed-channel session produces — when
+          one sitting holds both a rep-keyed and a customer-placed order it is
+          split into two scenario rows, and the sitting, its events and its
+          device minutes stay with the rep-keyed one. See channel_rank in the
+          model. Affects ~52 rows per 90 days.
       - name: segments
         description: >
           Contiguous runs behind this row. >1 means first_touch_local to
