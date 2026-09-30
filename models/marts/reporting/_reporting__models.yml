@@ -1270,25 +1270,34 @@ models:
       - name: attention_reason
         description: >
           ONE reason per account, in precedence order, so an assistant reads out
-          a cause instead of re-deriving one from six columns. An inactive
-          account is not the rep's problem; an account that has never ordered is
-          the biggest one; then one that has stopped.
+          a cause instead of re-deriving one from six columns. An account another
+          rep owns is not this rep's to-do at all; an inactive account is not the
+          rep's problem; an account that has never ordered is the biggest one;
+          then one that has stopped.
+
+          'owned by another rep' is checked FIRST. The spine keeps rows for
+          accounts a rep merely sold to once, and those carry the gap since THAT
+          REP last sold — which grows forever once the book changes hands, so
+          they used to read 'order overdue' with gaps of 500-600 days while the
+          owning rep had an order a fortnight old. The row stays (the selling
+          history is real); the false to-do does not.
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['no order on record', 'order overdue', 'ok', 'inactive account']
+                values: ['no order on record', 'order overdue', 'ok', 'inactive account', 'owned by another rep']
       - name: attention_priority
         description: >
           1 = most urgent, mirroring attention_reason exactly, so `order by
           attention_priority` gives the call list without the consumer needing to
           know the precedence. 1 no order on record, 2 order overdue, 5 ok,
-          9 inactive account.
+          8 owned by another rep, 9 inactive account.
         tests: [not_null]
       - name: needs_attention
         description: >
           attention_priority <= 2 — the two reasons that are genuinely a to-do.
-          Deliberately excludes 'inactive account', which the rep cannot act on.
+          Deliberately excludes 'inactive account', which the rep cannot act on,
+          and 'owned by another rep', which is somebody else's call to make.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -1374,7 +1383,16 @@ models:
         description: The item.
         tests: [not_null]
       - name: item_label
-        description: The item name to READ OUT. Never say the item number to a rep.
+        description: >
+          The item name to READ OUT. Never say the item number to a rep.
+
+          Guaranteed present: dim_items is joined INNER, so an item number NAV
+          posted but never catalogued cannot reach this table. That drops 1,299
+          item numbers and 699,494 purchases — pallet charges, freight, CRV,
+          sugar tax, return references and retired X-prefixed product numbers.
+          See the model header. A consumer no longer needs `item_label IS NOT
+          NULL` to keep freight out of a store's top-items list.
+        tests: [not_null]
       - name: item_category_code
         description: NAV category code.
       - name: item_category_name

@@ -39,6 +39,38 @@
 -- catalogue item would be millions of rows of nothing. What they have never
 -- bought but plausibly should is mart_account_item_opportunities.
 --
+-- THE ITEM MUST BE IN THE CATALOGUE. dim_items is joined INNER, and that drops
+-- 91,450 of 2,186,712 rows — 1,299 item numbers carrying 699,494 purchases
+-- (measured 2026-09-30). NAV posts more than products on an invoice line, and
+-- none of it is sellable:
+--
+--   503000  Pallet Charge                     214,691 purchases, 3,723 accounts
+--   271300  CRV (bottle deposit)              153,258 purchases, 2,117 accounts
+--   534000  Freight Charge                     89,482 purchases, 2,416 accounts
+--   271400  Sugar Tax                          17,877 purchases,   384 accounts
+--   601360  return references ("rtn#8262")      3,352 purchases,   733 accounts
+--
+-- Those charge codes ride along on nearly every order, so they sort straight to
+-- the top of "most bought": for 3,194 of 5,583 accounts with any history — 57%
+-- — the single most-purchased line was one of them. A pallet charge on every
+-- delivery also produces a flawless reorder rhythm, so int_customer_item_cadence
+-- rates it perpetually due. Left in, the answer to "what does this store buy"
+-- is freight, pallets and bottle deposits.
+--
+-- The rest are RETIRED PRODUCT NUMBERS, mostly X-prefixed — X45507 NS SHIN
+-- RAMYUN, X21040 RUFINA FISH SAUCE (L), X71621 FZ NAM SAUSAGE (M). Real things
+-- really bought, but renumbered and gone from the item master, so we cannot
+-- name, price, stock-check or sell them. Dropping them loses genuine history:
+-- if you want "what did they used to buy under the old numbers", go to
+-- int_customer_item_purchases, which keeps every line.
+--
+-- This used to be a LEFT join, so those rows survived with a null item_label
+-- and null everything else. Consumers filtered them out by noticing the null —
+-- the voice agent's item lookup carries `item_label IS NOT NULL` for exactly
+-- this reason. That is an accident working as a safeguard, and it hid the top
+-- two entries of a store's own purchase history behind a filter nobody could
+-- see. Better to state the contract: a row here is an item you could sell again.
+--
 -- UOM IS COLLAPSED and only the dates survive that intact. See
 -- int_customer_item_cadence: NAV records UOM as free text with no conversion
 -- available, so quantities are reported for the account's PRIMARY UOM only and
@@ -253,7 +285,9 @@ select
 from cadence as c
 join accounts as a
     on a.customer_key = c.customer_key
-left join items as i
+-- INNER, and the header says what that drops and why. A row here is an item
+-- the rep could sell again, not a freight charge or a retired number.
+join items as i
     on i.item_no = c.item_no
 left join recent_activity as r
     on r.customer_key = c.customer_key

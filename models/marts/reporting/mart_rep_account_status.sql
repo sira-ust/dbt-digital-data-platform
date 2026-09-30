@@ -298,6 +298,22 @@ from (
     select
         g.*,
         case
+            -- OWNERSHIP FIRST, because a to-do only makes sense on an account
+            -- the rep is responsible for. The spine keeps rows for accounts a
+            -- rep merely SOLD to once (see the header), and those rows carry
+            -- the gap since THAT REP last sold — which keeps growing forever
+            -- after the book changes hands. Ryan Tran's row for PACIFIC
+            -- PRODUCE read 557 days and 'order overdue' while Ken Tov, who
+            -- owns it, had an order 14 days old. TRAMCO WORLD FOOD read 624
+            -- against a real 24, VIET HOA 581 against 12.
+            --
+            -- Those rows are still published — the selling history is real and
+            -- is why the spine unions three senses of "the rep's account". But
+            -- they are not anyone's call list, and labelling them 'order
+            -- overdue' invited every consumer to treat a transferred account
+            -- as an emergency. is_owned_by_rep already said so; now the verdict
+            -- says it too, so a reader who forgets the flag cannot be misled.
+            when not g.is_owned_by_rep                           then 'owned by another rep'
             when not coalesce(g.customer_is_active, false)      then 'inactive account'
             -- BOTH feeds, deliberately. Keyed on app orders alone this said
             -- "no order on record" for every account that buys by phone or
@@ -309,6 +325,9 @@ from (
             else 'ok'
         end                                                              as attention_reason,
         case
+            -- 8 sits below 'ok' (5) and above 'inactive account' (9): not a
+            -- to-do, but a row you would look at before a dead account.
+            when not g.is_owned_by_rep                           then 8
             when not coalesce(g.customer_is_active, false)      then 9
             when g.invoices_all_time = 0
              and g.orders_all_time   = 0                         then 1
