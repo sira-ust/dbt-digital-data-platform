@@ -17,3 +17,7 @@ PyYAML>=6.0                    # resolve_trending_concepts.py — reads social_t
 # Databricks connectivity for local runs against real Databricks
 databricks-sdk>=0.30.0         # enrich_mentions.py, resolve_trending_concepts.py — ambient/local auth (Config)
 databricks-sql-connector>=3.0.0 # scripts/snapshot_uc_schema.py — direct SQL against Unity Catalog
+
+# Tests for the Python scripts (scripts/tests): python -m pytest scripts/tests
+pytest>=8.0
+formulas>=1.2               # optional: test_export recalculates the Summary formulas

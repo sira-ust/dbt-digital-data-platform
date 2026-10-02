@@ -85,7 +85,7 @@ sources:
           mysql ust_customer_no and jdawms stcust) and m2_customer_id (Magento).
           Also holds the weekday delivery pattern and routing/zone attributes.
         config:
-          external_location: "read_parquet('data/mock/navrep/customer.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/customer.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -191,7 +191,7 @@ sources:
           food wholesaler. Handle as demographic data: useful for assortment
           analysis, but keep it out of anything customer-facing.
         config:
-          external_location: "read_parquet('data/mock/navrep/customer_ethnicity.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/customer_ethnicity.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -215,7 +215,7 @@ sources:
           also the table holding real item names, families, and web-merchandising
           flags — the catalog attributes local dev.duckdb lacks.
         config:
-          external_location: "read_parquet('data/mock/navrep/item.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/item.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -319,7 +319,7 @@ sources:
           Distinct from seed_categories, which is the WEBSITE taxonomy; the two
           numbering systems are unrelated and must not be merged.
         config:
-          external_location: "read_parquet('data/mock/navrep/item_category.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/item_category.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -348,7 +348,7 @@ sources:
           of jdawms prtftp_dtl / ftpmst, so a natural place to cross-check the
           WMS footprint data.
         config:
-          external_location: "read_parquet('data/mock/navrep/item_unit_of_measure.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/item_unit_of_measure.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -378,7 +378,7 @@ sources:
           product_group_code, the level below item_category. Repeats the same four
           velocity flags at this finer grain.
         config:
-          external_location: "read_parquet('data/mock/navrep/product_group.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/product_group.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -406,7 +406,7 @@ sources:
           a state belongs to. Small reference table; a natural seed candidate if it
           turns out to be static.
         config:
-          external_location: "read_parquet('data/mock/navrep/state_zone.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/state_zone.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -428,7 +428,7 @@ sources:
           ERP's own seasonality definition, which beats deriving seasons from
           transaction dates for a business this holiday-driven.
         config:
-          external_location: "read_parquet('data/mock/navrep/holiday_calendar.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/holiday_calendar.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -452,7 +452,7 @@ sources:
           holiday_occasion, with the planned promo quantity. The buyer's demand
           expectation, which is a genuine forecast to compare actual sales against.
         config:
-          external_location: "read_parquet('data/mock/navrep/holiday_item.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/holiday_item.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -474,7 +474,7 @@ sources:
           Promotion header — one row per promo_code with its validity window.
           Sourced from NAV's `AFP Promotion Header` (promo_code is its [Code]).
         config:
-          external_location: "read_parquet('data/mock/navrep/promotion_header.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/promotion_header.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -499,7 +499,7 @@ sources:
           and only one is the real join to promotion_header.promo_code ([Code]) —
           resolve which before modelling.
         config:
-          external_location: "read_parquet('data/mock/navrep/promotion_line.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/promotion_line.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -561,7 +561,7 @@ sources:
           posted tables added to the ADF export first. Check row count and
           order_date range against expected volume to confirm before modelling.
         config:
-          external_location: "read_parquet('data/mock/navrep/sales_header.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/sales_header.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -691,7 +691,7 @@ sources:
           the SAME open-documents-only limitation as sales_header: lines vanish when
           their order posts, so this is in-flight demand, not sales history.
         config:
-          external_location: "read_parquet('data/mock/navrep/sales_line.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/sales_line.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -771,7 +771,7 @@ sources:
           Sales quota header — one row per quota_code with its period and an active
           flag. Targets, not actuals.
         config:
-          external_location: "read_parquet('data/mock/navrep/sales_quota_header.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/sales_quota_header.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -793,7 +793,7 @@ sources:
           the target quantity per salesperson per item. Pairs with sales_line
           actuals for attainment reporting.
         config:
-          external_location: "read_parquet('data/mock/navrep/sales_quota_line.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/sales_quota_line.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -849,7 +849,7 @@ sources:
           physical shipment attributes. CARRIES NO AMOUNT — see the block comment
           above.
         config:
-          external_location: "read_parquet('data/mock/navrep/sales_invoice_header.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/sales_invoice_header.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -942,7 +942,7 @@ sources:
           is what would normalise them, and until a model does, quantities must
           not be summed across lines with different UOMs without saying so.
         config:
-          external_location: "read_parquet('data/mock/navrep/sales_invoice_line.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/sales_invoice_line.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -1002,7 +1002,7 @@ sources:
           what makes a per-invoice return rate possible. CARRIES NO AMOUNT except
           freight_amount.
         config:
-          external_location: "read_parquet('data/mock/navrep/sales_cr_memo_header.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/sales_cr_memo_header.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -1059,7 +1059,7 @@ sources:
           sold. NOTE THE COLUMN NAME: the item is cr_memo_item_no here, not
           item_no, and line_type gates which rows are real product returns.
         config:
-          external_location: "read_parquet('data/mock/navrep/sales_cr_memo_line.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/sales_cr_memo_line.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}
@@ -1159,7 +1159,7 @@ sources:
           before it can. Declared so it is visible in lineage and so the missing
           entry_type can be requested.
         config:
-          external_location: "read_parquet('data/mock/navrep/item_ledger_entry.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/item_ledger_entry.parquet')"
           loaded_at_field: loaddate
           freshness:
             warn_after: {count: 48, period: hour}

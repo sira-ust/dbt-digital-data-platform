@@ -2225,3 +2225,29 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "not returns_over_threshold or return_rate_is_measurable"
+
+  - name: mart_promo_social_match
+    description: >
+      The "Promo vs Social Listening" sheet as a table: at least one row per
+      promo-workbook row, in workbook order, each matched post or video on its own
+      row. Precedence per item: Social Listening Exact posts, else its Close posts,
+      else up to 3 verified YouTube videos, else one Unmatched row.
+      scripts/export_promo_social_match.py writes the workbook from it.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [promo_month, promo_sheet, row_order, match_rank]
+    columns:
+      - name: match_status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Exact, Close, Unmatched]
+      - name: source
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["Social Listening", Scraped]
+      - name: engagement_text
+        description: Views / likes / total engagement as text WITH units ("31,939 views, 88 likes"), or "Not reported"; null only when Unmatched.

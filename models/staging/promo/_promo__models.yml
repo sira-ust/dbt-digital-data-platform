@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: stg_promo__items
+    description: >
+      The monthly promo workbook, typed. One row per workbook row of the LATEST load of
+      each promo_month (a corrected re-drop replaces the whole month). Grain is the
+      position in the workbook, not item_no — the output keeps every row in place.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [promo_month, promo_sheet, row_order]
+    columns:
+      - name: promo_month
+        tests: [not_null]
+      - name: promo_sheet
+        description: '"<MON> NEW" / "<MON> PROMO", as written.'
+        tests: [not_null]
+      - name: item_no
+        tests: [not_null]
+      - name: promo_description
+        description: Uppercase, truncated to 30 characters. Not the source of truth for brand.
+      - name: promo_code
+        description: Passed through unchanged, even when wrong (Oct item 43220 carries its size).
+
+  - name: stg_promo__item_terms_draft
+    description: LLM-drafted terms per item_no (latest draft wins). Used only where seed_promo_item_terms has no row.
+    columns:
+      - name: item_no
+        tests: [unique, not_null]
+
+  - name: stg_promo__social_judgments
+    description: >
+      The AI judge's ruling on each (promo item, Mentionlytics mention) keyword candidate.
+      One row per pair; the highest judge_version wins, so a prompt bump re-judges
+      without a truncate. Rejects are kept for audit.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [item_no, mention_id]
+    columns:
+      - name: verdict
+        tests:
+          - accepted_values:
+              arguments:
+                values: [exact, close, reject]
+      - name: keyword_level
+        tests:
+          - accepted_values:
+              arguments:
+                values: [exact, close]
+      - name: judge_votes
+        description: Every vote behind the verdict, e.g. "close,close,reject" (majority of promo_judge_votes calls).
+
+  - name: stg_promo__youtube_videos
+    description: >
+      Every YouTube video an item's searches returned, with statistics, keyword evidence
+      and — for keyword-exact videos only — the judge's verdict. Also the API cache.
+      One row per (promo_month, item_no, video_id).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [promo_month, item_no, video_id]

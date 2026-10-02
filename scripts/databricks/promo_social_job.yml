@@ -1,0 +1,157 @@
+# The monthly promo x social match job (models/docs/_promo_social.md).
+#
+# TRIGGER: a promo workbook landing in /Volumes/ust_databricks/social/promo_landing/.
+# Drop "UST <YYYY> <MON> NEW PROMO.xlsx" there and the whole chain runs; the
+# finished workbook appears in /Volumes/ust_databricks/social/promo_output/.
+# TikTok is NOT a task: it is a manual pass in Claude in Chrome over that workbook
+# (scripts/prompts/tiktok_promo_search.md), because TikTok offers a for-profit
+# company no search API.
+#
+# WHY SO MANY dbt STEPS. dbt never calls the LLM or the YouTube API (the
+# warehouse build stays deterministic), so every out-of-band script sits between
+# two dbt builds: the build before produces what the script reads, the build after
+# picks up what it wrote. Same pattern as the weekly social job
+# (parse -> dbt staging -> enrich -> dbt rest).
+#
+# ONE-TIME SETUP, before the first run (each is a Databricks write, so it is a
+# person's call, not this file's):
+#   1. create volumes ust_databricks.social.promo_landing and .promo_output
+#   2. the run-as identity needs: model-serving access (the judge), READ on secret
+#      scope ust-social (the YouTube key), and write on ust_databricks.social
+#      (the promo_* landing tables are created by load_promo_list.py on first run)
+#   3. the daily job must exclude tag:promo — see scripts/databricks/job.yml
+#
+# Compute: serverless job compute (environment_key), never an interactive cluster.
+
+resources:
+  jobs:
+    ust_promo_social_match:
+      name: ust-promo-social-match
+      trigger:
+        pause_status: UNPAUSED
+        file_arrival:
+          url: /Volumes/ust_databricks/social/promo_landing/
+          min_time_between_triggers_seconds: 600     # a re-drop within 10 min is one run
+          wait_after_last_change_seconds: 120        # let a large upload finish
+      max_concurrent_runs: 1
+      tasks:
+        # 1. land the workbook (pure from source) + create any missing landing table
+        - task_key: load-promo
+          spark_python_task:
+            python_file: scripts/load_promo_list.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: promo-python
+
+        # 2. items joined to NAV / WMS / the reviewed terms seed
+        - task_key: dbt-items
+          depends_on: [{task_key: load-promo}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select seed_promo_item_terms stg_promo__items stg_promo__item_terms_draft int_promo_items_enriched
+            warehouse_id: 0fa7b986f30f8aab
+            catalog: ust_databricks
+            source: GIT
+          environment_key: dbt-default
+
+        # 3. LLM-draft terms for any item the seed does not cover yet (a no-op when
+        #    every item has a reviewed row), then rebuild the items to pick them up
+        - task_key: draft-terms
+          depends_on: [{task_key: dbt-items}]
+          spark_python_task:
+            python_file: scripts/draft_promo_terms.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: promo-python
+
+        - task_key: dbt-items-with-drafts
+          depends_on: [{task_key: draft-terms}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select stg_promo__item_terms_draft int_promo_items_enriched
+            warehouse_id: 0fa7b986f30f8aab
+            catalog: ust_databricks
+            source: GIT
+          environment_key: dbt-default
+
+        # 4. keyword pass over every raw Mentionlytics post + the AI judge
+        - task_key: match-social
+          depends_on: [{task_key: dbt-items-with-drafts}]
+          spark_python_task:
+            python_file: scripts/match_promo_social.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: promo-python
+
+        - task_key: dbt-social-matches
+          depends_on: [{task_key: match-social}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select stg_promo__social_judgments int_promo_social_matches
+            warehouse_id: 0fa7b986f30f8aab
+            catalog: ust_databricks
+            source: GIT
+          environment_key: dbt-default
+
+        # 5. YouTube for branded items social listening did not match (cached per
+        #    item and month, so a rerun spends no quota)
+        - task_key: youtube-search
+          depends_on: [{task_key: dbt-social-matches}]
+          spark_python_task:
+            python_file: scripts/youtube_search.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: promo-python
+
+        # 6. the mart, with every promo test (coverage, Exact means exact, source
+        #    rules, units) — a failing test stops the export
+        - task_key: dbt-mart
+          depends_on: [{task_key: youtube-search}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select tag:promo
+            warehouse_id: 0fa7b986f30f8aab
+            catalog: ust_databricks
+            source: GIT
+          environment_key: dbt-default
+
+        # 7. the workbook -> /Volumes/ust_databricks/social/promo_output/
+        - task_key: export
+          depends_on: [{task_key: dbt-mart}]
+          spark_python_task:
+            python_file: scripts/export_promo_social_match.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: promo-python
+
+      git_source:
+        git_url: https://github.com/sira-ust/dbt-digital-data-platform.git
+        git_provider: gitHub
+        git_branch: main
+      queue:
+        enabled: true
+      environments:
+        - environment_key: dbt-default
+          spec:
+            dependencies:
+              - dbt-databricks>=1.0.0,<2.0.0
+            environment_version: "5"
+        - environment_key: promo-python
+          spec:
+            dependencies:
+              - anthropic>=0.120.0
+              - databricks-sdk>=0.30.0
+              - openpyxl>=3.1
+              - pandas>=2.0
+              - PyYAML>=6.0
+            environment_version: "5"
+
+      performance_target: STANDARD

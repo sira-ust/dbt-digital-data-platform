@@ -39,7 +39,7 @@ sources:
           ~$5/1,000, so a full 7,198-customer pass is ~$36 and a second run is
           free. Failures are stored with their status rather than retried forever.
         config:
-          external_location: "read_parquet('data/mock/navrep/customer_geocode.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/navrep/customer_geocode.parquet')"
           loaded_at_field: geocoded_at
           freshness:
             # geocoding runs on demand, not on a schedule -- a stale geocode only

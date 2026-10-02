@@ -980,3 +980,57 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "times_purchased > 0"
+
+  # ── monthly promo x social match (models/docs/_promo_social.md) ──────────
+  - name: int_promo_items_enriched
+    description: >
+      One row per promo-workbook row, joined to NAV (stg_nav__items), the WMS
+      (int_jdawms_items) and the matcher's terms — the reviewed seed_promo_item_terms
+      first, else the latest LLM draft. Every promo row is kept; nav_match / wms_match
+      say which joins failed, terms_source says where brand and terms came from.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [promo_month, promo_sheet, row_order]
+    columns:
+      - name: terms_source
+        description: seed (reviewed file) / draft (LLM, unreviewed) / missing (draft_promo_terms.py has not run).
+        tests:
+          - accepted_values:
+              arguments:
+                values: [seed, draft, missing]
+      - name: is_branded
+        description: False for generic items and private-label dishes — never searched.
+        tests: [not_null]
+      - name: nav_match
+        tests: [not_null]
+      - name: wms_match
+        tests: [not_null]
+
+  - name: int_promo_social_matches
+    description: >
+      Every Mentionlytics post the AI judge kept for a promo item — one row per
+      (promo row, post), Source = Social Listening. Exact only when the judge said
+      exact AND brand + product (+ flavor) were all found in the text.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [promo_month, promo_sheet, row_order, mention_id]
+    columns:
+      - name: match_status
+        tests:
+          - accepted_values:
+              arguments:
+                values: [Exact, Close]
+
+  - name: int_promo_scraped_matches
+    description: >
+      The top 1-3 (var promo_scraped_max_per_item) judged-Exact YouTube videos per
+      promo item and month, by views. Source = Scraped.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [promo_month, promo_sheet, row_order, video_id]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "scraped_rank <= {{ var('promo_scraped_max_per_item') }}"

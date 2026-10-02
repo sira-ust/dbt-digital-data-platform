@@ -1,0 +1,95 @@
+version: 2
+
+# Monthly promo x social match. Four landing tables, all written by scripts/
+# (never by dbt), all ALL-STRING columns — the stg_promo__* models cast. The
+# column lists live in scripts/promo_common.py (LANDING) so a script and its
+# staging model cannot drift.
+#
+# Target-dependent, like the mentionlytics source:
+#   DuckDB (dev):     parquet under <local_data_root>/promo/ (data/mock or data/real)
+#   Databricks:       Delta tables in ust_databricks.social, next to social.mentions
+
+sources:
+  - name: promo
+    description: >
+      Inputs and out-of-band results for the monthly promo x social listening match.
+      promo_items is the emailed promo workbook, landed as-is by
+      scripts/load_promo_list.py. The other three are produced by scripts that call
+      the Databricks-hosted LLM or the YouTube Data API, so that dbt itself never
+      calls either and a rebuild is deterministic: item_terms_draft
+      (draft_promo_terms.py), social_judgments (match_promo_social.py) and
+      youtube_videos (youtube_search.py). All four are append-only; staging keeps
+      the latest row per key.
+    database: "{{ 'ust_databricks' if target.type == 'databricks' else target.database }}"
+    schema: "{{ 'social' if target.type == 'databricks' else 'temp_promo' }}"
+    config:
+      tags: ["raw", "promo", "social"]
+      meta:
+        access: read_only
+        source_system: promo_workbook
+    tables:
+      - name: promo_items
+        identifier: "{{ 'promo_items' if target.type == 'databricks' else 'temp_promo_items' }}"
+        description: >
+          One row per row of the monthly promo workbook, both sheets ("<MON> NEW" and
+          "<MON> PROMO"). Every workbook header is kept, slugified; the two sheets
+          have different columns, so a column missing from a sheet is null for its
+          rows. A re-drop of the same month is appended; staging keeps the latest load.
+        config:
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/promo/promo_items_*.parquet', union_by_name = true)"
+        columns:
+          - name: item_no
+            description: NAV item number as written in the workbook ("Item No."). Joins to nav item.item_no and WMS prtmst.prtnum (all 52 October items join both).
+          - name: promo_code
+            description: Promo mechanic, e.g. "5+1". Blank on OCT NEW. Passed through unchanged even when it is clearly wrong (Oct item 43220 carries its size, 44X12OZ).
+          - name: description
+            description: Promo description — uppercase, truncated to 30 characters ("COCONUT MILK DRINK (LESS SUGAR"). NOT the source of truth for brand or product.
+          - name: size
+            description: Pack size as written ("8 X (6X10.14OZ)").
+          - name: vendor_no
+            description: NAV vendor code. Present on the NEW sheet only.
+          - name: starting_date
+          - name: ending_date
+          - name: promo_month
+            description: First day of the promo month, from the filename year + sheet-name month (falls back to the Ending Date's month).
+          - name: promo_sheet
+            description: Sheet name as written, e.g. "OCT NEW".
+          - name: sheet_order
+            description: 1-based position of the sheet in the workbook — the output keeps it.
+          - name: row_order
+            description: 1-based position of the row within its sheet — the output keeps it.
+          - name: loaded_at
+          - name: source_file
+
+      - name: item_terms_draft
+        identifier: "{{ 'promo_item_terms_draft' if target.type == 'databricks' else 'temp_promo_item_terms_draft' }}"
+        description: >
+          LLM-drafted brand / product / flavor and search terms for promo items that
+          have NO row in seed_promo_item_terms yet, from scripts/draft_promo_terms.py.
+          A stopgap so a new month runs before anyone has reviewed its terms: the
+          reviewed seed always wins (int_promo_items_enriched.terms_source says which
+          one a row used). Copy reviewed drafts into the seed with
+          `draft_promo_terms.py --to-seed`.
+        config:
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/promo/item_terms_draft.parquet')"
+
+      - name: social_judgments
+        identifier: "{{ 'promo_social_judgments' if target.type == 'databricks' else 'temp_promo_social_judgments' }}"
+        description: >
+          One row per (promo item, Mentionlytics mention) keyword candidate that the
+          AI judge has ruled on, from scripts/match_promo_social.py. Rejected pairs
+          are kept (verdict = reject) so they are never re-judged and the reason is
+          auditable. Keyed by (item_no, mention_id, judge_version).
+        config:
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/promo/social_judgments.parquet')"
+
+      - name: youtube_videos
+        identifier: "{{ 'promo_youtube_videos' if target.type == 'databricks' else 'temp_promo_youtube_videos' }}"
+        description: >
+          Every YouTube video returned for a promo item's searches, with statistics,
+          the keyword evidence and — for keyword candidates — the AI judge's verdict,
+          from scripts/youtube_search.py. This is also the API cache: an item that
+          already has rows for a promo_month is not searched again. Keyed by
+          (promo_month, item_no, video_id).
+        config:
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/promo/youtube_videos.parquet')"
