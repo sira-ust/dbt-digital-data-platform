@@ -33,10 +33,37 @@
 -- overstates accordingly. Compare like with like: value against value over the
 -- covered window, or units against units over the whole history. The unit
 -- ratio remains the only one available for anything before 2026-09-20.
+--
+-- THE SOURCE HOLDS REPEATS, as on the invoice side: ADF selects on NAV's row
+-- [timestamp] from 2026-10-05, so an edited line comes again, and the Lakeflow
+-- table only appends. Unlike the invoice side there was NO LINE KEY to dedupe
+-- on — the export never carried [Line No_]. It was added to the export
+-- together with a full re-export of the table, so:
+--   * rows WITH line_no: newest copy of each document_no + line_no wins.
+--   * rows WITHOUT line_no (everything loaded before the change) are kept only
+--     for a document the re-export has not supplied. Once it has run, that is
+--     none of them, and the old rows drop out.
+-- Until line_no exists in the source at all, the model passes rows through
+-- as before; checked at run time so it builds on either side of the change.
+
+{%- set has_line_no = false -%}
+{%- if execute -%}
+    {%- set source_columns = adapter.get_columns_in_relation(source('nav', 'sales_cr_memo_line'))
+                             | map(attribute='name') | map('lower') | list -%}
+    {%- set has_line_no = 'line_no' in source_columns -%}
+{%- endif %}
 
 with source as (
 
     select * from {{ source('nav', 'sales_cr_memo_line') }}
+    {%- if has_line_no %}
+    qualify
+        case
+            when line_no is not null
+                then row_number() over (partition by document_no, line_no order by loaddate desc) = 1
+            else max(case when line_no is not null then 1 else 0 end) over (partition by document_no) = 0
+        end
+    {%- endif %}
 
 )
 

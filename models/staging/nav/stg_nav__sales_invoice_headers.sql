@@ -21,10 +21,18 @@
 -- holds the old column list. So "past terms" and the posted-sales channel split
 -- both work for recent invoices only — see has_due_date and has_channel, which
 -- exist so a consumer can tell "not past terms" from "cannot tell".
+--
+-- THE SOURCE HOLDS REPEATS, so the newest copy of each invoice wins. From
+-- 2026-10-05 ADF selects on NAV's row [timestamp], which moves on every edit,
+-- so an invoice changed after it was loaded comes again in a later file. The
+-- Lakeflow table only appends, so both copies land; the 2026-10-05 export alone
+-- repeated 2,374 of its 3,489 invoices. loaddate is set once per load, so the
+-- latest one is the latest version.
 
 with source as (
 
     select * from {{ source('nav', 'sales_invoice_header') }}
+    qualify row_number() over (partition by document_no order by loaddate desc) = 1
 
 )
 
