@@ -36,10 +36,18 @@
 -- salesperson_code is taken from the LINE, not the header. A line can be
 -- credited to a different rep than the document, and per-rep history should
 -- follow the credit.
+--
+-- THE SOURCE HOLDS REPEATS, so the newest copy of each line wins. From
+-- 2026-10-05 ADF selects on NAV's row [timestamp], which moves on every edit,
+-- so a line changed after it was loaded comes again in a later file, and the
+-- append-only Lakeflow table keeps both. The 2026-10-05 export repeated 85,516
+-- of its 152,274 lines. Deduped BEFORE the filters below, so a newer version
+-- that blanks a column drops the line rather than letting the stale one stand.
 
 with source as (
 
     select * from {{ source('nav', 'sales_invoice_line') }}
+    qualify row_number() over (partition by document_no, line_no order by loaddate desc) = 1
 
 )
 

@@ -303,6 +303,10 @@ models:
       and 6 EA both arrive as quantity = 6. quantity_uom is carried verbatim and
       every downstream aggregate keeps it in the grain so the ambiguity stays
       visible as two rows rather than silently wrong as one.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [invoice_no, line_no]
     columns:
       - name: invoice_no
         description: >
