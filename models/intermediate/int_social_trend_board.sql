@@ -86,33 +86,73 @@ week_posts as (
 
 ),
 
-coverage as (
+-- "usual" volume is the median of the PREVIOUS social_trend_coverage_baseline_weeks
+-- weeks, not of the whole window: when the feed shrinks for good (the 2026-09 keyword
+-- change left ~700 posts a week against ~4,000 before), the new size becomes the
+-- baseline within a few weeks instead of reading as a data hole forever
+baseline as (
+
+    select
+        w.week_start,
+        {{ median('p.posts') }}                                         as median_posts
+    from weeks as w
+    left join week_posts as p
+        on  p.week_start <  w.week_start
+        and p.week_start >= {{ dbt.dateadd('day', -7 * var('social_trend_coverage_baseline_weeks'), 'w.week_start') }}
+    group by 1
+
+),
+
+thin as (
 
     select
         w.week_start,
         w.week_end,
         w.year_week,
         coalesce(p.posts, 0)                                            as week_posts,
-        m.median_posts,
-        coalesce(p.posts, 0) < {{ var('social_trend_low_coverage_ratio') }} * m.median_posts
+        b.median_posts,
+        coalesce(coalesce(p.posts, 0) < {{ var('social_trend_low_coverage_ratio') }} * b.median_posts, false)
                                                                         as is_low_coverage
     from weeks as w
     left join week_posts as p
         on p.week_start = w.week_start
-    cross join (
-        select {{ median('coalesce(p2.posts, 0)') }} as median_posts
-        from weeks as w2
-        left join week_posts as p2 on p2.week_start = w2.week_start
-    ) as m
+    left join baseline as b
+        on b.week_start = w.week_start
 
 ),
 
--- the fade clock: counts NORMAL weeks only, so it stands still through a low-coverage week
+coverage as (
+
+    select
+        *,
+        -- low-coverage weeks in a row so far (the normal week before them starts a group)
+        sum(case when is_low_coverage then 1 else 0 end) over (
+            partition by low_group order by week_start
+            rows between unbounded preceding and current row
+        )                                                               as low_run
+    from (
+        select
+            *,
+            sum(case when is_low_coverage then 0 else 1 end)
+                over (order by week_start rows between unbounded preceding and current row)
+                                                                        as low_group
+        from thin
+    ) as g
+
+),
+
+-- the fade clock: counts every week except a PAUSED one. A low-coverage week pauses
+-- it, but only social_trend_max_paused_weeks in a row: past that the silence is the
+-- feed's new normal, and a product nobody posts about has to fade like any other
+-- (before this cap, three thin weeks in four held a cake with no posts at #3 for a month)
 clock as (
 
     select
         *,
-        sum(case when is_low_coverage then 0 else 1 end)
+        is_low_coverage and low_run <= {{ var('social_trend_max_paused_weeks') }}
+                                                                        as is_fade_paused,
+        sum(case when is_low_coverage and low_run <= {{ var('social_trend_max_paused_weeks') }}
+                 then 0 else 1 end)
             over (order by week_start rows between unbounded preceding and current row)
                                                                         as normal_week_no
     from coverage
@@ -176,6 +216,7 @@ spine as (
         k.week_posts,
         k.median_posts,
         k.is_low_coverage,
+        k.is_fade_paused,
         k.normal_week_no,
         t.trend_rank,
         t.trend_score,
@@ -216,22 +257,22 @@ faded as (
         max(case when past.has_posts then past.normal_week_no end)      as last_posted_week_no,
         -- the previous NORMAL week's signal: status compares against it, never a
         -- low-coverage week's thin one
-        max(case when not past.is_low_coverage
+        max(case when not past.is_fade_paused
                   and past.normal_week_no = cur.normal_week_no - 1
                  then past.signal end)                                  as prev_normal_signal,
         -- Rising list inputs, over NORMAL weeks only
-        sum(case when not past.is_low_coverage
+        sum(case when not past.is_fade_paused
                   and past.normal_week_no >  cur.normal_week_no - {{ var('social_trend_rising_recent_weeks') }}
                  then past.signal else 0 end)                           as recent_signal,
-        sum(case when not past.is_low_coverage
+        sum(case when not past.is_fade_paused
                   and past.normal_week_no <= cur.normal_week_no - {{ var('social_trend_rising_recent_weeks') }}
                   and past.normal_week_no >  cur.normal_week_no - {{ var('social_trend_rising_recent_weeks') }}
                                                                 - {{ var('social_trend_rising_baseline_weeks') }}
                  then past.signal else 0 end)                           as baseline_signal,
-        sum(case when not past.is_low_coverage
+        sum(case when not past.is_fade_paused
                   and past.normal_week_no >  cur.normal_week_no - {{ var('social_trend_rising_recent_weeks') }}
                  then coalesce(past.mention_count, 0) else 0 end)       as recent_mentions,
-        sum(case when not past.is_low_coverage
+        sum(case when not past.is_fade_paused
                   and past.normal_week_no >  cur.normal_week_no - {{ var('social_trend_rising_recent_weeks') }}
                  then coalesce(past.distinct_authors_adj, 0) else 0 end) as recent_authors
     from spine as cur
@@ -252,7 +293,7 @@ baseline_depth as (
         count(b.week_start)                                             as baseline_weeks
     from clock as c
     left join clock as b
-        on  not b.is_low_coverage
+        on  not b.is_fade_paused
         and b.normal_week_no <= c.normal_week_no - {{ var('social_trend_rising_recent_weeks') }}
         and b.normal_week_no >  c.normal_week_no - {{ var('social_trend_rising_recent_weeks') }}
                                                - {{ var('social_trend_rising_baseline_weeks') }}
@@ -426,7 +467,7 @@ select
         when not b.is_on_board                                    then null
         when not b.was_on_board                                   then 'new'
         -- a hole in the data says nothing about the product: hold it where it was
-        when b.is_low_coverage                                    then 'steady'
+        when b.is_fade_paused                                     then 'steady'
         when b.quiet_weeks >= 1                                   then 'cooling'
         -- up 25%+ on the previous normal week; from nothing to something counts too
         when b.signal > 0 and b.signal >= 1.25 * coalesce(b.prev_normal_signal, 0) then 'rising'
@@ -450,7 +491,8 @@ select
                                                                         as rising_growth,
     b.recent_mentions,
     b.week_posts,
-    b.is_low_coverage
+    b.is_low_coverage,
+    b.is_fade_paused
 from board as b
 inner join qualifying as q
     on  q.concept_class = b.concept_class

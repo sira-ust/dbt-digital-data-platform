@@ -1049,7 +1049,10 @@ models:
               arguments:
                 values: ['new', 'rising', 'steady', 'cooling']
       - name: is_low_coverage
-        description: The feed itself was thin that week (below social_trend_low_coverage_ratio x the median post count) — the fade clock stops and nothing counts as quiet.
+        description: The feed itself was thin that week (below social_trend_low_coverage_ratio x the median post count of the previous social_trend_coverage_baseline_weeks weeks). Its posts are scaled by the coverage and nothing enters through the fast lane.
+        tests: [not_null]
+      - name: is_fade_paused
+        description: A low-coverage week that also stopped the fade clock — nothing fades and nothing counts as quiet. At most social_trend_max_paused_weeks in a row; after that a lasting drop is the feed's new size and products fade again.
         tests: [not_null]
 
   - name: int_social_product_labels

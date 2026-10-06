@@ -304,6 +304,8 @@ vars:
   social_trend_variant_count: 5          # related products listed per board row
   social_trend_low_coverage_ratio: 0.4    # a week under 40% of the median post count is a data hole
                                           # (quota out, keyword change), not a quiet week
+  social_trend_coverage_baseline_weeks: 4 # ...the median of the previous N weeks, so a lasting drop becomes the norm
+  social_trend_max_paused_weeks: 2        # low weeks in a row that pause the fade; after that products fade again
   social_trend_rising_recent_weeks: 4     # Rising list: average share over the last N normal weeks...
   social_trend_rising_baseline_weeks: 8   # ...vs the N normal weeks before them
   social_trend_rising_min_baseline_weeks: 4  # a baseline needs at least this many normal weeks

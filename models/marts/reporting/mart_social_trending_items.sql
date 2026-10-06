@@ -93,6 +93,7 @@ board as (
         b.rising_rank,
         b.rising_growth,
         b.is_low_coverage,
+        b.is_fade_paused,
         v.top_variants,
         v.related_products,
         t.trend_rank,
@@ -651,6 +652,7 @@ joined as (
         b.rising_rank,
         b.rising_growth,
         b.is_low_coverage,
+        b.is_fade_paused,
         b.top_variants,
         b.related_products,
         b.trend_rank,
@@ -703,7 +705,9 @@ select
     -- THE BOARD (int_social_trend_board): where the product stands on the faded,
     -- sticky board, and whether it is on the Rising list. board_status is null off the
     -- board. is_low_coverage marks a week the feed itself was thin (quota, keyword
-    -- change) — read nothing into a dip that week.
+    -- change) — read nothing into a dip that week. is_fade_paused says whether that
+    -- week also stopped the fade clock: at most social_trend_max_paused_weeks in a row,
+    -- after which a lasting drop is the feed's new size and products fade again.
     --
     -- SHELF FIRST: board_rank lists every branded / shelf product (is_shelf_product)
     -- before any generic category. For the stockable-products view, filter
@@ -723,6 +727,7 @@ select
     j.rising_rank,
     j.rising_growth,
     j.is_low_coverage,
+    j.is_fade_paused,
     -- "which Pepsi? which Magnum?": the product's related products (same brand, or a
     -- longer name containing its whole name) with posts over the last
     -- social_trend_variant_window_weeks — see int_social_product_variants
