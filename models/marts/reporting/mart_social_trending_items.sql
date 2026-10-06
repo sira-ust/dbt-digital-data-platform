@@ -59,33 +59,68 @@ with trends as (
 
 ),
 
--- concepts that reached the board in ANY week, per class. `select distinct` is
--- mandatory: without it the join below fans out by the number of weeks the concept
--- was top-N. The class must be part of the key too, or a string that is a top-N
--- dish and a long-tail item would drag the item's trajectory in on the dish's ticket.
-qualifying as (
-
-    select distinct concept_class, concept_norm
-    from trends
-    where trend_rank <= {{ var('social_trend_top_n') }}
-
-),
-
+-- THE BOARD comes from int_social_trend_board (2026-10): products, not spellings
+-- (int_social_concept_canon merged them), scored with a 3-4 week fade so a viral
+-- product stays on until its buzz actually dies, with a fast lane for new spikes and
+-- the Rising list beside it. It already carries every week of any product that made
+-- the board or the Rising list — including weeks with NO posts, which the old
+-- weekly-top-N board could not show — so no qualifying filter is needed here.
+--
+-- is_top_n keeps its name for existing readers but now means ON THE BOARD that week
+-- (= is_on_board). The weekly columns (trend_rank, mention_count, rank_change, ...) come
+-- from int_social_concept_trends and are NULL on a week the product had no posts.
 board as (
 
     select
-        t.*,
-        -- `trend_rank is not null and ...`, not a bare comparison: a concept excluded
-        -- that week as a repeat_poster has NO rank, and `NULL <= 20` is NULL, not
-        -- false — which left is_top_n null on a trajectory row and failed its not_null
-        -- test on real data (2026-08-19). No rank means not on the board, which is
-        -- false, not unknown.
-        t.trend_rank is not null
-            and t.trend_rank <= {{ var('social_trend_top_n') }}          as is_top_n
-    from trends as t
-    inner join qualifying as q
-        on q.concept_class = t.concept_class
-       and q.concept_norm  = t.concept_norm
+        b.week_start,
+        b.week_end,
+        b.year_week,
+        b.concept_class,
+        b.concept_norm,
+        b.product_name,
+        b.product_type,
+        b.brand,
+        b.is_shelf_product,
+        b.is_on_board                                                   as is_top_n,
+        b.board_rank,
+        b.scope_rank,
+        b.board_status,
+        b.weeks_on_board,
+        b.best_board_rank,
+        b.faded_score,
+        b.quiet_weeks,
+        b.is_rising_candidate,
+        b.rising_rank,
+        b.rising_growth,
+        b.is_low_coverage,
+        v.top_variants,
+        v.related_products,
+        t.trend_rank,
+        t.rank_change,
+        t.mention_count,
+        t.subject_mentions,
+        t.ingredient_mentions,
+        t.unlabelled_mentions,
+        t.has_subject_evidence,
+        t.mention_count_wow_pct,
+        t.mention_share,
+        t.mention_share_change,
+        t.total_engagement,
+        t.total_views,
+        t.is_rising,
+        t.source_links,
+        t.distinct_authors_adj,
+        t.author_quality,
+        t.is_single_channel
+    from {{ ref('int_social_trend_board') }} as b
+    left join {{ ref('int_social_product_variants') }} as v
+        on  v.week_start    = b.week_start
+        and v.concept_class = b.concept_class
+        and v.concept_norm  = b.concept_norm
+    left join trends as t
+        on  t.week_start    = b.week_start
+        and t.concept_class = b.concept_class
+        and t.concept_norm  = b.concept_norm
 
 ),
 
@@ -600,7 +635,24 @@ joined as (
 
         -- the group's display name when the resolver judged several concepts to be
         -- one thing, else this concept's own label
-        coalesce(r.group_label, r.canonical_label, b.concept_norm)       as concept_label,
+        coalesce(r.group_label, r.canonical_label, b.product_name, b.concept_norm)
+                                                                        as concept_label,
+        b.product_type,
+        b.brand,
+        b.is_shelf_product,
+        b.board_rank,
+        b.scope_rank,
+        b.board_status,
+        b.weeks_on_board,
+        b.best_board_rank,
+        b.faded_score,
+        b.quiet_weeks,
+        b.is_rising_candidate,
+        b.rising_rank,
+        b.rising_growth,
+        b.is_low_coverage,
+        b.top_variants,
+        b.related_products,
         b.trend_rank,
         b.rank_change,
         b.mention_count,
@@ -648,7 +700,36 @@ select
     j.week_end,
     j.year_week,
 
-    -- social trend signal
+    -- THE BOARD (int_social_trend_board): where the product stands on the faded,
+    -- sticky board, and whether it is on the Rising list. board_status is null off the
+    -- board. is_low_coverage marks a week the feed itself was thin (quota, keyword
+    -- change) — read nothing into a dip that week.
+    --
+    -- SHELF FIRST: board_rank lists every branded / shelf product (is_shelf_product)
+    -- before any generic category. For the stockable-products view, filter
+    -- is_shelf_product and sort by scope_rank, its rank among shelf products alone.
+    -- brand is the hook promo matching links a product to a promo item on.
+    j.product_type,
+    j.brand,
+    j.is_shelf_product,
+    j.board_rank,
+    j.scope_rank,
+    j.board_status,
+    j.weeks_on_board,
+    j.best_board_rank,
+    j.faded_score,
+    j.quiet_weeks,
+    j.is_rising_candidate,
+    j.rising_rank,
+    j.rising_growth,
+    j.is_low_coverage,
+    -- "which Pepsi? which Magnum?": the product's related products (same brand, or a
+    -- longer name containing its whole name) with posts over the last
+    -- social_trend_variant_window_weeks — see int_social_product_variants
+    j.top_variants,
+    j.related_products,
+
+    -- social trend signal for THIS WEEK alone (null on a week with no posts)
     j.trend_rank,
     j.mention_count,
     -- HOW the concept was mentioned, not just how often. subject = the post is about

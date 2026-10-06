@@ -263,8 +263,6 @@ mentions_normalized as (
 
     select
         m.mention_id, m.profile, m.channel, m.posted_date, m.follower_count, m.link,
-        m.mentioned_dishes, m.mentioned_products,
-        m.subject_dishes, m.subject_products,
         m.week_start, m.week_end,
         m.engagement, m.views,
         case when cb.channel_median_engagement > 0
@@ -292,134 +290,27 @@ mentions_normalized as (
 
 ),
 
--- The two class streams. macros/unnest.sql allows exactly ONE generator per
--- SELECT on both engines, so each array gets its own select and they are UNION
--- ALLed. `union all`, never `union`: a mention naming the same string as both a
--- dish and an ingredient must keep both rows — the classes are separate rank
--- spaces. Both branches list the same columns in the same order because UNION ALL
--- matches by position, hence no `select *` inside them.
-dish_concepts_raw as (
-
-    select
-        mention_id, profile, channel, posted_date, engagement, views,
-        engagement_ratio, views_ratio, follower_count, link,
-        week_start, week_end, reach_ratio,
-        'dish'                                                          as concept_class,
-        -- the subject array for THIS class. A dish is a subject only if it is in
-        -- subject_dishes; a product only if it is in subject_products. Crossing them
-        -- would make every recipe's dish mark its ingredients as subjects too.
-        subject_dishes                                                  as subject_arr,
-        {{ unnest('mentioned_dishes') }}                                as concept
-    from mentions_normalized
-
-),
-
-item_concepts_raw as (
-
-    select
-        mention_id, profile, channel, posted_date, engagement, views,
-        engagement_ratio, views_ratio, follower_count, link,
-        week_start, week_end, reach_ratio,
-        'item'                                                          as concept_class,
-        subject_products                                                as subject_arr,
-        {{ unnest('mentioned_products') }}                              as concept
-    from mentions_normalized
-
-),
-
-concepts_raw as (
-
-    select * from dish_concepts_raw
-    union all
-    select * from item_concepts_raw
-
-),
-
--- strip a trailing LLM-appended gloss ("ขนมโตเกียว (tokyo pastry/snack)" ->
--- "ขนมโตเกียว") BEFORE folding. Kept as its own step so the empty-string edge
--- case (a concept that's entirely parenthetical) can fall back to the
--- original text instead of silently disappearing.
-concepts_degloss as (
-
-    select
-        mention_id, profile, channel, posted_date, engagement, views,
-        engagement_ratio, views_ratio, follower_count, link,
-        week_start, week_end,
-        reach_ratio,
-        concept_class,
-        concept,
-        -- ROLE: is this post ABOUT the concept, or does it merely name it?
-        --   2 = subject     the post exists because of this thing
-        --   1 = ingredient  named as a step, an ingredient, or one line on a menu
-        --   0 = unknown     mention not yet re-labelled at prompt v4
-        -- Decided on the RAW string, before deglossing and folding, because that is
-        -- the spelling enrich_mentions._subset guarantees the subject array holds.
-        -- Comparing after folding would need the same fold applied to the array and
-        -- would silently return "not a subject" if the two ever drifted.
-        --
-        -- Three states, not a boolean: between deploying this model and finishing
-        -- the v4 re-label the corpus is a mix, and treating an unlabelled mention as
-        -- "not a subject" would report almost the whole board as incidental.
-        case
-            when subject_arr is null                        then 0
-            when {{ array_contains('subject_arr', 'concept') }} then 2
-            else 1
-        end                                                             as role_rank,
-        {{ strip_parenthetical_gloss('concept') }}                      as concept_deglossed
-    from concepts_raw
-    where nullif(trim(concept), '') is not null
-
-),
-
-concepts as (
-
-    select
-        mention_id, profile, channel, posted_date, engagement, views,
-        engagement_ratio, views_ratio, follower_count, link,
-        week_start, week_end,
-        reach_ratio,
-        role_rank,
-        concept_class,
-        -- fold Vietnamese diacritic/case/spacing variants to one key so the same
-        -- thing (bánh khọt / banh khot) ranks once, not several times
-        {{ fold_concept(
-            "case when nullif(concept_deglossed, '') is not null then concept_deglossed else concept end"
-        ) }}                                                            as concept_norm
-    from concepts_degloss
-
-),
-
--- generic-commodity stoplist, folded with the SAME macro the concepts are folded
--- with (one folding implementation, both sides). Folded once here rather than in
--- the join predicate so neither engine evaluates a regex per probe row.
-generic_terms as (
-
-    select
-        {{ fold_concept('term') }}                                      as term_norm,
-        applies_to
-    from {{ ref('seed_social_generic_terms') }}
-    where coalesce(is_active, true)
-
-),
-
--- Anti-join UPSTREAM of ranking, not a filter on the finished board. Three
--- reasons, the first fatal: (1) row_number() counts every row in its ordering, so
--- removing rows afterwards leaves GAPS in the surviving ranks — the exact thing
--- assert_social_concept_trends_rank_is_dense forbids; (2) mention_share's
--- denominator must exclude generic terms too, or every real item's share is
--- diluted by a constant flood of salt/water/oil; (3) the shared-post divisor must
--- not be inflated by them — a post naming 3 real ingredients plus salt, water and
--- oil should divide by 3, not 6. The cost is that suppressed terms are invisible
--- here; dq_social_generic_term_hits counts them separately so the stoplist stays
--- auditable.
+-- Every dish / product name each post named, cleaned (gloss stripped, folded,
+-- stoplist applied) by int_social_concept_mentions — the ONE place that cleaning
+-- lives, shared with the canonical-name map — joined to this model's week-scoped,
+-- channel-normalised mentions. INNER join on mention_id: a mention outside the
+-- retained complete weeks has no row in mentions_normalized, so it drops here exactly
+-- as it did when the unnest ran inline. Row multiplicity is preserved (a post naming
+-- a thing twice still yields two rows; concept_mentions' select distinct collapses
+-- them, as before).
 concepts_kept as (
 
-    select c.*
-    from concepts as c
-    left join generic_terms as g
-        on g.term_norm = c.concept_norm
-       and (g.applies_to = 'all' or g.applies_to = c.concept_class)
-    where g.term_norm is null
+    select
+        m.mention_id, m.profile, m.channel, m.posted_date, m.engagement, m.views,
+        m.engagement_ratio, m.views_ratio, m.follower_count, m.link,
+        m.week_start, m.week_end,
+        m.reach_ratio,
+        c.role_rank,
+        c.concept_class,
+        c.concept_norm
+    from mentions_normalized as m
+    inner join {{ ref('int_social_concept_mentions') }} as c
+        on c.mention_id = m.mention_id
 
 ),
 
@@ -466,16 +357,41 @@ concept_groups as (
 
 ),
 
+-- ONE PRODUCT, ONE NAME, ONE BOARD (2026-10). Before the resolver's grouping, every
+-- name is replaced by its canonical PRODUCT from int_social_concept_canon — which
+-- merges across scripts AND across the two boards: "ไอติมเลย์" [item], "lays ice
+-- cream" [dish] and "lay's ice cream" [item] are one row here, on the board the
+-- product belongs to. The resolver's group_primary used to be the only merge, and it
+-- only ever saw the top-N names it was gated to; measured 2026-10-05, that left Lay's
+-- ice cream in 9+ pieces and put the July sponge-cake spike on the dish board at #204.
+--
+-- Same reasoning as the group_primary note above, and it is why this is done HERE,
+-- before concept_mentions' select distinct: a post naming two spellings (or naming the
+-- product once as a dish and once as an item) counts ONCE, and trend_score / shares /
+-- the author checks are computed on the merged mention set.
+--
+-- The class can CHANGE here (a dish-board spelling of a bought product moves to item).
+-- role_rank is carried as is: subject-ness was decided per spelling on the raw string,
+-- and concept_roles' max() already resolves a post that names a product both ways.
+--
+-- Fallback is the name itself: a name canonicalize_concepts.py has not reached yet
+-- ranks exactly as before. The resolver's group_primary then applies on top of the
+-- product key, so a resolver grouping of two PRODUCTS still merges them.
 grouped as (
 
     select
         c.mention_id, c.profile, c.channel, c.posted_date, c.engagement, c.views,
         c.engagement_ratio, c.views_ratio, c.reach_ratio, c.follower_count, c.link,
-        c.week_start, c.week_end, c.concept_class, c.role_rank,
-        coalesce(g.group_primary, c.concept_norm)                       as concept_norm
+        c.week_start, c.week_end,
+        coalesce(cn.product_class, c.concept_class)                     as concept_class,
+        c.role_rank,
+        coalesce(g.group_primary, cn.product_key, c.concept_norm)       as concept_norm
     from concepts_kept as c
+    left join {{ ref('int_social_concept_canon') }} as cn
+        on  cn.concept_class = c.concept_class
+        and cn.concept_norm  = c.concept_norm
     left join concept_groups as g
-        on g.concept_norm = c.concept_norm
+        on g.concept_norm = coalesce(cn.product_key, c.concept_norm)
 
 ),
 
