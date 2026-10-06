@@ -6,7 +6,8 @@
 --   1. seed_social_product_overrides — a person's correction always wins. The LLM labels
 --      22k products once; the few wrong ones that matter sit at the top of the board,
 --      and fixing those by hand is cheaper and more certain than another LLM pass.
---      Leave product_type or brand blank in the seed to keep the LLM's value for it.
+--      Leave product_type or brand blank in the seed to keep the LLM's value for it;
+--      brand '-' removes the LLM's brand.
 --   2. ONE SPELLING PER BRAND. The LLM wrote 71 brands more than one way ("Lay's" /
 --      "Lays", "7-Eleven" / "7 Eleven"). brand_key folds them (case, accents,
 --      apostrophes, hyphens, dots, spaces removed); brand is the spelling carried by
@@ -45,7 +46,8 @@ labelled as (
     select
         coalesce(p.product_key, o.product_key)                         as product_key,
         coalesce(o.product_type, p.product_type)                       as product_type,
-        coalesce(o.brand, p.brand)                                     as brand_raw,
+        -- '-' in the seed clears a brand the LLM gave a generic product
+        case when o.brand = '-' then null else coalesce(o.brand, p.brand) end as brand_raw,
         o.product_key is not null                                      as is_overridden
     from profiles as p
     full outer join overrides as o
@@ -74,8 +76,12 @@ brand_names as (
         select
             brand_key,
             brand_raw,
+            -- a capitalised spelling first: "Magnum", not the all-lowercase "magnum"
+            -- the LLM wrote on most Magnum products
             row_number() over (
-                partition by brand_key order by sum(posts) desc, brand_raw
+                partition by brand_key
+                order by case when brand_raw <> lower(brand_raw) then 0 else 1 end,
+                         sum(posts) desc, brand_raw
             )                                                          as _rn
         from keyed
         where brand_key is not null

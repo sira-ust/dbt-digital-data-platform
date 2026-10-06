@@ -66,10 +66,12 @@ serving). On Databricks, auth is the job's run-as identity.
 from __future__ import annotations
 
 import argparse
+import difflib
 import os
 import re
 import sys
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -130,8 +132,8 @@ For each product give:
    - "shelf": a specific ready-made product SOLD IN SHOPS or convenience stores - packaged, bottled, frozen or a bakery product - even when no brand is named (lemon jelly sponge cake, hokkaido milk ice cream, salted egg potato chips, crispy pork skin snack).
    - "generic": a broad category or commodity (fish sauce, ice cream, coffee, snacks, instant noodles, matcha, rice paper), OR a dish or dessert made at home or served at a restaurant or cafe (som tam, pho, tiramisu, sponge cake, banh mi). A dessert counts as shelf only when the name says it is a packaged or store product ("7-eleven tiramisu cup").
 2. brand: the brand name when type is branded, otherwise "-".
-Reply with one line per input and nothing else, TAB-separated:
-<index>\t<branded, shelf or generic>\t<brand or ->"""
+Reply with one line per input and nothing else, TAB-separated, copying the product name exactly as given:
+<index>\t<product name>\t<branded, shelf or generic>\t<brand or ->"""
 
 INSTRUCTIONS = """You standardise the names of foods and food products taken from Thai and Vietnamese social media posts, so that every spelling of the SAME thing gets the SAME name.
 
@@ -145,8 +147,8 @@ For each input give:
    - If a name in KNOWN PRODUCTS below is the same thing, reuse it EXACTLY as written.
 2. category: "item" if it is a product someone buys ready-made (a packaged snack, branded drink, sauce, a bakery or convenience-store product); "dish" if it is cooked or prepared (a recipe, a restaurant or street-food dish). The board the name came from is a hint, not the answer.
 
-Reply with one line per input and nothing else, TAB-separated:
-<index>\t<canonical>\t<item or dish>"""
+Reply with one line per input and nothing else, TAB-separated, copying the input name exactly as given:
+<index>\t<name as written>\t<canonical>\t<item or dish>"""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -249,6 +251,54 @@ def read_done(backend: str) -> list[dict]:
     return df[["concept_class", "concept_norm", "canonical_name"]].to_dict("records")
 
 
+MISALIGNED_SHARE = 0.25     # shifted batches measured 41-51% of names on a neighbour's
+                            # answer; the worst healthy batch 9%
+
+
+def read_misaligned(backend: str, posts_by_name: dict) -> set:
+    """Names whose CURRENT answer came from a batch that was answered one line off.
+
+    Before reply lines repeated their input name, an index-only reply could be numbered
+    from 1 instead of 0; every name then took the answer meant for the name sent before
+    it (2026-10-05: 3 batches, 177 names, e.g. "spicy beef noodle soup" -> "coffee
+    beans"). A batch is rebuilt from its rows (one write timestamp each) and put back in
+    the order it was sent — most-posted first, then by name — and judged shifted when
+    many answers share a word with the PREVIOUS name but none with their own. Phase 1
+    re-asks those names; the new answers are newer rows, so staging prefers them, and
+    the next run finds nothing left to redo."""
+    version = f"%/{PROMPT_VERSION}"
+    if backend == "databricks":
+        rows = _query(backend, f"select concept_class, concept_norm, concept_text, canonical_name, "
+                               f"canonicalized_at from {DBX_CANON_TABLE} "
+                               f"where model_version like '{version}' and canonical_name is not null")
+    else:
+        import pandas as pd
+        path = Path(LOCAL_CANON_PATH)
+        if not path.exists():
+            return set()
+        d = pd.read_parquet(path)
+        d = d[d["model_version"].fillna("").str.endswith(f"/{PROMPT_VERSION}") & d["canonical_name"].notna()]
+        rows = d.to_dict("records")
+    words = lambda s: {w for w in re.findall(r"\w+", str(s or "").lower()) if len(w) > 2}
+    latest, batches = {}, {}
+    for r in rows:
+        key, at = (r["concept_class"], r["concept_norm"]), str(r["canonicalized_at"] or "")
+        if at >= latest.get(key, ""):
+            latest[key] = at
+        batches.setdefault(at, []).append(r)
+    redo = set()
+    for at, batch in batches.items():
+        batch.sort(key=lambda r: (-posts_by_name.get((r["concept_class"], r["concept_norm"]), 0), r["concept_norm"]))
+        sent = [words(r["concept_norm"]) | words(r["concept_text"]) for r in batch]
+        shifted = sum(1 for i in range(1, len(batch))
+                      if words(batch[i]["canonical_name"]) & sent[i - 1]
+                      and not words(batch[i]["canonical_name"]) & sent[i])
+        if len(batch) >= 10 and shifted / len(batch) >= MISALIGNED_SHARE:
+            redo |= {(r["concept_class"], r["concept_norm"]) for r in batch
+                     if latest[(r["concept_class"], r["concept_norm"])] == at}
+    return redo
+
+
 def write(backend: str, records: list[dict], table: str = DBX_CANON_TABLE,
           local: str = LOCAL_CANON_PATH, columns: list = None) -> None:
     columns = columns or COLUMNS
@@ -273,32 +323,51 @@ def write(backend: str, records: list[dict], table: str = DBX_CANON_TABLE,
 # Canonicalise
 # ─────────────────────────────────────────────────────────────────────────────
 
-_LINE = re.compile(r"^\s*(\d+)\.?\s*\t\s*(.+?)\s*\t\s*(item|dish)\s*$", re.IGNORECASE)
+_LINE = re.compile(r"^\s*(\d+)\.?\s*\t\s*(.*?)\s*\t\s*(.+?)\s*\t\s*(item|dish)\s*$", re.IGNORECASE)
 
 
-def parse_reply(text: str, n: int) -> dict[int, tuple[str, str]]:
+def _fold_echo(s: str) -> str:
+    """Letters and digits only, accents and Thai marks dropped — for comparing a name
+    the model copied back with the name that was sent."""
+    s = unicodedata.normalize("NFKD", str(s or "").lower())
+    return "".join(ch for ch in s if ch.isalnum() and not unicodedata.combining(ch))
+
+
+def echo_matches(echo: str, sent: str) -> bool:
+    """Does the name the model copied back belong to THIS input line? Every reply line
+    repeats its input name because the index alone is not trustworthy: on 2026-10-05
+    three 60-name batches came back numbered from 1 instead of 0, and every name took
+    its neighbour's answer ("sprite" -> "spicy short rib pho")."""
+    a, b = _fold_echo(echo), _fold_echo(sent)
+    if not a or not b:
+        return False
+    return a == b or difflib.SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
+def parse_reply(text: str, sent: list[str]) -> dict[int, tuple[str, str]]:
     """TAB-separated lines -> {index: (canonical, category)}. A line that does not
-    parse is simply missing, and its name is retried next run."""
+    parse, or whose copied name is not the name sent at that index, is simply
+    missing, and its name is retried next run."""
     out = {}
     for line in (text or "").splitlines():
         m = _LINE.match(line)
-        if m and int(m.group(1)) < n:
-            name = m.group(2).strip().strip('"').lower()
+        if m and int(m.group(1)) < len(sent) and echo_matches(m.group(2), sent[int(m.group(1))]):
+            name = m.group(3).strip().strip('"').lower()
             if name:
-                out[int(m.group(1))] = (name, m.group(3).lower())
+                out[int(m.group(1))] = (name, m.group(4).lower())
     return out
 
 
 def canonicalize_batch(client, model: str, batch: list[dict], hints: list[str]) -> list[dict]:
-    lines = "\n".join(f"{i}. [{r['concept_class']}] {r['concept_text'] or r['concept_norm']}"
-                      for i, r in enumerate(batch))
+    sent = [r["concept_text"] or r["concept_norm"] for r in batch]
+    lines = "\n".join(f"{i}. [{r['concept_class']}] {s}" for i, (r, s) in enumerate(zip(batch, sent)))
     known = "KNOWN PRODUCTS:\n" + ("\n".join(hints) if hints else "(none yet)")
     parsed = {}
     for _ in range(2):          # one retry for a reply that came back short or garbled
         resp = client.messages.create(
             model=model, max_tokens=MAX_TOKENS, system=INSTRUCTIONS,
             messages=[{"role": "user", "content": f"{known}\n\nINPUT:\n{lines}"}])
-        parsed = parse_reply("".join(getattr(b, "text", "") for b in resp.content), len(batch))
+        parsed = parse_reply("".join(getattr(b, "text", "") for b in resp.content), sent)
         if len(parsed) >= len(batch) * 0.9:
             break
     now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
@@ -514,7 +583,8 @@ def run_consolidation(backend: str, model: str, concurrency: int, dry_run=False,
 # Phase 2: label every product (type + brand)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_PROFILE_LINE = re.compile(r"^\s*(\d+)\.?\s*\t\s*(branded|shelf|generic)\s*\t\s*(.*?)\s*$", re.IGNORECASE)
+_PROFILE_LINE = re.compile(r"^\s*(\d+)\.?\s*\t\s*(.*?)\s*\t\s*(branded|shelf|generic)\s*\t\s*(.*?)\s*$",
+                           re.IGNORECASE)
 
 
 def read_products(backend: str) -> list[dict]:
@@ -559,9 +629,10 @@ def profile_batch(client, model: str, batch: list) -> list:
         parsed = {}
         for line in "".join(getattr(b, "text", "") for b in resp.content).splitlines():
             m = _PROFILE_LINE.match(line)
-            if m and int(m.group(1)) < len(batch):
-                brand = m.group(3).strip().strip('"')
-                parsed[int(m.group(1))] = (m.group(2).lower(), None if brand in ("", "-") else brand)
+            if (m and int(m.group(1)) < len(batch)
+                    and echo_matches(m.group(2), batch[int(m.group(1))]["product_name"])):
+                brand = m.group(4).strip().strip('"')
+                parsed[int(m.group(1))] = (m.group(3).lower(), None if brand in ("", "-") else brand)
         if len(parsed) >= len(batch) * 0.9:
             break
     now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
@@ -624,15 +695,18 @@ def main(argv=None):
     names = read_names(args.backend)
     done = read_done(args.backend)
     done_keys = {(r["concept_class"], r["concept_norm"]) for r in done}
-    todo = [r for r in names if (r["concept_class"], r["concept_norm"]) not in done_keys]
+    posts_by_name = {(r["concept_class"], r["concept_norm"]): int(r["posts"]) for r in names}
+    redo = read_misaligned(args.backend, posts_by_name)
+    todo = [r for r in names if (r["concept_class"], r["concept_norm"]) not in done_keys
+            or (r["concept_class"], r["concept_norm"]) in redo]
     if args.limit:
         todo = todo[: args.limit]
     print(f"{len(names):,} names in all history; {len(done_keys):,} already canonicalised at "
-          f"{PROMPT_VERSION}; {len(todo):,} to do (~{-(-len(todo) // BATCH_SIZE)} calls)")
+          f"{PROMPT_VERSION}; {len(todo):,} to do (~{-(-len(todo) // BATCH_SIZE)} calls), "
+          f"{len(redo):,} of them re-asked because their batch was answered one line off")
     if args.dry_run or not todo:
         return
 
-    posts_by_name = {(r["concept_class"], r["concept_norm"]): int(r["posts"]) for r in names}
     batches = [todo[i:i + BATCH_SIZE] for i in range(0, len(todo), BATCH_SIZE)]
     t0, written = time.time(), 0
     for w in range(0, len(batches), WAVE_BATCHES):

@@ -531,9 +531,12 @@ seeds:
       Hand corrections to the LLM's product labels, keyed by product_key (the canonical
       product's key, e.g. 'tiramisu', 'lays ice cream'). product_type (branded / shelf /
       generic) and brand override the LLM's when filled; leave either blank to keep the
-      LLM's. Applied in int_social_product_labels, so the board's shelf-first ranking and
-      the related-variants list both follow it. Review the top of the board after a label
+      LLM's, and set brand to '-' to remove the LLM's brand. Applied in
+      int_social_product_labels, so the board's shelf-first ranking and the
+      related-variants list both follow it. Review the top of the board after a label
       run and add a row for anything wrong — far cheaper and more certain than re-labelling.
+      Restaurant and cafe chains are 'generic' with their brand kept: they cannot be
+      stocked, so they must not take the shelf board's places.
     columns:
       - name: product_key
         tests: [unique, not_null]

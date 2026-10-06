@@ -1,1 +1,29 @@
 product_key,product_type,brand,note
+yogurt drink,generic,-,a category; the LLM gave it the Dido brand
+coffee beans,generic,,a commodity
+vegan vietnamese food,generic,,a category
+bento,branded,Bento,Bento squid snack brand
+bento squid snack,branded,Bento,
+bento with grilled squid,branded,Bento,
+surati bhusu,branded,Surati,
+dido fruit juice,,Deedo,one brand spelled two ways (Dido / Deedo)
+dido fruit juice with yogurt,,Deedo,
+dido honey orange juice,,Deedo,
+monchichi,,Monchhichi,one brand spelled two ways
+mon chichi,,Monchhichi,
+bonchon fried chicken,generic,,restaurant chain: cannot be stocked
+fried chicken with bonchon sauce,generic,,restaurant chain
+bonchon tom yum fried chicken wings,generic,,restaurant chain
+bonchon fried chicken tom yum sauce,generic,,restaurant chain
+bonchon hot tom yum sauce,generic,,restaurant chain
+kfc chicken,generic,,restaurant chain
+crispy pork akong,generic,,restaurant
+hia sai pork leg,generic,,restaurant
+bin bin clay pot rice,generic,,restaurant
+gojiro ramen,generic,,restaurant
+blizzard,generic,,Dairy Queen: restaurant chain
+blizzard greek yogurt,generic,,Dairy Queen: restaurant chain
+hey tea,generic,,HeyTea: tea shop chain
+hey tea peach,generic,,HeyTea: tea shop chain
+pon de ring,generic,,Mister Donut: donut shop chain
+slurpee,generic,,7-Eleven fountain drink

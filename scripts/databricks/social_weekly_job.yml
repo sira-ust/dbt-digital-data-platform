@@ -5,7 +5,8 @@
 # never calls the LLM. Each LLM step SKIPS work already done, so a normal week costs only
 # what is new:
 #   enrich_mentions       new posts only
-#   canonicalize          new names only
+#   canonicalize          new names only (plus, once, the 177 names of the three 2026-10-05
+#                         batches answered one line off — read_misaligned finds them)
 #   canonicalize --consolidate        only look-alike groups holding a product new since
 #                                     the last run (it leaves a checkpoint row)
 #   canonicalize --profile-products   new products only
