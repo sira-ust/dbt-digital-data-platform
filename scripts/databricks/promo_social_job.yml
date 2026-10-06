@@ -50,7 +50,7 @@ resources:
             project_directory: ""
             commands:
               - dbt deps
-              - dbt build --select seed_promo_item_terms stg_promo__items stg_promo__item_terms_draft int_promo_items_enriched
+              - dbt build --select seed_promo_item_terms stg_promo__items stg_promo__item_terms_draft int_promo_items_enriched --indirect-selection cautious
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
@@ -72,7 +72,7 @@ resources:
             project_directory: ""
             commands:
               - dbt deps
-              - dbt build --select stg_promo__item_terms_draft int_promo_items_enriched
+              - dbt build --select stg_promo__item_terms_draft int_promo_items_enriched --indirect-selection cautious
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
@@ -93,7 +93,7 @@ resources:
             project_directory: ""
             commands:
               - dbt deps
-              - dbt build --select stg_promo__social_judgments int_promo_social_matches
+              - dbt build --select stg_promo__social_judgments int_promo_social_matches --indirect-selection cautious
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
@@ -135,7 +135,7 @@ resources:
       git_source:
         git_url: https://github.com/sira-ust/dbt-digital-data-platform.git
         git_provider: gitHub
-        git_branch: main
+        git_branch: main            # feat/monthly-promo-social until the PR is merged
       queue:
         enabled: true
       environments:
