@@ -13,6 +13,12 @@
 # picks up what it wrote. Same pattern as the weekly social job
 # (parse -> dbt staging -> enrich -> dbt rest).
 #
+# Every dbt step except dbt-mart runs with --indirect-selection cautious: it runs only
+# the tests whose models were ALL built in that step. assert_promo_every_item_in_mart
+# reads stg_promo__items AND the mart, so without it the first step would test a mart
+# that does not exist yet (the weekly social job failed this way on 2026-10-06).
+# dbt-mart runs every promo test.
+#
 # ONE-TIME SETUP, before the first run (each is a Databricks write, so it is a
 # person's call, not this file's):
 #   1. create volumes ust_databricks.social.promo_landing and .promo_output
