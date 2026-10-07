@@ -27,9 +27,9 @@
 -- but for at most 2 weeks in a row: a drop that lasts is the feed's new size, and a
 -- product nobody posts about then fades like any other.
 --
--- STOCKABLE FIRST. Branded and shelf products (`type`) rank ahead of generic categories
--- and dishes on each board, so `rank` 1-N is the stockable list and the generic rows
--- follow. `stockable_rank` numbers the stockable rows alone.
+-- STOCKABLE FIRST, ON THE ITEM BOARD. Branded and shelf products (`type`) rank ahead of
+-- generic categories, so `rank` 1-N is the stockable list and the generic rows follow;
+-- `stockable_rank` numbers the stockable rows alone. The dish board ranks on buzz alone.
 --
 -- The two boards are ranked SEPARATELY and both come back, items first: 'item' is things
 -- we could stock, 'dish' is what people are eating.
@@ -77,7 +77,8 @@ select
     b.week_start,
     b.concept_class                                          as board,
     b.board_rank                                             as rank,
-    case when b.is_shelf_product then b.scope_rank end       as stockable_rank,
+    case when b.is_shelf_product and b.concept_class = 'item'
+         then b.scope_rank end                              as stockable_rank,
     p.last_week_rank                                         as last_week,
     case
         -- no earlier week exists — not the same thing as "new to the board"

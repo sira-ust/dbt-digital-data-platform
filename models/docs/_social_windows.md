@@ -186,8 +186,9 @@ reads all history too. Three LLM steps, in this order, each followed by a dbt re
    with an unbranded one (the first run tried "fresh eggs" -> "cp fresh eggs"). Same words
    in a different order need no LLM: `int_social_concept_canon` merges those itself;
 3. **label products** (`--profile-products`): branded / shelf / generic + brand, for ALL
-   products. `int_social_trend_board` ranks branded + shelf products as their own scope,
-   ahead of every generic category (`assert_social_board_shelf_before_generic`).
+   products. On the item board, `int_social_trend_board` ranks branded + shelf products as
+   their own scope, ahead of every generic category (`assert_social_board_shelf_before_generic`);
+   the dish board ranks on buzz alone.
 
 Then dbt builds the trends and the board, the resolver runs, and dbt builds the mart.
 

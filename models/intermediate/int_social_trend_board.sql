@@ -44,15 +44,18 @@
 --       status        = new / rising / steady / cooling, plus weeks_on_board and the
 --                       best rank of the current run.
 --
---  TWO SCOPES, shelf first (2026-10). Every product carries a label from
---  stg_mentionlytics__product_profile: branded / shelf (a product someone can STOCK)
---  or generic (a category, commodity or dish; also any product not labelled yet). The
---  two scopes are ranked SEPARATELY — fast lane, faded rank, stay-on rule each within
---  its own scope, with social_trend_top_n / _stay_rank for shelf and the smaller
---  social_trend_generic_top_n / _stay_rank for general — and board_rank then lists
---  every shelf product BEFORE every generic one. A broad staple ("fish sauce") can
---  stay on the board, but never above a stockable product ("lay's ice cream"), and the
---  report can drop generics and sort by scope_rank alone.
+--  TWO SCOPES ON THE ITEM BOARD, shelf first (2026-10). Every product carries a label
+--  from stg_mentionlytics__product_profile: branded / shelf (a product someone can
+--  STOCK) or generic (a category, commodity or dish; also any product not labelled
+--  yet). On the item board the two scopes are ranked SEPARATELY — fast lane, faded
+--  rank, stay-on rule each within its own scope, with social_trend_top_n / _stay_rank
+--  for shelf and the smaller social_trend_generic_top_n / _stay_rank for general — and
+--  board_rank then lists every shelf product BEFORE every generic one. A broad staple
+--  ("fish sauce") can stay on the board, but never above a stockable product ("lay's
+--  ice cream"), and the report can drop generics and sort by scope_rank alone.
+--  The DISH board is one scope ranked on buzz alone, with social_trend_top_n /
+--  _stay_rank: shelf-first there put cafe cakes with no posts above the dishes people
+--  were actually posting about (2026-10-07).
 --
 --  RISING LIST (separate): the product's average share over the last
 --  social_trend_rising_recent_weeks normal weeks vs the social_trend_rising_baseline_weeks
@@ -183,8 +186,11 @@ products as (
         min(t.week_start)                                               as first_week,
         max(pf.product_type)                                            as product_type,
         max(pf.brand)                                                   as brand,
-        case when max(pf.product_type) in ('branded', 'shelf')
-             then 'shelf' else 'general' end                            as scope
+        max(pf.product_type) in ('branded', 'shelf')                    as is_shelf_product,
+        -- the DISH board is one scope: it ranks on buzz alone
+        case when t.concept_class = 'dish'                     then 'dish'
+             when max(pf.product_type) in ('branded', 'shelf') then 'shelf'
+             else 'general' end                                         as scope
     from trends as t
     left join profiles as pf
         on pf.product_key = t.concept_norm
@@ -208,6 +214,7 @@ spine as (
         p.concept_class,
         p.concept_norm,
         p.scope,
+        p.is_shelf_product,
         p.product_type,
         p.brand,
         k.week_start,
@@ -315,7 +322,7 @@ ranked as (
         f.recent_authors,
         f.prev_normal_signal,
         bd.baseline_weeks,
-        -- all ranks are WITHIN the product's scope (shelf vs general)
+        -- all ranks are WITHIN the product's scope (item board: shelf vs general; dish board: one scope)
         case when f.faded_score > 0 then
             row_number() over (
                 partition by s.week_start, s.concept_class, s.scope
@@ -326,9 +333,9 @@ ranked as (
                 partition by s.week_start, s.concept_class, s.scope, s.has_posts
                 order by s.signal desc, coalesce(s.mention_count, 0) desc, s.concept_norm
             ) end                                                       as week_scope_rank,
-        case when s.scope = 'shelf' then {{ var('social_trend_top_n') }}
+        case when s.scope <> 'general' then {{ var('social_trend_top_n') }}
              else {{ var('social_trend_generic_top_n') }} end           as scope_top_n,
-        case when s.scope = 'shelf' then {{ var('social_trend_stay_rank') }}
+        case when s.scope <> 'general' then {{ var('social_trend_stay_rank') }}
              else {{ var('social_trend_generic_stay_rank') }} end       as scope_stay_rank
     from spine as s
     inner join faded as f
@@ -459,7 +466,7 @@ select
     pn.product_name,
     b.product_type,
     b.brand,
-    b.scope = 'shelf'                                                   as is_shelf_product,
+    coalesce(b.is_shelf_product, false)                                as is_shelf_product,
     b.is_on_board,
     b.board_rank,
     b.scope_rank,

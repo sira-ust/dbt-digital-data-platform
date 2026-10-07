@@ -702,7 +702,7 @@ models:
           1..N position on the board that week; null off the board. Every shelf product
           (is_shelf_product) is ranked before every generic one, each by faded score.
       - name: scope_rank
-        description: Rank within the product's own scope — among shelf products alone, or among generic ones. Filter is_shelf_product and sort by this for the stockable-products view.
+        description: Rank within the product's own scope — on the item board among shelf products alone, or among generic ones (filter is_shelf_product and sort by this for the stockable-products view); on the dish board, which ranks on buzz alone, the same as board_rank.
       - name: product_type
         description: branded / shelf / generic, from stg_mentionlytics__product_profile; null until the product is labelled (it then ranks as generic).
         tests:
