@@ -26,7 +26,9 @@ the moment a TikTok row turns an Unmatched item into Exact.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
+import tempfile
 import urllib.parse
 from datetime import date, datetime
 from pathlib import Path
@@ -268,7 +270,14 @@ def main(argv=None):
         Path(DBX_OUT_DIR) if args.backend == "databricks" else local_data_root() / "promo" / "output")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / output_name(data["promo_month"])
-    build_workbook(data).save(path)
+    # An .xlsx is a zip, and writing one seeks back to patch headers. A Unity Catalog
+    # Volume is write-once, sequential storage: saving straight to it fails with
+    # "[Errno 5] Input/output error" (first Databricks run, 2026-10-07). So the workbook
+    # is built on local disk and then copied over in one sequential write.
+    with tempfile.TemporaryDirectory() as tmp:
+        local = Path(tmp) / path.name
+        build_workbook(data).save(local)
+        shutil.copyfile(local, path)
     statuses = {}
     for row in data["rows"]:
         statuses.setdefault(row["match_status"], set()).add(row["item_no"])
