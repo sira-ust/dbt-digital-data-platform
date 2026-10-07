@@ -40,8 +40,9 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
 
 ### Running a new month on Databricks
 
-Drop the workbook into `/Volumes/ust_databricks/social/promo_landing/`. The job
-`ust-promo-social-match` (`scripts/databricks/promo_social_job.yml`) runs in this order:
+Upload the workbook to `/Volumes/ust_databricks/social/promo_landing/`, then open the
+job `ust-promo-social-match` (`scripts/databricks/promo_social_job.yml`) and click
+**Run now** — it is started by hand, not by the upload. It runs in this order:
 load → dbt → draft terms → dbt → match social → dbt → YouTube → dbt (with all promo tests)
 → export. The workbook lands in `/Volumes/ust_databricks/social/promo_output/`. Then do
 the TikTok step.

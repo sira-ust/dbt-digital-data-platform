@@ -1,8 +1,12 @@
 # The monthly promo x social match job (models/docs/_promo_social.md).
 #
-# TRIGGER: a promo workbook landing in /Volumes/ust_databricks/social/promo_landing/.
-# Drop "UST <YYYY> <MON> NEW PROMO.xlsx" there and the whole chain runs; the
-# finished workbook appears in /Volumes/ust_databricks/social/promo_output/.
+# RUN BY HAND, once a month: upload "UST <YYYY> <MON> NEW PROMO.xlsx" to
+# /Volumes/ust_databricks/social/promo_landing/, then Run now. The finished workbook
+# appears in /Volumes/ust_databricks/social/promo_output/.
+# No file-arrival trigger: on 2026-10-07 it could not start ("Failed to provision file
+# events resources", Azure 403 — the workspace identity lacks the Event Grid / queue
+# roles on the volume's storage account). Re-add one only after an Azure admin grants
+# those roles; nothing else in the job depends on how it is started.
 # TikTok is NOT a task: it is a manual pass in Claude in Chrome over that workbook
 # (scripts/prompts/tiktok_promo_search.md), because TikTok offers a for-profit
 # company no search API.
@@ -33,12 +37,6 @@ resources:
   jobs:
     ust_promo_social_match:
       name: ust-promo-social-match
-      trigger:
-        pause_status: UNPAUSED
-        file_arrival:
-          url: /Volumes/ust_databricks/social/promo_landing/
-          min_time_between_triggers_seconds: 600     # a re-drop within 10 min is one run
-          wait_after_last_change_seconds: 120        # let a large upload finish
       max_concurrent_runs: 1
       tasks:
         # 1. land the workbook (pure from source) + create any missing landing table
