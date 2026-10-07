@@ -45,30 +45,41 @@ Find the item's rows on that sheet. Its **Item No.** matches column B.
   below its last row**.
 - Copy columns A–E (Promo Sheet, Item No., Promo Item, Size, Promo Code) from the item's
   existing row, unchanged.
-- Copy the formatting of the row above: Arial 10, thin grey borders, top-aligned and wrapped.
+- Formatting, copied from the item's existing row: Arial 10, thin grey borders, top-aligned
+  and wrapped, row height 39.75. Every other item is shaded light blue `EEF3F8` so an item's
+  rows read as one block: if the item's row is shaded, shade your new rows the same; if not,
+  leave them unshaded. A row you overwrite from Unmatched stops being grey: use black text.
 
 Fill the other columns like this:
 
 | Column | Value |
 |---|---|
-| F Match Status | `Exact`: bold, green fill `C6EFCE` |
+| F Match Status | `Exact`: bold, dark green text `006100` on green fill `C6EFCE` |
 | G Matched Content Item | the product name as the video writes it. Keep native script and add English in parentheses, e.g. `Trà Vải Cozy (Cozy Lychee Tea)` |
 | H Channel | `TikTok` |
 | I Profile | the creator's handle with the `@`, e.g. `@cozyvietnam`. Add ` (brand)` if it is the brand's own account |
 | J Post Date | `YYYY-MM-DD` if TikTok shows a full date; `YYYY-MM` if it shows only a month; otherwise leave blank |
-| K Views / Engagement | the like count, written out with commas plus a unit: `3,706 likes`. If TikTok shows `3.7K`, open the video for the exact number. If only an abbreviation exists, write `~3.7K likes` |
-| L Caption | the full caption text, hashtags included |
-| M Link | the video's own URL, `https://www.tiktok.com/@handle/video/<id>`, never a search or discover page. Make it a clickable hyperlink, blue `0563C1` and underlined |
-| N Source | `Scraped` |
-| O Match Note | `Brand + product/flavor named in video.` plus any caveat, e.g. pack size differs or it is the powder version |
+| K Views | leave blank (TikTok shows likes, not views) |
+| L Likes | the like count as a **number**, format `#,##0`, right-aligned. If TikTok shows `3.7K`, open the video for the exact number. If only an abbreviation exists, convert it (`3.7K` → `3700`, `1.2M` → `1200000`) |
+| M Approx. Count | `Yes`, centred, only when the Likes number came from an abbreviation; otherwise blank |
+| N Engagement (as shown) | the count as TikTok shows it, with a unit: `3,706 likes`, or `~3.7K likes` for an abbreviation |
+| O Caption | the full caption text, hashtags included |
+| P Link | the text `Open ↗`, hyperlinked to the video's own URL, `https://www.tiktok.com/@handle/video/<id>`, never a search or discover page. Blue `0563C1`, underlined |
+| Q Source | `Scraped` |
+| R Match Note | `Brand + product/flavor named in video.` plus any caveat, e.g. pack size differs or it is the powder version |
 
 ## When you are done
 
-1. Delete the **TikTok Search List** sheet. The finished workbook has exactly two sheets:
-   *Promo vs Social Listening* and *Summary*.
-2. Leave the **Summary** sheet alone. Its formulas recount automatically. Check that its
-   Total "Promo Items" still equals the number of promo items in the footnote. If it is
-   higher, an item still has an `Unmatched` row next to a new `Exact` row; fix that row.
-3. Keep the header row, the freeze at D2, and the filter on the header row.
+1. Delete the **TikTok Search List** sheet. The finished workbook has exactly two sheets,
+   in this order: *Summary* (first) and *Promo vs Social Listening*.
+2. On the **Summary** sheet, leave every formula alone; they recount automatically. Then:
+   - In **Unmatched promo items (no post found)**, delete the rows of items you just
+     matched, so the list keeps only items with no post at all. Keep the grey note under
+     the list.
+   - Check that the Total "Promo Items" (first table) still equals the number of promo
+     items in the footnote. If it is higher, an item still has an `Unmatched` row next to
+     a new `Exact` row; fix that row.
+3. On *Promo vs Social Listening*, keep the header row, the freeze at D2, and the filter on
+   the header row, extended to the last row.
 4. Save as the same file name and give it back to me, with a short list of which items got
    TikTok rows and which you searched but found nothing exact for.
