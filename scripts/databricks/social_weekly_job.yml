@@ -1,0 +1,185 @@
+# The weekly social-listening job — trends board with staying power (2026-10).
+# models/docs/_social_windows.md explains every step; README "Social pipeline run order".
+#
+# ORDER MATTERS: every LLM step writes a table the next dbt step reads, and dbt itself
+# never calls the LLM. Each LLM step SKIPS work already done, so a normal week costs only
+# what is new:
+#   enrich_mentions       new posts only
+#   canonicalize          new names only (plus, once, the 177 names of the three 2026-10-05
+#                         batches answered one line off — read_misaligned finds them)
+#   canonicalize --consolidate        only look-alike groups holding a product new since
+#                                     the last run (it leaves a checkpoint row)
+#   canonicalize --profile-products   new products only
+#   resolve_trending_concepts         board products not yet resolved
+#
+# FIRST RUN after the 2026-10 change: upload the locally-produced AI results FIRST, from
+# a laptop, so this job finds them done instead of paying for them again:
+#     python scripts/bootstrap_social_ai_results.py --from data/social_bootstrap --confirm
+# Then run this job once on the feature branch (set git_branch below), and on main
+# after the merge. scripts/databricks/job.yml (the daily job) keeps `--exclude tag:social`.
+#
+# Every dbt step except the last runs with --indirect-selection cautious: it runs only the
+# tests whose models were ALL built in that step. A test reading a model a LATER step
+# builds would otherwise run early and fail on a table that does not exist yet (it did on
+# the first run, 2026-10-06). The final dbt_social step runs every test.
+#
+# The run-as identity needs: model-serving access (enrich, canonicalize, resolve) and
+# write on ust_databricks.social (the scripts create concept_canon / product_profile
+# with `create table if not exists` on first use).
+
+resources:
+  jobs:
+    dbt_social_mentions_weekly_job:
+      name: dbt social_mentions weekly job       # job 516307499975793; run by hand after each weekly drop
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: parse
+          spark_python_task:
+            python_file: scripts/databricks/parse_mentions.py
+            source: GIT
+          environment_key: py-default
+
+        - task_key: dbt_stg
+          depends_on: [{task_key: parse}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select stg_mentionlytics__mentions stg_mentionlytics__mention_enrichment --indirect-selection cautious
+            warehouse_id: e165fed86011619a
+            catalog: ust_databricks
+            schema: social
+            source: GIT
+          environment_key: dbt-default
+
+        - task_key: enrich
+          depends_on: [{task_key: dbt_stg}]
+          spark_python_task:
+            python_file: scripts/enrich_mentions.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: py-default
+
+        # every extracted name, cleaned, ALL history
+        - task_key: dbt_names
+          depends_on: [{task_key: enrich}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select +int_social_concept_mentions --indirect-selection cautious
+            warehouse_id: e165fed86011619a
+            catalog: ust_databricks
+            schema: social
+            source: GIT
+          environment_key: dbt-default
+
+        - task_key: canonicalize
+          depends_on: [{task_key: dbt_names}]
+          spark_python_task:
+            python_file: scripts/canonicalize_concepts.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: py-default
+
+        - task_key: dbt_products
+          depends_on: [{task_key: canonicalize}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select stg_mentionlytics__concept_canon int_social_concept_canon --indirect-selection cautious
+            warehouse_id: e165fed86011619a
+            catalog: ust_databricks
+            schema: social
+            source: GIT
+          environment_key: dbt-default
+
+        - task_key: consolidate
+          depends_on: [{task_key: dbt_products}]
+          spark_python_task:
+            python_file: scripts/canonicalize_concepts.py
+            parameters: ["--backend", "databricks", "--consolidate"]
+            source: GIT
+          environment_key: py-default
+
+        - task_key: dbt_products_merged
+          depends_on: [{task_key: consolidate}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select stg_mentionlytics__concept_canon int_social_concept_canon --indirect-selection cautious
+            warehouse_id: e165fed86011619a
+            catalog: ust_databricks
+            schema: social
+            source: GIT
+          environment_key: dbt-default
+
+        - task_key: label_products
+          depends_on: [{task_key: dbt_products_merged}]
+          spark_python_task:
+            python_file: scripts/canonicalize_concepts.py
+            parameters: ["--backend", "databricks", "--profile-products"]
+            source: GIT
+          environment_key: py-default
+
+        # the board the resolver gates on
+        - task_key: dbt_board
+          depends_on: [{task_key: label_products}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select stg_mentionlytics__product_profile seed_social_product_overrides int_social_product_labels int_social_concept_trends int_social_trend_board --indirect-selection cautious
+            warehouse_id: e165fed86011619a
+            catalog: ust_databricks
+            schema: social
+            source: GIT
+          environment_key: dbt-default
+
+        - task_key: resolve
+          depends_on: [{task_key: dbt_board}]
+          spark_python_task:
+            python_file: scripts/resolve_trending_concepts.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: py-default
+
+        # everything social, with every test
+        - task_key: dbt_social
+          depends_on: [{task_key: resolve}]
+          dbt_task:
+            project_directory: ""
+            commands:
+              - dbt deps
+              - dbt build --select tag:social
+            warehouse_id: e165fed86011619a
+            catalog: ust_databricks
+            schema: social
+            source: GIT
+          environment_key: dbt-default
+
+      git_source:
+        git_url: https://github.com/sira-ust/dbt-digital-data-platform.git
+        git_provider: gitHub
+        git_branch: main            # feat/social_trending_staying_power until the PR is merged
+      queue:
+        enabled: true
+      environments:
+        - environment_key: dbt-default
+          spec:
+            dependencies:
+              - dbt-databricks>=1.0.0,<2.0.0
+            environment_version: "5"
+        - environment_key: py-default
+          spec:
+            dependencies:
+              - openpyxl
+              - anthropic
+              - databricks-sdk
+              - pandas
+              - PyYAML
+            environment_version: "5"
+
+      performance_target: PERFORMANCE_OPTIMIZED

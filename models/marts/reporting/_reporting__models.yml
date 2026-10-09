@@ -692,10 +692,43 @@ models:
                 values: ['dish', 'item']
       - name: is_top_n
         description: >
-          True for the weeks this concept was actually within social_trend_top_n of
-          its class. False rows exist so a trajectory has no holes — filter on this
-          for the board, ignore it for a chart.
+          True for the weeks this product was ON THE BOARD (int_social_trend_board's
+          is_on_board): in the top social_trend_top_n by faded score, entering through
+          the fast lane, or staying on after recently entering. False rows exist so a
+          trajectory has no holes — filter on this for the board, ignore it for a chart.
         tests: [not_null]
+      - name: board_rank
+        description: >
+          1..N position on the board that week; null off the board. Every shelf product
+          (is_shelf_product) is ranked before every generic one, each by faded score.
+      - name: scope_rank
+        description: Rank within the product's own scope — on the item board among shelf products alone, or among generic ones (filter is_shelf_product and sort by this for the stockable-products view); on the dish board, which ranks on buzz alone, the same as board_rank.
+      - name: product_type
+        description: branded / shelf / generic, from stg_mentionlytics__product_profile; null until the product is labelled (it then ranks as generic).
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['branded', 'shelf', 'generic']
+      - name: brand
+        description: The product's brand when product_type = branded — what promo matching links on.
+      - name: is_shelf_product
+        description: True for branded and shelf products — things someone can stock.
+        tests: [not_null]
+      - name: top_variants
+        description: >
+          "Which Pepsi? which Magnum?" — up to social_trend_variant_count related products
+          with their posts over the last social_trend_variant_window_weeks, e.g.
+          'pepsi dubai chocolate (10)'. Same brand for a branded product; a longer name
+          containing its whole name otherwise. Null when nothing related was posted.
+      - name: board_status
+        description: new / rising / steady / cooling while on the board; null off it.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['new', 'rising', 'steady', 'cooling']
+          - not_null:
+              config:
+                where: "is_top_n"
       - name: week_end
         description: Last day of the calendar week (week_start + 6).
         tests: [not_null]
@@ -720,11 +753,14 @@ models:
           per window, so a concept excluded as a repeat_poster in one week has no
           rank there while still having a trajectory.
         tests:
+          # every week WITH posts has a rank (unless excluded as a repeat_poster); a
+          # product can now sit on the board through a quiet week, so is_top_n alone
+          # no longer implies a weekly rank
           - not_null:
               config:
-                where: "is_top_n"
+                where: "mention_count is not null and author_quality <> 'repeat_poster'"
       - name: mention_count
-        description: Distinct food-relevant, non-spam mentions behind the trend THAT WEEK.
+        description: Distinct food-relevant, non-spam mentions behind the trend THAT WEEK; null on a week the product had no posts.
       - name: subject_mentions
         description: >
           Of mention_count, how many posts are ABOUT this concept rather than merely

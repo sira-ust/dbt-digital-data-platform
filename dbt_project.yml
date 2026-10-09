@@ -285,6 +285,33 @@ vars:
   social_trend_top_n: 20             # trending items the mart shows PER CLASS PER WEEK
   social_trend_min_mentions: 2       # noise floor, per concept per WEEK. Bites harder at a 7-day
                                      # grain than a multi-week one: expect gaps in trajectories
+  # ── STAYING POWER: int_social_trend_board (models/docs/_social_windows.md) ──
+  # Backtested 2026-10-05 on the real corpus: at these settings item-board churn fell
+  # from 63% to ~17% a week, the board holds ~28 items, and an item stays ~4.5 weeks
+  # once on (was 1.6). A looser stay rule (top 40, 4-week window) froze it at 9% churn.
+  social_trend_fade_half_life_weeks: 2    # buzz counts 100%, ~71%, 50%, ~35%, 25% over the weeks
+                                          # after it; a spike trails off over ~3-4 weeks
+  social_trend_stay_window_weeks: 3       # a product that got on within this many weeks may stay...
+  social_trend_stay_rank: 25              # ...while still in this top-N by faded score...
+  social_trend_quiet_weeks_to_drop: 4     # ...and had posts within this many NORMAL weeks
+  # the GENERAL scope (generic categories, commodities, dishes, unlabelled products) has
+  # its own, smaller slots and is always listed after the shelf scope — see
+  # int_social_trend_board's TWO SCOPES note
+  social_trend_generic_top_n: 8          # with ~25-30 shelf products, keeps the board near 40
+  social_trend_generic_stay_rank: 10
+  # int_social_product_variants: "which Pepsi?" — a board product's related products
+  social_trend_variant_window_weeks: 4   # posts counted over this many weeks ending at the row's week
+  social_trend_variant_count: 5          # related products listed per board row
+  social_trend_low_coverage_ratio: 0.4    # a week under 40% of the median post count is a data hole
+                                          # (quota out, keyword change), not a quiet week
+  social_trend_coverage_baseline_weeks: 4 # ...the median of the previous N weeks, so a lasting drop becomes the norm
+  social_trend_max_paused_weeks: 2        # low weeks in a row that pause the fade; after that products fade again
+  social_trend_rising_recent_weeks: 4     # Rising list: average share over the last N normal weeks...
+  social_trend_rising_baseline_weeks: 8   # ...vs the N normal weeks before them
+  social_trend_rising_min_baseline_weeks: 4  # a baseline needs at least this many normal weeks
+  social_trend_rising_min_growth: 2.0     # at least 2x its own baseline (a staple sits near 1x)
+  social_trend_rising_min_mentions: 4     # recent window floors, so 1 -> 3 posts never qualifies
+  social_trend_rising_min_authors: 3
   social_trend_link_count: 5         # source_links per concept-week, top links by reach then engagement
   social_resolve_min_confidence: 0.7 # below this, ANY match (carried/substitute/basket) is suppressed
   social_carried_skus_max: 200       # RUNAWAY GUARD only — the SKU list is not meant to truncate
@@ -496,6 +523,16 @@ seeds:
         language: string
         reason: string
         is_active: boolean
+
+    # A person's corrections to the LLM's product labels (int_social_product_labels).
+    # A blank product_type or brand keeps the LLM's value for that field.
+    seed_social_product_overrides:
+      +tags: ["social", "reference"]
+      +column_types:
+        product_key: string
+        product_type: string
+        brand: string
+        note: string
 
     # Disabled: these decode the LEGACY two-tier tracking/activity streams,
     # whose staging/int/mart models were removed 2026-07-08 (superseded by the

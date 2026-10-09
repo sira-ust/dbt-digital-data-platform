@@ -192,3 +192,35 @@ models:
           databricks-claude-haiku-4-5/v5). A '-noverify' suffix marks a smoke-test
           row written without the review pass; those never pass as verified and are
           re-resolved on the next normal run.
+
+  - name: stg_mentionlytics__concept_canon
+    description: >
+      Lossless staging for the canonical-product map (scripts/canonicalize_concepts.py).
+      One row per (concept_class, concept_norm) — latest row at the highest prompt
+      version wins. The product-level decisions (key, board, display name) are made in
+      int_social_concept_canon, not here.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [concept_class, concept_norm]
+    columns:
+      - name: canonical_class
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['item', 'dish']
+
+  - name: stg_mentionlytics__product_profile
+    description: >
+      One label per canonical product (latest at the highest prompt version):
+      product_type branded / shelf / generic, and the brand. Read by
+      int_social_trend_board to rank stockable products ahead of generic categories.
+    columns:
+      - name: product_key
+        tests: [unique, not_null]
+      - name: product_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['branded', 'shelf', 'generic']

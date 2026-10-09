@@ -981,6 +981,106 @@ models:
           arguments:
             expression: "times_purchased > 0"
 
+  # ── social staying power (models/docs/_social_windows.md) ────────────────
+  - name: int_social_concept_mentions
+    description: >
+      One row per (mention, class, name) for every dish / product name a post's
+      enrichment named, cleaned (gloss stripped, folded, stoplist applied) — ALL
+      history. The single home of that cleaning, read by int_social_concept_trends
+      (joined by mention_id) and by scripts/canonicalize_concepts.py. Not unique: a
+      post naming a thing twice yields two rows, as the unnest always did.
+    columns:
+      - name: concept_class
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['dish', 'item']
+      - name: concept_norm
+        tests: [not_null]
+
+  - name: int_social_concept_canon
+    description: >
+      The name -> PRODUCT map. Every spelling, script and board a thing was named under
+      resolves to one product_key (the merge key), one product_name (display) and one
+      product_class (item or dish, by its spellings' votes weighted by posts; ties go to
+      item). A name not yet canonicalised has no row, and ranks as itself.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [concept_class, concept_norm]
+    columns:
+      - name: product_key
+        tests: [not_null]
+      - name: product_class
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['dish', 'item']
+      - name: product_mentions
+        description: Posts summed across the product's spellings — an upper bound, since a post naming two spellings counts twice. The board itself counts each post once.
+
+  - name: int_social_trend_board
+    description: >
+      The trending board with staying power: one row per (week, class, product) for
+      every product ever on the board or the Rising list, from its first appearance on,
+      including weeks with no posts. Faded score (social_trend_fade_half_life_weeks) on
+      volume-neutral weekly shares; low-coverage weeks stop the clock; fast lane for new
+      spikes; stay-on rule; new / rising / steady / cooling status; a separate Rising
+      list against each product's own baseline.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, concept_class, concept_norm]
+      # off the board means no rank and no status; on it means both
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "(is_on_board and board_rank is not null and board_status is not null) or (not is_on_board and board_rank is null and board_status is null)"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "not is_rising_candidate or rising_rank is not null"
+    columns:
+      - name: is_on_board
+        tests: [not_null]
+      - name: board_status
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['new', 'rising', 'steady', 'cooling']
+      - name: is_low_coverage
+        description: The feed itself was thin that week (below social_trend_low_coverage_ratio x the median post count of the previous social_trend_coverage_baseline_weeks weeks). Its posts are scaled by the coverage and nothing enters through the fast lane.
+        tests: [not_null]
+      - name: is_fade_paused
+        description: A low-coverage week that also stopped the fade clock — nothing fades and nothing counts as quiet. At most social_trend_max_paused_weeks in a row; after that a lasting drop is the feed's new size and products fade again.
+        tests: [not_null]
+
+  - name: int_social_product_labels
+    description: >
+      One label per canonical product: product_type (branded / shelf / generic) and brand,
+      with seed_social_product_overrides applied over the LLM's label and ONE spelling per
+      brand (brand_key folds "Lay's" / "Lays"; brand is the most-posted spelling).
+    columns:
+      - name: product_key
+        tests: [unique, not_null]
+      - name: product_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['branded', 'shelf', 'generic']
+
+  - name: int_social_product_variants
+    description: >
+      For every product on the board each week, its related products — same brand for a
+      branded product, or a longer name containing its whole name for an unbranded one —
+      with posts over the last social_trend_variant_window_weeks. Deterministic; an evidence
+      list ("which Pepsi?"), not a hierarchy anything is counted against.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, concept_class, concept_norm]
+
   - name: int_rep_period_sales
     description: >
       ONE ROW PER REP PER PERIOD — posted sales money and the target it is
