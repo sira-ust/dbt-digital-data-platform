@@ -656,6 +656,102 @@ KEYED["item_ledger_entry"] = {
     "salesperson_code": [rng.choice(NAV_REPS) for _ in range(NAV_DEFAULT_ROWS)],
 }
 
+# ── salesperson_target: ONE ROW PER REP PER DAY, and the pair is the key ───
+# Generic filler produced 200 random rows and broke all three of this table's
+# invariants at once: duplicate (code, date) pairs, and a daily_target with no
+# relation to the monthly one. Measured in the real source 2026-10-08:
+#   48,944 rows, 24 codes, 2019-01-01..2026-12-31, (code, date) unique
+#   monthly_target non-zero ONLY on the 1st -- 1,418 rows
+#   daily_target == monthly_target / days-in-month, exact to the cent
+#   7,060 rows carry daily_target = 0, which means no goal was set that day
+#
+# THE DATE RANGE REACHES INTO THE FUTURE on purpose. int_rep_period_sales
+# publishes period_target (the whole month, future days included) alongside
+# target_to_date (elapsed only), and the difference between them is the entire
+# point of the model. A mock that stopped at today would make the two columns
+# identical and every test of that distinction would pass vacuously.
+_tgt_days = [(_NOW_D := NOW.date()) + timedelta(days=d) for d in range(-200, 45)]
+_tgt_rows = [(rep, day) for rep in NAV_REPS for day in _tgt_days]
+
+
+def _days_in_month(d) -> int:
+    nxt = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return (nxt - d.replace(day=1)).days
+
+
+# one monthly figure per rep per month, so the daily values are consistent
+# within a month the way NAV's are
+_tgt_monthly = {
+    (rep, day.year, day.month): round(rng.uniform(300_000, 1_500_000), 2)
+    for rep in NAV_REPS for day in _tgt_days
+}
+_tgt_daily = [
+    0.0 if rng.random() < 0.145          # the measured share with no goal set
+    else round(_tgt_monthly[(rep, day.year, day.month)] / _days_in_month(day), 2)
+    for rep, day in _tgt_rows
+]
+ROWCOUNTS["salesperson_target"] = len(_tgt_rows)
+KEYED["salesperson_target"] = {
+    "salesperson_code": [r for r, _ in _tgt_rows],
+    "target_date": [datetime(d.year, d.month, d.day) for _, d in _tgt_rows],
+    "daily_target": _tgt_daily,
+    # non-zero ONLY on the 1st, exactly as NAV fills it
+    "monthly_target": [
+        _tgt_monthly[(rep, day.year, day.month)] if day.day == 1 else 0.0
+        for rep, day in _tgt_rows
+    ],
+    # ABANDONED IN THE REAL SOURCE -- non-zero only in 2019, zero for seven
+    # years since. Emitted as zero so staging's decision to drop the columns is
+    # exercised against what production actually holds.
+    "last_year_sales": [0.0 for _ in _tgt_rows],
+    "last_year_sales_month": [0.0 for _ in _tgt_rows],
+}
+
+# ── sales_person_margin_history: ONE ROW PER POSTED DOCUMENT ──────────────
+# Measured 2026-10-08: 61,997 rows, document_no UNIQUE, document_type only ever
+# 0 or 1, 5,677 credit memos (9.2%). Generic filler gave 23 duplicate document
+# numbers and 87 rows with a document_type outside {0, 1}.
+#
+# CREDIT MEMO AMOUNTS ARE POSITIVE HERE, as NAV stores them -- the sign comes
+# from document_type and staging is what applies it. A mock that pre-signed
+# them would never exercise that.
+#
+# brand <= product <= sales, because sales carries freight, CRV and pallet
+# charges that product does not. The gap is what makes brand-over-sales and
+# brand-over-product differ, which is the distinction the mart publishes both
+# figures to keep visible.
+_mh_n = 600
+_mh_docs = [f"MH{i:07d}" for i in range(_mh_n)]
+_mh_type = [1 if rng.random() < 0.092 else 0 for _ in _mh_docs]
+_mh_product = [round(rng.uniform(200, 60_000), 2) for _ in _mh_docs]
+# charges on roughly a quarter of documents, matching the measured share where
+# sales and product diverge
+_mh_sales = [round(p + (rng.uniform(20, 900) if rng.random() < 0.26 else 0.0), 2)
+             for p in _mh_product]
+_mh_brand = [round(p * rng.uniform(0.05, 0.95), 2) for p in _mh_product]
+ROWCOUNTS["sales_person_margin_history"] = _mh_n
+KEYED["sales_person_margin_history"] = {
+    "document_no": _mh_docs,
+    "document_type": _mh_type,
+    "sales_person_code": [rng.choice(NAV_REPS) for _ in _mh_docs],
+    "customer_no": [rng.choice(NAV_CUSTOMERS) for _ in _mh_docs],
+    # spread across two years so the mart's prior-year self-join has something
+    # on both sides of the boundary
+    "posting_date": [datetime.combine(NOW.date() - timedelta(days=rng.randint(0, 700)),
+                                      datetime.min.time())
+                     for _ in _mh_docs],
+    "sales_amount": _mh_sales,
+    "cost_amount": [round(s * rng.uniform(0.70, 0.95), 2) for s in _mh_sales],
+    "brand_sales_amount": _mh_brand,
+    "product_sales_amount": _mh_product,
+    # 0-1 SCALE, not 0-100, and over PRODUCT sales -- NAV's own denominator
+    "brand_pct": [round(b / p, 2) for b, p in zip(_mh_brand, _mh_product)],
+    "invoice_margin_pct": [round(rng.uniform(-0.05, 0.35), 4) for _ in _mh_docs],
+    "brand_below_target": [1 if b / p < 0.60 else 0
+                           for b, p in zip(_mh_brand, _mh_product)],
+    "invoice_margin_below_target": [1 if rng.random() < 0.5 else 0 for _ in _mh_docs],
+}
+
 
 def load_snapshot() -> dict[str, dict[str, list[tuple[str, str]]]]:
     schemas: dict[str, dict[str, list[tuple[str, str]]]] = {}

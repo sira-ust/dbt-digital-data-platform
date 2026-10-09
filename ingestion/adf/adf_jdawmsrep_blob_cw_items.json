@@ -321,6 +321,26 @@
   },
   {
     "source": {
+      "table": "[U_S_ Trading Co_$Salesperson Target]",
+      "loadStrategy": "full",
+      "query": "SELECT [Date] AS target_date, [Salesperson Code] AS salesperson_code, [Daily Target] AS daily_target, [Monthly Target] AS monthly_target, [Last Year Sales] AS last_year_sales, [Last Year Sales Month] AS last_year_sales_month FROM dbo.[U_S_ Trading Co_$Salesperson Target]"
+    },
+    "destination": {
+      "fileName": "nav_salesperson_target"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Person Margin History]",
+      "loadStrategy": "full",
+      "query": "SELECT [Document No_] AS document_no, [Posting Date] AS posting_date, [Sales Person Code] AS sales_person_code, [Customer No_] AS customer_no, [Document Type] AS document_type, [Sales ($)] AS sales_amount, [Cost Amount] AS cost_amount, [Brand Sales Amount] AS brand_sales_amount, [Product Sales Amount] AS product_sales_amount, [Brand %] AS brand_pct, [Brand < 60%] AS brand_below_target, [Invoice Margin %] AS invoice_margin_pct, [Invoice Margin < 13%] AS invoice_margin_below_target FROM dbo.[U_S_ Trading Co_$Sales Person Margin History]"
+    },
+    "destination": {
+      "fileName": "nav_sales_person_margin_history"
+    }
+  },
+  {
+    "source": {
       "table": "[U_S_ Trading Co_$Item Ledger Entry]",
       "loadStrategy": "append_query",
       "query": "SELECT [Entry No_] AS entry_no, [Item No_] AS item_no, [Posting Date] AS posting_date, [Source No_] AS source_no, [Location Code] AS location_code, [Quantity] AS quantity, [Invoiced Quantity] AS invoiced_quantity, [Unit of Measure Code] AS unit_of_measure_code, [Item Category Code] AS item_category_code, [Product Group Code] AS product_group_code, [Salesperson Code] AS salesperson_code, [Shipment Date] AS shipment_date, [Customer City] AS customer_city, [Customer State] AS customer_state FROM dbo.[U_S_ Trading Co_$Item Ledger Entry]"

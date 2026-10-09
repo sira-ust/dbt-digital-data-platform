@@ -1194,3 +1194,113 @@ sources:
             description: "Customer state, denormalised."
           - name: loaddate
             description: "Ingestion watermark — pipeline run time (full load)."
+
+      - name: salesperson_target
+        description: >
+          THE REP'S NUMBER. One row per salesperson per calendar date,
+          2019-01-01 to 2026-12-31, 24 codes. The only source in the warehouse
+          for what a rep is supposed to sell — nothing else states a goal.
+
+          TWO QUIRKS, both benign once known. monthly_target is populated ONLY
+          on the 1st of each month and is 0 on every other day (1,418 of 48,944
+          rows carry it). daily_target is populated throughout AND equals
+          monthly_target divided by the days in that month, exactly — October
+          2026 is 34,838.71 x 31 = 1,080,000.00 for rep 032, and the same holds
+          company-wide. So a period target is the SUM OF daily_target over the
+          period's dates, which prorates correctly for a week or a part-month
+          and never needs the 1st-of-month row.
+
+          LAST YEAR IS DEAD HERE. last_year_sales is > 0 on 2,750 rows, ALL of
+          them in 2019, and last_year_sales_month on 134, likewise all 2019.
+          Zero in every year since. The columns are not ingested; prior-year
+          comparison is computed from sales_person_margin_history instead, which
+          holds real money from 2025-01-02.
+        config:
+          external_location: "read_parquet('data/mock/navrep/salesperson_target.parquet')"
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: target_date
+            description: "The calendar day the row is for. NAV's [Date]; renamed because `date` is reserved in Spark SQL."
+          - name: salesperson_code
+            description: "Rep the target belongs to. Same code space as dim_reps.sales_code. 20 of 24 codes have a dim_reps row; 009, 020, 023 and 027 do not."
+          - name: daily_target
+            description: "Dollar target for this day. Populated throughout, and equal to monthly_target / days-in-month. SUM THIS over a period to get the period's target."
+          - name: monthly_target
+            description: "Dollar target for the whole month, carried ONLY on the 1st and 0 on every other day. Prefer summing daily_target."
+          - name: last_year_sales
+            description: "ABANDONED — non-zero only in 2019. Not ingested."
+          - name: last_year_sales_month
+            description: "ABANDONED — non-zero on 134 rows, all 2019. Not ingested."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."
+
+      - name: sales_person_margin_history
+        description: >
+          REAL MONEY, PER DOCUMENT, PER REP — and the only place in this
+          warehouse that has it going back a year. One row per posted document,
+          61,997 rows, 2025-01-02 to 2026-10-07, $313.4M of invoiced sales
+          across 2,342 customers.
+
+          WHY IT MATTERS: sales_invoice_line carries an amount only from
+          2026-09-20 (19,654,620 of 19,696,349 lines are null and stay null), so
+          every dollar question reaching further back than three weeks has no
+          other source. Measured 2025-10: 10 of 130,188 invoice lines had an
+          amount; this table had all 2,715 documents for the same month.
+
+          COVERAGE IS EXACT where it exists: every month from 2025-01 matches
+          the posted invoice headers 1:1 (2,764/2,764 in Jan 2025,
+          2,715/2,715 in Oct 2025, 2,776/2,776 in Sep 2026). 56,149 of its
+          56,320 invoice documents tie back to a real invoice header; 171 (0.3%)
+          do not and are unexplained.
+
+          THE FLOOR IS 2025-01-02. Year-over-year works for any month in 2026
+          and will keep improving; anything earlier has no prior year.
+
+          PERCENTAGES ARE 0-1, NOT 0-100. brand_pct averages 0.5492 and
+          invoice_margin_pct 0.1181 — that is 55% and 11.8%. The paired flags
+          name the company thresholds: brand under 60%, invoice margin under
+          13%, which are stated nowhere else in the warehouse.
+
+          BRAND % DIVIDES BY PRODUCT SALES, NOT TOTAL SALES. NAV's brand_pct
+          matches brand_sales_amount / product_sales_amount on 50,572 of 50,620
+          rows (99.9%) and brand_sales_amount / sales_amount on 37,407 (74%).
+          The two agree only when a document carries no freight, CRV or pallet
+          charge — sales_amount = product_sales_amount on 40,409 of 54,805 rows,
+          average gap $222. The business asked for brand as a share of SALES, so
+          that is what the mart publishes; NAV's own figure is carried beside it.
+        config:
+          external_location: "read_parquet('data/mock/navrep/sales_person_margin_history.parquet')"
+          loaded_at_field: loaddate
+          freshness:
+            warn_after: {count: 48, period: hour}
+        columns:
+          - name: document_no
+            description: "Posted document number — the grain, one row each. Joins to sales_invoice_header.document_no for document_type = 0."
+          - name: posting_date
+            description: "Posting date of the document. NAV's clock, not the event log's."
+          - name: sales_person_code
+            description: "Rep credited. NAV spells this column 'Sales Person Code' (two words, varchar 20) unlike every other table's 'Salesperson Code'. Same code space; 19 of 21 match dim_reps."
+          - name: customer_no
+            description: "Account the document was raised against. Joins to customer.customer_no."
+          - name: document_type
+            description: "0 = invoice (56,320 rows, +$313.4M), 1 = credit memo (5,677 rows, -$1.2M). Staging signs credit memos negative so they net."
+          - name: sales_amount
+            description: "NAV's [Sales ($)] — total invoiced value INCLUDING freight, CRV and pallet charges. Populated on 57,946 of 61,997 rows."
+          - name: cost_amount
+            description: "Cost of the document. Populated on 56,100 rows."
+          - name: brand_sales_amount
+            description: "Value of own-brand product on the document. Populated on 52,129 rows. What 'Brand' means is still undefined anywhere in NAV — the amount exists, the rule behind it does not."
+          - name: product_sales_amount
+            description: "Value of product only, excluding freight and charges. NAV's own brand_pct denominator."
+          - name: brand_pct
+            description: "NAV's own brand share, 0-1, = brand_sales_amount / product_sales_amount. Carried for reconciliation against the mart's brand-over-sales figure."
+          - name: brand_below_target
+            description: "NAV's [Brand < 60%] flag. Names the company brand threshold, which is stated nowhere else."
+          - name: invoice_margin_pct
+            description: "Margin on the document, 0-1. Averages 0.1181."
+          - name: invoice_margin_below_target
+            description: "NAV's [Invoice Margin < 13%] flag. Names the company margin threshold."
+          - name: loaddate
+            description: "Ingestion watermark — pipeline run time (full load)."

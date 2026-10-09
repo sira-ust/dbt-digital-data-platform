@@ -1080,3 +1080,100 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [week_start, concept_class, concept_norm]
+
+  - name: int_rep_period_sales
+    description: >
+      ONE ROW PER REP PER PERIOD — posted sales money and the target it is
+      measured against, on one spine and one clock. Raw measures only; every
+      ratio, projection and prior-year figure is built in mart_rep_period_sales
+      so a percentage is defined in exactly one place.
+
+      TWO TARGET COLUMNS AND THE DIFFERENCE IS THE POINT. period_target is the
+      FULL period including days that have not happened; target_to_date covers
+      only days up to as_of_date. Dividing by the first says how much of the
+      month is done, by the second whether the rep is ahead today. On the 8th of
+      a month they differ by about four times.
+
+      Targets are summed from daily_target, never read from monthly_target.
+
+      THE CLOCK IS THIS FEED'S OWN — the newest posting_date in the margin
+      history, a third leading edge distinct from rep_log_today() and
+      nav_posted_today().
+
+      A rep with a target and NO sales in a period IS published, with zero
+      sales. That row is the entire point of the table. Periods before a rep's
+      first document or first target are absent rather than zero-filled.
+    columns:
+      - name: sales_code
+        description: Rep. From either feed — a code may have targets without sales, or the reverse.
+        tests: [not_null]
+      - name: period_type
+        description: day / week / month / quarter / year. ALWAYS FILTER ON THIS.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['day', 'week', 'month', 'quarter', 'year']
+      - name: period_start
+        description: First day of the period.
+        tests: [not_null]
+      - name: period_end
+        description: Last day of the period.
+        tests: [not_null]
+      - name: as_of_date
+        description: Newest posting_date on this feed. The contract — read it first.
+        tests: [not_null]
+      - name: is_current
+        description: Whether as_of_date falls inside this period.
+        tests: [not_null]
+      - name: sales_amount
+        description: Posted sales, net of credit memos. Zero where the rep sold nothing.
+      - name: cost_amount
+        description: Cost, net of credit memos.
+      - name: brand_sales_amount
+        description: Own-brand value, net.
+      - name: product_sales_amount
+        description: Product-only value, net. Excludes freight and charges.
+      - name: document_count
+        description: Documents posted in the period.
+      - name: credit_memo_count
+        description: How many of those were credit memos.
+      - name: valued_document_count
+        description: Documents carrying an amount. Equal to document_count means full coverage.
+      - name: accounts_sold
+        description: Distinct accounts billed. Computed per period type, so it does not double-count across weeks.
+      - name: last_posting_date
+        description: Newest document in this period for this rep.
+      - name: period_target
+        description: The FULL period's target. NULL where no goal was set.
+      - name: target_to_date
+        description: Target for the days up to as_of_date. The pace denominator.
+      - name: target_days
+        description: Days in the period carrying a target.
+      - name: target_days_elapsed
+        description: How many of those have happened.
+      - name: has_target
+        description: Whether a target exists for this rep and period.
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [sales_code, period_type, period_start]
+      # elapsed can never exceed the whole period
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "target_days_elapsed <= target_days"
+      # a period on the spine has started
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "period_start <= as_of_date"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "period_start <= period_end"
+      # value coverage cannot exceed the documents it is drawn from
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "valued_document_count <= document_count"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "credit_memo_count <= document_count"

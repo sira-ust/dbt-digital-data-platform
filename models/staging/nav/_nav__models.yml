@@ -650,3 +650,103 @@ models:
         description: Total pallets.
       - name: loaded_at
         description: Ingestion watermark.
+
+  - name: stg_nav__salesperson_targets
+    description: >
+      ONE ROW PER REP PER CALENDAR DAY — the rep's number, and the only
+      statement of one anywhere in this warehouse. 2019-01-01 to 2026-12-31.
+
+      READ daily_target, NOT monthly_target. monthly_target is populated only on
+      the 1st of each month (1,418 of 48,944 rows) and reads 0 on every other
+      day, which is an absence rather than a goal of zero. daily_target is
+      populated throughout and equals monthly_target / days-in-month exactly, so
+      a period's target is the SUM of daily_target over its dates — which
+      prorates a part-week or part-month correctly and needs no special case.
+
+      last_year_sales is NOT ingested: NAV has the columns and abandoned them
+      after 2019. Prior-year comparison comes from the margin history instead.
+    columns:
+      - name: target_date
+        description: The calendar day this target is for.
+        tests: [not_null]
+      - name: sales_code
+        description: Rep the target belongs to. Same code space as dim_reps.sales_code.
+        tests: [not_null]
+      - name: daily_target
+        description: >
+          Dollar target for the day. NULL where NAV carried 0, which means no
+          goal was set for that rep that day — 7,109 of 48,944 rows.
+      - name: monthly_target_on_first
+        description: Whole-month target, present only on the 1st. Reconciliation only.
+      - name: has_target
+        description: Whether a real target was set for this rep on this day.
+        tests: [not_null]
+      - name: loaded_at
+        description: Ingestion watermark.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [sales_code, target_date]
+
+  - name: stg_nav__sales_person_margin_history
+    description: >
+      ONE ROW PER POSTED DOCUMENT, with the money on it — the only dollar
+      history in this warehouse that reaches back a year. 2025-01-02 onward,
+      $313.4M across 2,342 accounts.
+
+      sales_invoice_line carries an amount only from 2026-09-20 and 19.65M of
+      its 19.70M rows are null forever, so anything asking what a rep sold more
+      than three weeks ago has no other source. Coverage is 1:1 with posted
+      invoice headers every month from 2025-01.
+
+      CREDIT MEMOS ARE SIGNED NEGATIVE here. NAV stores them positive and
+      expects the reader to know the sign from document_type; flipping it in
+      staging means SUM() nets without the consumer having to remember.
+
+      PERCENTAGES ARE 0-1, not 0-100, and are NAV's own — not recomputed.
+    columns:
+      - name: document_no
+        description: Posted document number. The grain.
+        tests: [not_null, unique]
+      - name: posting_date
+        description: NAV posting date. This feed's clock.
+        tests: [not_null]
+      - name: sales_code
+        description: >
+          Rep credited. NAV spells the source column 'Sales Person Code' here
+          and 'Salesperson Code' everywhere else; renamed to the house spelling.
+      - name: customer_key
+        description: Account the document was raised against.
+      - name: document_type
+        description: 0 = invoice, 1 = credit memo.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: is_credit_memo
+        description: Whether this document is a credit memo.
+        tests: [not_null]
+      - name: sales_amount
+        description: >
+          Total invoiced value INCLUDING freight, CRV and pallet charges,
+          signed negative on a credit memo. NULL where NAV exported none.
+      - name: cost_amount
+        description: Cost of the document, signed.
+      - name: brand_sales_amount
+        description: Own-brand product value, signed. What 'Brand' means is undefined in NAV.
+      - name: product_sales_amount
+        description: Product-only value, signed. Excludes freight and charges.
+      - name: brand_pct_nav
+        description: NAV's own brand share, 0-1, = brand / PRODUCT sales. For reconciliation.
+      - name: invoice_margin_pct_nav
+        description: NAV's own margin on the document, 0-1.
+      - name: brand_below_target
+        description: NAV's [Brand < 60%] flag — the only record of the company brand threshold.
+      - name: invoice_margin_below_target
+        description: NAV's [Invoice Margin < 13%] flag — the only record of the margin threshold.
+      - name: has_value
+        description: Whether an amount was exported for this document.
+        tests: [not_null]
+      - name: loaded_at
+        description: Ingestion watermark.

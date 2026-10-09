@@ -2261,3 +2261,189 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "not returns_over_threshold or return_rate_is_measurable"
+
+  - name: mart_rep_period_sales
+    description: >
+      ONE ROW PER REP PER PERIOD — posted sales dollars, the target, and last
+      year. This is the table that answers "Am I going to make my number?".
+
+      THE THIRD REP-PERIOD MART, and the three do not agree about a period on
+      purpose. mart_rep_period_status is ORDERS SUBMITTED from the app event
+      log; mart_rep_period_item_mix is what the month was MADE OF from posted
+      invoice LINES; this is WHAT POSTED IN DOLLARS from NAV's margin history,
+      from 2025-01-02, on its own clock. Join on (sales_code, period_type,
+      period_start) and read each table's own as_of_date. An order keyed on the
+      30th is in March's orders and April's posted sales; neither is wrong.
+
+      Targets live here and not in mart_rep_period_status because that table
+      measures app orders only — dividing them by a sales target would report a
+      rep at 40% while ignoring every phone and email order.
+
+      FOUR WAYS TO BE "AT" A TARGET. pct_of_period_target is how much of the
+      number is done and is small early in a period by construction;
+      pct_of_target_to_date is whether the rep is ahead or behind TODAY and is
+      the one to read out, where 1.0 is exactly on pace; sales_projected and
+      pct_of_target_projected say where they land if nothing changes.
+
+      BRANDED % DIVIDES BY TOTAL SALES, as the business asked. NAV's own figure
+      divides by product sales and is published beside it — the two differ
+      because sales_amount includes freight, CRV and pallet charges. What counts
+      as "Brand" is defined in no NAV table; we can report the share, not
+      explain it.
+
+      PRIOR YEAR IS NULL BEFORE 2026. The feed starts 2025-01-02, so 2026
+      periods have a counterpart and 2025 ones do not. Null, never zero.
+
+      ALWAYS FILTER ON period_type.
+    columns:
+      - name: sales_code
+        description: Rep.
+        tests: [not_null]
+      - name: rep_name
+        description: >
+          NULL for codes NAV uses but the app never issued a login to — 009,
+          020, 023 and 027 among the target codes. Published rather than
+          filtered so a nameless rep is visible instead of absent.
+      - name: period_type
+        description: day / week / month / quarter / year. ALWAYS FILTER ON THIS.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['day', 'week', 'month', 'quarter', 'year']
+      - name: period_start
+        description: First day of the period.
+        tests: [not_null]
+      - name: period_end
+        description: Last day of the period.
+        tests: [not_null]
+      - name: as_of_date
+        description: >
+          This feed's leading edge — the newest posting_date in the margin
+          history. NOT the same date as the other two rep marts. Say it out loud
+          in a spoken answer.
+        tests: [not_null]
+      - name: is_current
+        description: Whether as_of_date falls inside this period.
+        tests: [not_null]
+      - name: pct_period_elapsed
+        description: Share of the period's TARGET DAYS that have happened, 0-1.
+      - name: sales_amount
+        description: Posted sales, net of credit memos. Can legitimately be negative.
+      - name: cost_amount
+        description: Cost, net.
+      - name: gross_profit
+        description: sales_amount - cost_amount.
+      - name: document_count
+        description: Documents posted.
+      - name: credit_memo_count
+        description: How many were credit memos.
+      - name: accounts_sold
+        description: Distinct accounts billed in the period.
+      - name: valued_document_count
+        description: Documents carrying an amount.
+      - name: last_posting_date
+        description: Newest document in the period for this rep.
+      - name: period_target
+        description: The whole period's target. NULL where none was set.
+      - name: target_to_date
+        description: Target for the days that have happened. The pace denominator.
+      - name: has_target
+        description: Whether a target exists.
+        tests: [not_null]
+      - name: target_days
+        description: Days in the period a target was set for.
+      - name: target_days_remaining
+        description: >
+          Days left with a target — "with 9 days left". Counted off TARGET days,
+          not the calendar, so a rep with no target on weekends is not told they
+          have more selling time than they do.
+      - name: sales_still_needed
+        description: >
+          period_target - sales_amount — "you still need $25k". Negative once a
+          rep is past their number, which is the right answer.
+      - name: pct_of_period_target
+        description: sold / whole-period target. How much of the number is done. NOT a verdict early in a period.
+      - name: pct_of_target_to_date
+        description: sold / target for elapsed days. THE ONE TO READ OUT — 1.0 is exactly on pace.
+      - name: sales_projected
+        description: Where the rep lands at the current rate. NULL for a closed period.
+      - name: pct_of_target_projected
+        description: Projected finish as a share of the target. NULL for a closed period.
+      - name: margin_pct
+        description: (sales - cost) / sales, recomputed from summed amounts, 0-1.
+      - name: brand_pct_of_sales
+        description: brand / TOTAL sales, 0-1. The figure the business asked for.
+      - name: brand_pct_of_product_sales
+        description: brand / product sales, 0-1. NAV's own denominator, for reconciliation.
+      - name: brand_sales_amount
+        description: Own-brand value, net.
+      - name: product_sales_amount
+        description: Product-only value, net.
+      - name: brand_below_target
+        description: Whether brand share of sales is under the company's 60% threshold.
+      - name: margin_below_target
+        description: Whether margin is under the company's 13% threshold.
+      - name: prev_year_sales
+        description: >
+          Same rep, same period, one year earlier. NULL before 2026 because the
+          feed starts 2025-01-02 — never zero, since "down 100%" is the wrong
+          answer to "we have no data". Arithmetically correct but commercially
+          misleading for a rep whose book changed hands.
+      - name: prev_year_sales_to_date
+        description: >
+          Last year's sales over the SAME ELAPSED WINDOW — the denominator
+          sales_change_pct_vs_prev_year actually uses. Identical to
+          prev_year_sales for a closed period; very different for one still
+          running, which is the whole reason both are published.
+      - name: sales_change_pct_vs_prev_year
+        description: >
+          Change against the same ELAPSED window last year, not against the
+          whole prior period. NULL where there is no prior year.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [sales_code, period_type, period_start]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "period_start <= period_end"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "period_start <= as_of_date"
+      # a projection only makes sense for a period still running
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "is_current or sales_projected is null"
+      # the pace denominator can never exceed the whole period's target
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "target_to_date is null or period_target is null or target_to_date <= period_target"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "valued_document_count <= document_count"
+      # a ratio only exists where there was something to divide
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "margin_pct is null or sales_amount > 0"
+      # A change percentage cannot exist without a prior-year figure to compute
+      # it from. This replaced an assertion that prev_year_sales is only
+      # populated from 2026 onward -- true of production today, because the
+      # margin feed starts 2025-01-02, but that is a fact about how deep the
+      # feed happens to be and not an invariant of the model. It failed on 350
+      # dev rows the moment the mock generated two years of postings, which is
+      # the test being wrong rather than the data.
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "sales_change_pct_vs_prev_year is null or prev_year_sales_to_date is not null"
+      # a closed period has fully elapsed, so the two prior-year figures agree.
+      # This is what would have caught the month-to-date-vs-full-month error.
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "is_current or prev_year_sales_to_date is null or prev_year_sales is null or abs(prev_year_sales_to_date - prev_year_sales) < 0.01"
+      # NO TEST THAT prev_year_sales_to_date <= prev_year_sales. It looks like
+      # an invariant and is not: credit memos are signed negative, so the part
+      # of a period OUTSIDE the elapsed window can net below zero and the
+      # partial figure legitimately exceeds the whole. Measured in dev — rep
+      # 004's year 2026 row carries 145,777.84 to date against 132,432.95 for
+      # all of 2025, because November and December 2025 netted -13,344.89. The
+      # assertion failed on exactly that row and the data was right.
