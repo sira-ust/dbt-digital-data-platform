@@ -525,3 +525,23 @@ seeds:
         description: Why it's suppressed — in practice commodity / too_broad / unit_or_measure / ambiguous_across_languages.
       - name: is_active
         description: False retires a term without losing the audit row (and records a deliberate "we considered this and left it in").
+
+  - name: seed_social_product_overrides
+    description: >
+      Hand corrections to the LLM's product labels, keyed by product_key (the canonical
+      product's key, e.g. 'tiramisu', 'lays ice cream'). product_type (branded / shelf /
+      generic) and brand override the LLM's when filled; leave either blank to keep the
+      LLM's, and set brand to '-' to remove the LLM's brand. Applied in
+      int_social_product_labels, so the board's shelf-first ranking and the
+      related-variants list both follow it. Review the top of the board after a label
+      run and add a row for anything wrong — far cheaper and more certain than re-labelling.
+      Restaurant and cafe chains are 'generic' with their brand kept: they cannot be
+      stocked, so they must not take the shelf board's places.
+    columns:
+      - name: product_key
+        tests: [unique, not_null]
+      - name: product_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['branded', 'shelf', 'generic']

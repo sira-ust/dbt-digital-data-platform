@@ -379,7 +379,7 @@ def _backfill_cutoff_sql(weeks):
             f"-7 * {int(weeks) - 1}) from {{rel}})")
 
 
-def read_mentions_and_enriched(backend, limit, duckdb_path, backfill_weeks=None):
+def read_mentions_and_enriched(backend, limit, duckdb_path, backfill_weeks=None, relabel_versions=None):
     """Return (list of mention dicts to classify, count already done).
 
     Reads the deduped, cleaned dbt staging model (stg_mentionlytics__mentions) — one
@@ -439,11 +439,35 @@ def read_mentions_and_enriched(backend, limit, duckdb_path, backfill_weeks=None)
         except Exception:
             enriched_ids = set()
 
+    if relabel_versions:
+        enriched_ids -= _ids_latest_at_versions(backend, duckdb_path, relabel_versions)
+
     new = [r for r in rows
            if r["mention_id"] is not None and r["mention_id"] not in enriched_ids]
     if limit:
         new = new[:limit]
     return new, len(enriched_ids)
+
+
+def _ids_latest_at_versions(backend, duckdb_path, versions):
+    """Mentions whose LATEST label was made at one of `versions` (prompt versions,
+    e.g. {"v1", "v2"}). --relabel-versions sends exactly these back to the model,
+    whatever week they are in — a targeted re-label, not a window. Added 2026-10 for
+    the ~1,100 posts still at v1/v2: v1 extracted NO products at all, so those weeks
+    under-count the item board and the Rising list's baseline."""
+    likes = " or ".join(f"model_version like '%/{v}'" for v in sorted(versions))
+    rel = DBX_ENRICHMENT_TABLE if backend == "databricks" else f"read_parquet('{LOCAL_ENRICHMENT_PATH}')"
+    sql = (f"select mention_id from (select mention_id, model_version, row_number() over "
+           f"(partition by mention_id order by enriched_at desc) as rn from {rel}) "
+           f"where rn = 1 and ({likes})")
+    if backend == "databricks":
+        return {r.mention_id for r in _get_spark().sql(sql).collect()}
+    import duckdb
+    con = duckdb.connect(duckdb_path, read_only=True)
+    try:
+        return set(con.sql(sql).df()["mention_id"].tolist())
+    finally:
+        con.close()
 
 
 def write_enrichment(backend, records):
@@ -678,13 +702,17 @@ def to_records(attrs_by_id, enriched_at):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main(backend="local", limit=None, dry_run=False, concurrency=CONCURRENCY,
-         duckdb_path=LOCAL_DUCKDB_PATH, backfill_weeks=None, per_call=None):
+         duckdb_path=LOCAL_DUCKDB_PATH, backfill_weeks=None, per_call=None,
+         relabel_versions=None):
     per_call = MENTIONS_PER_CALL if per_call is None else max(1, int(per_call))
     weeks = BACKFILL_WEEKS if backfill_weeks is None else backfill_weeks
     print(f"re-label window: "
           + (f"last {weeks} weeks (older mentions keep their existing labels)"
              if weeks and int(weeks) > 0 else "ALL history"))
-    mentions, n_enriched = read_mentions_and_enriched(backend, limit, duckdb_path, weeks)
+    if relabel_versions:
+        print(f"also re-labelling every mention whose latest label is {sorted(relabel_versions)}")
+    mentions, n_enriched = read_mentions_and_enriched(backend, limit, duckdb_path, weeks,
+                                                      relabel_versions)
 
     # deterministic pre-filter: label obvious gambling spam without the LLM
     spam = [m for m in mentions if is_prefilter_spam(m)]
@@ -749,6 +777,9 @@ if __name__ == "__main__":
                         f"social_enrich_backfill_weeks). Week-aligned. 0 = all history.")
     p.add_argument("--concurrency", type=int, default=CONCURRENCY,
                    help=f"parallel serving calls (default {CONCURRENCY}); lower if rate-limited")
+    p.add_argument("--relabel-versions", default=None,
+                   help="comma-separated prompt versions (e.g. v1,v2): also re-label every "
+                        "mention whose latest label is one of them, in any week")
     p.add_argument("--dry-run", action="store_true", help="build prompts only; no API call")
     p.add_argument("--duckdb", default=LOCAL_DUCKDB_PATH,
                    help=f"local duckdb build path (default {LOCAL_DUCKDB_PATH})")
@@ -759,4 +790,6 @@ if __name__ == "__main__":
         pass
     main(backend=args.backend, limit=args.limit, dry_run=args.dry_run,
          concurrency=args.concurrency, duckdb_path=args.duckdb,
-         backfill_weeks=args.backfill_weeks, per_call=args.mentions_per_call)
+         backfill_weeks=args.backfill_weeks, per_call=args.mentions_per_call,
+         relabel_versions={v.strip() for v in args.relabel_versions.split(",") if v.strip()}
+                          if args.relabel_versions else None)

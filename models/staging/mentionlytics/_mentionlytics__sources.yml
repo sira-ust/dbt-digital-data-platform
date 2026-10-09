@@ -226,3 +226,55 @@ sources:
             description: When this concept was resolved (dedup tiebreak — latest wins).
           - name: model_version
             description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v5); a '-noverify' suffix marks a smoke-test row written without the review pass.
+
+      - name: concept_canon
+        identifier: "{{ 'concept_canon' if target.type == 'databricks' else 'temp_concept_canon' }}"
+        description: >
+          LLM-assigned CANONICAL PRODUCT for every dish / product name the enrichment has
+          ever extracted, from scripts/canonicalize_concepts.py. dbt only reads this — it
+          never calls the LLM. Keyed by (concept_class, concept_norm), the cleaned name
+          int_social_concept_mentions produces; covers ALL history, not just the board's
+          retained weeks, because promo matching reads all history too. Each name is
+          canonicalised once and kept (append-only; staging keeps the latest row at the
+          highest prompt version), so a name's product never drifts between runs.
+          Merges cross-language and cross-board variants: "ไอติมเลย์" [item], "lays ice
+          cream" [dish] and "lay's ice cream" [item] all -> lay's ice cream. On DuckDB
+          reads the local parquet (create it with `canonicalize_concepts.py --init`); on
+          Databricks the social.concept_canon Delta table, which the script creates if
+          missing.
+        config:
+          external_location: "read_parquet('data/mock/mentionlytics/concept_canon.parquet')"
+        columns:
+          - name: concept_class
+            description: dish / item — the board the NAME came from (its own vote; the product's final class is decided across all its names in int_social_concept_canon).
+          - name: concept_norm
+            description: The cleaned, folded name. Join key to int_social_concept_mentions.concept_norm.
+          - name: concept_text
+            description: One unfolded spelling of the name, as the LLM was shown it.
+          - name: canonical_name
+            description: The product's standard English name as the LLM wrote it, e.g. "lay's ice cream".
+          - name: canonical_class
+            description: This name's vote for the product's board — item (bought ready-made) or dish (cooked or prepared).
+          - name: canonicalized_at
+            description: When the name was canonicalised (dedup tiebreak — latest wins).
+          - name: model_version
+            description: Model + prompt version, e.g. databricks-claude-sonnet-5/v1.
+
+      - name: product_profile
+        identifier: "{{ 'product_profile' if target.type == 'databricks' else 'temp_product_profile' }}"
+        description: >
+          LLM label for every canonical PRODUCT (int_social_concept_canon.product_key),
+          from scripts/canonicalize_concepts.py --profile-products: branded (names a brand
+          or maker), shelf (a specific ready-made product sold in stores, brand or not) or
+          generic (a category, a commodity or a dish), plus the brand. ALL products, not
+          only the board's: promo matching must find a product that never trended. dbt
+          only reads this. Append-only; staging keeps the latest label per product.
+        config:
+          external_location: "read_parquet('data/mock/mentionlytics/product_profile.parquet')"
+        columns:
+          - name: product_key
+            description: Join key to int_social_concept_canon.product_key / int_social_concept_trends.concept_norm.
+          - name: product_type
+            description: branded / shelf / generic.
+          - name: brand
+            description: The brand when product_type = branded, else null.

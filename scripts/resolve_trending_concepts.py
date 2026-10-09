@@ -517,14 +517,28 @@ def _top_concepts_sql(trends_rel, top_n, resolution_rel=None):
     mention_count is max(), not sum(): summing across overlapping trailing windows
     is not a count of anything.
     """
+    # The gate is the weekly top-N PLUS everything on the staying-power board
+    # (int_social_trend_board) that week: a product held on through a quiet week, or
+    # on the board by its faded score, is still on the board a reader sees and needs
+    # its "do we carry it" answer. Measured 2026-10-06: 27 of 43 item-board products
+    # had none, because the gate only read the weekly rank.
+    board_rel = trends_rel.replace("int_social_concept_trends", "int_social_trend_board")
     board = f"""
         select concept_norm,
                max(case when concept_class = 'dish' then 1 else 0 end) as is_dish,
                max(case when concept_class = 'item' then 1 else 0 end) as is_item,
                max(mention_count) as mention_count
-        from {trends_rel}
-        where trend_rank <= {top_n}
-          and week_start = (select max(week_start) from {trends_rel})
+        from (
+            select concept_norm, concept_class, mention_count
+            from {trends_rel}
+            where trend_rank <= {top_n}
+              and week_start = (select max(week_start) from {trends_rel})
+            union all
+            select concept_norm, concept_class, cast(null as int) as mention_count
+            from {board_rel}
+            where is_on_board
+              and week_start = (select max(week_start) from {board_rel})
+        ) as gate
         group by concept_norm
     """
     if not resolution_rel:

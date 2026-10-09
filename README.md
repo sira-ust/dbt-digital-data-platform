@@ -325,8 +325,26 @@ singular-test-vs-DQ-model distinction live in [TESTING.md](TESTING.md).
 
     parse_mentions.py (Databricks)  or  convert_mentionlytics.py (local)
       -> enrich_mentions.py
+      -> dbt build --select +int_social_concept_mentions
+      -> canonicalize_concepts.py                     # every extracted name -> one product
+      -> dbt build --select stg_mentionlytics__concept_canon int_social_concept_canon
+      -> canonicalize_concepts.py --consolidate       # merge near-duplicate products
+      -> dbt build --select stg_mentionlytics__concept_canon int_social_concept_canon
+      -> canonicalize_concepts.py --profile-products  # branded / shelf / generic + brand
+      -> dbt build --select int_social_concept_canon+ (trends, board)
       -> resolve_trending_concepts.py
       -> dbt build --select tag:social
+
+The board readers see is `int_social_trend_board`: products (not spellings), shelf and
+branded products ranked ahead of generic categories, a 3-4 week fade, a fast lane for new
+spikes, a stay-on rule, low-coverage weeks, and a Rising list.
+All of it is defined in `models/docs/_social_windows.md`. The job definition is
+`scripts/databricks/social_weekly_job.yml`; every AI step in it skips work already done.
+
+**First run after the 2026-10 change:** upload the AI results produced locally first,
+so Databricks does not pay for them again —
+`python scripts/bootstrap_social_ai_results.py --from data/social_bootstrap` (preview),
+then the same with `--confirm`. Safe to re-run: it inserts only rows not already there.
 
 `parse_mentions.py` is append-only; `stg_mentionlytics__mentions` dedupes on
 mention_id by latest loaded_at, so overlapping weekly drops self-reconcile.

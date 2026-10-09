@@ -1,0 +1,392 @@
+[
+  {
+    "source": {
+      "table": "locmst",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "locmst"
+    }
+  },
+  {
+    "source": {
+      "table": "rplcfg",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "rplcfg"
+    }
+  },
+  {
+    "source": {
+      "table": "prtdsc",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "prtdsc"
+    }
+  },
+  {
+    "source": {
+      "table": "vw_prtmst",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "prtmst"
+    }
+  },
+  {
+    "source": {
+      "table": "prtftp",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "prtftp"
+    }
+  },
+  {
+    "source": {
+      "table": "prtftp_dtl",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "prtftp_dtl"
+    }
+  },
+  {
+    "source": {
+      "table": "dlytrn",
+      "loadStrategy": "append",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "dlytrn"
+    }
+  },
+  {
+    "source": {
+      "table": "inv_snap",
+      "loadStrategy": "append",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "inv_snap"
+    }
+  },
+  {
+    "source": {
+      "table": "vw_invdtl",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "invdtl"
+    }
+  },
+  {
+    "source": {
+      "table": "invsub",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "invsub"
+    }
+  },
+  {
+    "source": {
+      "table": "invlod",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "invlod"
+    }
+  },
+  {
+    "source": {
+      "table": "invsum",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "invsum"
+    }
+  },
+  {
+    "source": {
+      "table": "pckwrk_hdr",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "pckwrk_hdr"
+    }
+  },
+  {
+    "source": {
+      "table": "pckwrk_dtl",
+      "loadStrategy": "full",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "pckwrk_dtl"
+    }
+  },
+  {
+    "source": {
+      "table": "shipment",
+      "loadStrategy": "append",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "shipment"
+    }
+  },
+  {
+    "source": {
+      "table": "shipment_line",
+      "loadStrategy": "append",
+      "query": ""
+    },
+    "destination": {
+      "fileName": "shipment_line"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Customer]",
+      "loadStrategy": "full",
+      "query": "SELECT [No_] AS customer_no, [Name] AS name, [Name 2] AS name_2, [Address] AS address, [City] AS city, [Global Dimension 1 Code] AS global_dimension_1_code, [Global Dimension 2 Code] AS global_dimension_2_code, [Customer Posting Group] AS customer_posting_group, [Customer Price Group] AS customer_price_group, [Payment Terms Code] AS payment_terms_code, [Salesperson Code] AS salesperson_code, [Shipment Method Code] AS shipment_method_code, [Shipping Agent Code] AS shipping_agent_code, [Country_Region Code] AS country_region_code, [Payment Method Code] AS payment_method_code, [Gen_ Bus_ Posting Group] AS gen_bus_posting_group, [Post Code] AS post_code, [County] AS county, [Responsibility Center] AS responsibility_center, [Shipping Agent Service Code] AS shipping_agent_service_code, [Monday Deliveries] AS monday_deliveries, [Tuesday Deliveries] AS tuesday_deliveries, [Wednesday Deliveries] AS wednesday_deliveries, [Thursday Deliveries] AS thursday_deliveries, [Friday Deliveries] AS friday_deliveries, [Saturday Deliveries] AS saturday_deliveries, [Sunday Deliveries] AS sunday_deliveries, [In Active] AS in_active, [Shipping Zone] AS shipping_zone, [Appointment Required] AS appointment_required, [M2 Customer Id] AS m2_customer_id, [M2 Customer] AS m2_customer, [JDA Route] AS jda_route, [M2 Setup DT] AS m2_setup_dt, [Ship Zone] AS ship_zone, [Customer Group] AS customer_group, [Customer - Retail] AS customer_retail, [Customer - Wholesale] AS customer_wholesale, [Customer - Food Service] AS customer_food_service, [Budgeted Amount] AS budgeted_amount FROM dbo.[U_S_ Trading Co_$Customer]"
+    },
+    "destination": {
+      "fileName": "nav_customer"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Customer Ethnicity]",
+      "loadStrategy": "full",
+      "query": "SELECT [Customer No_] AS customer_no, [Ethnicity] AS ethnicity, [Selected] AS selected, [Allocation %] AS allocation_pct FROM dbo.[U_S_ Trading Co_$Customer Ethnicity]"
+    },
+    "destination": {
+      "fileName": "nav_customer_ethnicity"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Ethnicity Codes]",
+      "loadStrategy": "full",
+      "query": "SELECT [Ethnicity Code] AS ethnicity_code, [Description] AS description FROM dbo.[U_S_ Trading Co_$Ethnicity Codes]"
+    },
+    "destination": {
+      "fileName": "nav_ethnicity_codes"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$State Zone]",
+      "loadStrategy": "full",
+      "query": "SELECT [State Code] AS state_code, [State Name] AS state_name, [Zone Code] AS zone_code FROM dbo.[U_S_ Trading Co_$State Zone]"
+    },
+    "destination": {
+      "fileName": "nav_state_zone"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Item]",
+      "loadStrategy": "full",
+      "query": "SELECT [No_] AS item_no, [Description] AS description, [Base Unit of Measure] AS base_unit_of_measure, [Inventory Posting Group] AS inventory_posting_group, [Gross Weight] AS gross_weight, [Blocked] AS blocked, [Gen_ Prod_ Posting Group] AS gen_prod_posting_group, [Country_Region of Origin Code] AS country_region_of_origin_code, [Global Dimension 1 Code] AS global_dimension_1_code, [Global Dimension 2 Code] AS global_dimension_2_code, [Item Category Code] AS item_category_code, [Product Group Code] AS product_group_code, [UPC Code 1] AS upc_code_1, [Show On Web] AS show_on_web, [New Item] AS new_item, [Popular Item] AS popular_item, [Hi] AS hi, [Ti] AS ti, [Cs per Pallet] AS cs_per_pallet, [Basic UOM Size] AS basic_uom_size, [Case Qty_] AS case_qty, [InnerPack Qty_] AS innerpack_qty, [Ea Qty_] AS ea_qty, [Size Unit] AS size_unit, [Item Family No_] AS item_family_no, [App Banner] AS app_banner, [M2_Last_Sync_DT] AS m2_last_sync_dt, [Body Description] AS body_description, [Attributes1 (Flavor)] AS attributes1_flavor, [Attributes2 (Size_Other)] AS attributes2_size_other, [Attributes3 (Package)] AS attributes3_package, [Full Description] AS full_description, [Unit Price] AS unit_price, [New Begin Date] AS new_begin_date, [New End date] AS new_end_date, [Discontinued] AS discontinued, [Focus Item] AS focus_item, [Focus Begin Date] AS focus_begin_date, [Focus End Date] AS focus_end_date FROM dbo.[U_S_ Trading Co_$Item]"
+    },
+    "destination": {
+      "fileName": "nav_item"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Item Unit of Measure]",
+      "loadStrategy": "full",
+      "query": "SELECT [Item No_] AS item_no, [Code] AS uom_code, [Length] AS length, [Width] AS width, [Height] AS height, [Weight] AS weight, [Size] AS size, [UPC 1] AS upc_1 FROM dbo.[U_S_ Trading Co_$Item Unit of Measure]"
+    },
+    "destination": {
+      "fileName": "nav_item_unit_of_measure"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Product Group]",
+      "loadStrategy": "full",
+      "query": "SELECT [Item Category Code] AS item_category_code, [Code] AS product_group_code, [Description] AS description, [Good Item] AS good_item, [Average Item] AS average_item, [Slow Item] AS slow_item, [Fast Item] AS fast_item FROM dbo.[U_S_ Trading Co_$Product Group]"
+    },
+    "destination": {
+      "fileName": "nav_product_group"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Item Category]",
+      "loadStrategy": "full",
+      "query": "SELECT [Code] AS item_category_code, [Description] AS description, [Def_ Inventory Posting Group] AS def_inventory_posting_group, [Fast Item] AS fast_item, [Good Item] AS good_item, [Average Item] AS average_item, [Slow Item] AS slow_item FROM dbo.[U_S_ Trading Co_$Item Category]"
+    },
+    "destination": {
+      "fileName": "nav_item_category"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Header]",
+      "loadStrategy": "full",
+      "query": "SELECT [Document Type] AS document_type, [No_] AS document_no, [Sell-to Customer No_] AS sell_to_customer_no, [Bill-to Name] AS bill_to_name, [Bill-to Address] AS bill_to_address, [Bill-to City] AS bill_to_city, [Ship-to Code] AS ship_to_code, [Ship-to Name] AS ship_to_name, [Ship-to Address] AS ship_to_address, [Ship-to City] AS ship_to_city, [Order Date] AS order_date, [Posting Date] AS posting_date, [Shipment Date] AS shipment_date, [Shipment Method Code] AS shipment_method_code, [Location Code] AS location_code, [Customer Posting Group] AS customer_posting_group, [Salesperson Code] AS salesperson_code, [Gen_ Bus_ Posting Group] AS gen_bus_posting_group, [Bill-to Post Code] AS bill_to_post_code, [Bill-to County] AS bill_to_county, [Bill-to Country_Region Code] AS bill_to_country_region_code, [Ship-to Post Code] AS ship_to_post_code, [Ship-to County] AS ship_to_county, [Ship-to Country_Region Code] AS ship_to_country_region_code, [Prepayment %] AS prepayment_pct, [Responsibility Center] AS responsibility_center, [Requested Delivery Date] AS requested_delivery_date, [Shipping Time] AS shipping_time, [Shipping Agent Service Code] AS shipping_agent_service_code, [PDA Order No_] AS pda_order_no, [Date Received] AS date_received, [Time Received] AS time_received, [Date Sent] AS date_sent, [Time Sent] AS time_sent, [Ship with Prepayment] AS ship_with_prepayment, [Order Weight (JDA SENT)] AS order_weight_jda_sent, [Order Cubage (JDA SENT)] AS order_cubage_jda_sent, [Order Cubage Mix (EST)] AS order_cubage_mix_est, [Pallet Count Total] AS pallet_count_total, [Pallet Count Override] AS pallet_count_override, [Pick Priority] AS pick_priority, [JDA Last Sent DT] AS jda_last_sent_dt, [Lift Gate Required] AS lift_gate_required, [Hot_Rush (Local)] AS hot_rush_local, [Appt_ Required] AS appt_required, [Handle With Care] AS handle_with_care, [Order Weight Fz (EST)] AS order_weight_fz_est, [Order Cubage Fz (EST)] AS order_cubage_fz_est, [Pickup Date] AS pickup_date, [Pickup time] AS pickup_time, [Qty_ Override] AS qty_override, [Override OOS] AS override_oos, [Update JDA Ship Qty] AS update_jda_ship_qty, [M2 Order No_] AS m2_order_no, [M2 Order] AS m2_order, [M2 Entity Id] AS m2_entity_id FROM dbo.[U_S_ Trading Co_$Sales Header]"
+    },
+    "destination": {
+      "fileName": "nav_sales_header"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Line]",
+      "loadStrategy": "full",
+      "query": "SELECT [Sell-to Customer No_] AS sell_to_customer_no, [Document Type] AS document_type, [Document No_] AS document_no, [Line No_] AS line_no, [Type] AS line_type, [No_] AS item_no, [Location Code] AS location_code, [Posting Group] AS posting_group, [Description] AS description, [Unit of Measure] AS unit_of_measure, [Gross Weight] AS gross_weight, [Unit Volume] AS unit_volume, [Quantity] AS quantity, [Quantity Shipped] AS quantity_shipped, [Quantity Invoiced] AS quantity_invoiced, [Gen_ Bus_ Posting Group] AS gen_bus_posting_group, [Gen_ Prod_ Posting Group] AS gen_prod_posting_group, [Prepayment %] AS prepayment_pct, [Unit of Measure Code] AS unit_of_measure_code, [Responsibility Center] AS responsibility_center, [Item Category Code] AS item_category_code, [Product Group Code] AS product_group_code, [Requested Delivery Date] AS requested_delivery_date, [Return Qty_ to Receive] AS return_qty_to_receive, [Return Reason Code] AS return_reason_code, [Is Frozen Item] AS is_frozen_item, [Original Qty_] AS original_qty, [UST Return Reason] AS ust_return_reason, [Override OOS] AS override_oos FROM dbo.[U_S_ Trading Co_$Sales Line]"
+    },
+    "destination": {
+      "fileName": "nav_sales_line"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$AFP Promotion Header]",
+      "loadStrategy": "full",
+      "query": "SELECT [Code] AS promo_code, [Description] AS description, [Promo Begin Date] AS promo_begin_date, [Promo End Date] AS promo_end_date FROM dbo.[U_S_ Trading Co_$AFP Promotion Header]"
+    },
+    "destination": {
+      "fileName": "nav_promotion_header"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$AFP Promotion Line]",
+      "loadStrategy": "full",
+      "query": "SELECT [Promotion Code] AS promotion_code, [Item No_] AS item_no, [Promotion Group Code] AS promotion_group_code, [Campaign Target Qty_] AS campaign_target_qty, [New On Promotion] AS new_on_promotion, [Promo Begin Date] AS promo_begin_date, [Promo End Date] AS promo_end_date, [Promo Code] AS promo_code, [Holiday Occasion] AS holiday_occasion, [Holiday Year] AS holiday_year, [Discontinued] AS discontinued, [Released] AS released, [Sprice] AS sprice, [Promo Buy Qty_] AS promo_buy_qty, [Promo Free Qty_] AS promo_free_qty FROM dbo.[U_S_ Trading Co_$AFP Promotion Line]"
+    },
+    "destination": {
+      "fileName": "nav_promotion_line"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Holiday Calendar]",
+      "loadStrategy": "full",
+      "query": "SELECT [Year] AS holiday_year, [Begin Period] AS begin_period, [End Period] AS end_period, [Occasion] AS holiday_occasion, [Description] AS description FROM dbo.[U_S_ Trading Co_$Holiday Calendar]"
+    },
+    "destination": {
+      "fileName": "nav_holiday_calendar"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Holiday Item]",
+      "loadStrategy": "full",
+      "query": "SELECT [Year] AS holiday_year, [Item No_] AS item_no, [Occasion] AS holiday_occasion, [Promo Qty_] AS promo_qty FROM dbo.[U_S_ Trading Co_$Holiday Item]"
+    },
+    "destination": {
+      "fileName": "nav_holiday_item"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Quota Header]",
+      "loadStrategy": "full",
+      "query": "SELECT [Code] AS quota_code, [Begin Date] AS begin_date, [End Date] AS end_date, [Active] AS active FROM dbo.[U_S_ Trading Co_$Sales Quota Header]"
+    },
+    "destination": {
+      "fileName": "nav_sales_quota_header"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Quota line]",
+      "loadStrategy": "full",
+      "query": "SELECT [Code] AS quota_code, [Item No_] AS item_no, [Salesperson Code] AS salesperson_code, [Quota Quantity] AS quota_quantity, [Order Quota Qty_] AS order_quota_qty FROM dbo.[U_S_ Trading Co_$Sales Quota line]"
+    },
+    "destination": {
+      "fileName": "nav_sales_quota_line"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Salesperson Target]",
+      "loadStrategy": "full",
+      "query": "SELECT [Date] AS target_date, [Salesperson Code] AS salesperson_code, [Daily Target] AS daily_target, [Monthly Target] AS monthly_target, [Last Year Sales] AS last_year_sales, [Last Year Sales Month] AS last_year_sales_month FROM dbo.[U_S_ Trading Co_$Salesperson Target]"
+    },
+    "destination": {
+      "fileName": "nav_salesperson_target"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Person Margin History]",
+      "loadStrategy": "full",
+      "query": "SELECT [Document No_] AS document_no, [Posting Date] AS posting_date, [Sales Person Code] AS sales_person_code, [Customer No_] AS customer_no, [Document Type] AS document_type, [Sales ($)] AS sales_amount, [Cost Amount] AS cost_amount, [Brand Sales Amount] AS brand_sales_amount, [Product Sales Amount] AS product_sales_amount, [Brand %] AS brand_pct, [Brand < 60%] AS brand_below_target, [Invoice Margin %] AS invoice_margin_pct, [Invoice Margin < 13%] AS invoice_margin_below_target FROM dbo.[U_S_ Trading Co_$Sales Person Margin History]"
+    },
+    "destination": {
+      "fileName": "nav_sales_person_margin_history"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Item Ledger Entry]",
+      "loadStrategy": "append_query",
+      "query": "SELECT [Entry No_] AS entry_no, [Item No_] AS item_no, [Posting Date] AS posting_date, [Source No_] AS source_no, [Location Code] AS location_code, [Quantity] AS quantity, [Invoiced Quantity] AS invoiced_quantity, [Unit of Measure Code] AS unit_of_measure_code, [Item Category Code] AS item_category_code, [Product Group Code] AS product_group_code, [Salesperson Code] AS salesperson_code, [Shipment Date] AS shipment_date, [Customer City] AS customer_city, [Customer State] AS customer_state FROM dbo.[U_S_ Trading Co_$Item Ledger Entry]"
+    },
+    "destination": {
+      "fileName": "nav_item_ledger_entry"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Invoice Header]",
+      "loadStrategy": "append_query",
+      "query": "SELECT [No_] AS document_no, [Bill-to Customer No_] AS bill_to_customer_no, [Bill-to Name] AS bill_to_name, [Bill-to Name 2] AS bill_to_name_2, [Bill-to Address] AS bill_to_address, [Bill-to City] AS bill_to_city, [Ship-to Name] AS ship_to_name, [Ship-to Address] AS ship_to_address, [Ship-to City] AS ship_to_city, [Order Date] AS order_date, [Posting Date] AS posting_date, [Shipment Date] AS shipment_date, [Order Pick Date] AS order_pick_date, [Shipment Method Code] AS shipment_method_code, [Customer Posting Group] AS customer_posting_group, [Salesperson Code] AS salesperson_code, [Gen_ Bus_ Posting Group] AS gen_bus_posting_group, [Bill-to Post Code] AS bill_to_post_code, [Bill-to Country_Region Code] AS bill_to_country_region_code, [Sell-to Post Code] AS sell_to_post_code, [Sell-to County] AS sell_to_county, [Ship-to Post Code] AS ship_to_post_code, [Ship-to County] AS ship_to_county, [Responsibility Center] AS responsibility_center, [Order Weight] AS order_weight, [Order Cubage] AS order_cubage, [Pallet Count Total] AS pallet_count_total, [UST Ship-to Code] AS ust_ship_to_code, [Override Pallet Count] AS override_pallet_count, [Due Date] AS due_date, [PDA Order No_] AS pda_order_no, [M2 Order No_] AS m2_order_no FROM dbo.[U_S_ Trading Co_$Sales Invoice Header]"
+    },
+    "destination": {
+      "fileName": "nav_sales_invoice_header"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Invoice Line]",
+      "loadStrategy": "append_query",
+      "query": "SELECT [Document No_] AS document_no, [Line No_] AS line_no, [Sell-to Customer No_] AS sell_to_customer_no, [No_] AS item_no, [Description] AS description, [Quantity] AS quantity, [Unit of Measure] AS unit_of_measure, [Salesperson Code] AS salesperson_code, [Posting Date] AS posting_date, [Amount] AS amount, [Line Amount] AS line_amount, [Unit Price] AS unit_price, [Qty_ per Unit of Measure] AS qty_per_unit_of_measure, [Unit of Measure Code] AS unit_of_measure_code FROM dbo.[U_S_ Trading Co_$Sales Invoice Line]"
+    },
+    "destination": {
+      "fileName": "nav_sales_invoice_line"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Cr_Memo Header]",
+      "loadStrategy": "append_query",
+      "query": "SELECT [No_] AS document_no, [Bill-to Customer No_] AS bill_to_customer_no, [Bill-to Name] AS bill_to_name, [Bill-to Address] AS bill_to_address, [Bill-to City] AS bill_to_city, [Ship-to Name] AS ship_to_name, [Posting Date] AS posting_date, [Posting Description] AS posting_description, [Shipment Method Code] AS shipment_method_code, [Location Code] AS location_code, [Customer Posting Group] AS customer_posting_group, [Salesperson Code] AS salesperson_code, [Applies-to Doc_ No_] AS applies_to_doc_no, [Gen_ Bus_ Posting Group] AS gen_bus_posting_group, [Bill-to Post Code] AS bill_to_post_code, [Bill-to County] AS bill_to_county, [Bill-to Country_Region Code] AS bill_to_country_region_code, [External Document No_] AS external_document_no, [Responsibility Center] AS responsibility_center, [Freight Option] AS freight_option, [Freight Amount] AS freight_amount, [Freight Amount per Pound] AS freight_amount_per_pound FROM dbo.[U_S_ Trading Co_$Sales Cr_Memo Header]"
+    },
+    "destination": {
+      "fileName": "nav_sales_cr_memo_header"
+    }
+  },
+  {
+    "source": {
+      "table": "[U_S_ Trading Co_$Sales Cr_Memo Line]",
+      "loadStrategy": "append_query",
+      "query": "SELECT [Document No_] AS document_no, [Line No_] AS line_no, [Sell-to Customer No_] AS sell_to_customer_no, [Type] AS line_type, [Cr_Memo Item No_] AS cr_memo_item_no, [Location Code] AS location_code, [Posting Group] AS posting_group, [Shipment Date] AS shipment_date, [Description] AS description, [Unit of Measure] AS unit_of_measure, [Quantity] AS quantity, [Gross Weight] AS gross_weight, [Shortcut Dimension 1 Code] AS shortcut_dimension_1_code, [Shortcut Dimension 2 Code] AS shortcut_dimension_2_code, [Gen_ Bus_ Posting Group] AS gen_bus_posting_group, [Gen_ Prod_ Posting Group] AS gen_prod_posting_group, [Responsibility Center] AS responsibility_center, [Item Category Code] AS item_category_code, [Product Group Code] AS product_group_code, [Return Reason Code] AS return_reason_code, [Is Frozen Item] AS is_frozen_item, [Size] AS size, [Salesperson Code] AS salesperson_code, [CRV Charge] AS crv_charge, [Invoice No_] AS invoice_no, [Posting Date] AS posting_date, [Amount] AS amount, [Line Amount] AS line_amount, [Unit Price] AS unit_price, [Qty_ per Unit of Measure] AS qty_per_unit_of_measure, [Unit of Measure Code] AS unit_of_measure_code FROM dbo.[U_S_ Trading Co_$Sales Cr_Memo Line]"
+    },
+    "destination": {
+      "fileName": "nav_sales_cr_memo_line"
+    }
+  }
+]
