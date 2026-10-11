@@ -349,6 +349,17 @@ then the same with `--confirm`. Safe to re-run: it inserts only rows not already
 `parse_mentions.py` is append-only; `stg_mentionlytics__mentions` dedupes on
 mention_id by latest loaded_at, so overlapping weekly drops self-reconcile.
 
+## Monthly promo × social match run order
+
+    load_promo_list.py -> dbt (items) -> draft_promo_terms.py -> dbt
+      -> match_promo_social.py (keywords over every raw post + AI judge) -> dbt
+      -> youtube_search.py -> dbt build --select tag:promo
+      -> export_promo_social_match.py -> TikTok by hand (scripts/prompts/tiktok_promo_search.md)
+
+Monthly, run by hand after uploading the workbook (`scripts/databricks/promo_social_job.yml`); the daily job
+excludes `tag:promo`. How to run a month, edit `seed_promo_item_terms`, and the
+known false-positive patterns: `models/docs/_promo_social.md`.
+
 ## Repo structure
 
 ```

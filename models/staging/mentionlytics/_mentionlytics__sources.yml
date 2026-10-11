@@ -35,7 +35,7 @@ sources:
           external_location globs all weekly parquet files so re-drops and
           overlapping exports are unioned, then deduped downstream on mention_id.
         config:
-          external_location: "read_parquet('data/mock/mentionlytics/mentions_*.parquet', union_by_name = true)"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/mentionlytics/mentions_*.parquet', union_by_name = true)"
           loaded_at_field: loaded_at
           freshness:
             warn_after: {count: 8, period: day}   # weekly cadence — stale after ~8 days
@@ -108,7 +108,7 @@ sources:
           social.mention_enrichment Delta table (append-only; staging dedupes on
           mention_id, latest enriched_at wins).
         config:
-          external_location: "read_parquet('data/mock/mentionlytics/mention_enrichment.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/mentionlytics/mention_enrichment.parquet')"
         columns:
           - name: mention_id
             description: Mention this enrichment describes. Joins to mentions.id.
@@ -181,7 +181,7 @@ sources:
           whose review call fails is NOT written — it stays unresolved and is
           retried, rather than shipping an unverified match.
         config:
-          external_location: "read_parquet('data/mock/mentionlytics/concept_resolution.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/mentionlytics/concept_resolution.parquet')"
         columns:
           - name: concept_norm
             description: Normalised concept text (lower+trim). Join key to int_social_concept_trends.concept_norm.

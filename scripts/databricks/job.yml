@@ -47,7 +47,9 @@ resources:
               # mentionlytics models depend on the weekly xlsx conversion and the
               # offline enrichment, neither of which runs daily -- see
               # dbt_project.yml, which documents this daily/weekly split.
-              - dbt build --exclude tag:social
+              # --exclude tag:promo, likewise: the promo models read landing
+              # tables the MONTHLY promo job fills (promo_social_job.yml).
+              - dbt build --exclude tag:social tag:promo
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
