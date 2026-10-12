@@ -1247,3 +1247,142 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "credit_memo_count <= document_count"
+
+  - name: int_search_queries
+    description: >
+      ONE ROW PER SEARCH A PERSON TYPED — the query grain. 114,901 searches from
+      2026-01-19, of which 83,263 are customers typing into the website or an
+      app and 31,638 are reps looking something up while building an order.
+      Nothing in this warehouse read them until now.
+
+      WHY IT MATTERS: social listening is what the market talks about, almost
+      none of it from anyone who buys from us. This is the opposite — every row
+      is an account we invoice, typing what it wants, into our own search box,
+      and it carries customer_key so demand ties to an account, a rep and a
+      territory. It is also the wider vocabulary: 24,902 distinct terms against
+      the 364 concepts the social resolver has ever named.
+
+      READS int_events_decoded, NOT int_events_enriched, DELIBERATELY. Enriched
+      filters `sales_code not in ('000')`, and '000' is the code a
+      customer-originated event carries — that clause plus the SQL NULL trap
+      (`null not in ('000')` is NULL, not TRUE) drops 144,625 of 247,417 search
+      events, every one of them a customer. On Web that is 113,258 of 161,906
+      gone; on Vegas-I all 28,110. Correct for a rep model, wrong for a customer
+      one. See the model header.
+
+      NO SEARCH RESULT IS RECORDED. The log says what was typed and nothing
+      about what came back or whether anything was ordered. "Nobody found it"
+      cannot be measured from here.
+    columns:
+      - name: event_id
+        description: The log record. One per search.
+        tests: [not_null, unique]
+      - name: search_term
+        description: What was typed, lowercased and trimmed, for grouping. search_text keeps it as typed.
+        tests: [not_null]
+      - name: search_date
+        description: UTC date of the search.
+        tests: [not_null]
+      - name: customer_key
+        description: The account searching. This is what social listening can never provide.
+      - name: is_web
+        description: Typed on the website. From seed_app_sources, so a new app lands in the right bucket.
+        tests: [not_null]
+      - name: is_app
+        description: Typed in a handheld or tablet app — PDA, Vegas, CatalogFS, CatalogFC.
+        tests: [not_null]
+      - name: is_customer_search
+        description: A customer typed it. The apps carry both populations, so this is not a restatement of is_app.
+        tests: [not_null]
+      - name: is_rep_search
+        description: A rep typed it, usually while building an order.
+        tests: [not_null]
+      - name: is_sku_paste
+        description: >
+          Starts with a digit — a SKU number pasted with its item name. 39,806 of
+          them. That is re-ordering from a sheet, not demand discovery, and it
+          swamps any volume ranking: one such term is 260 searches from ONE
+          account. Flagged rather than dropped, because it does say which items
+          people re-order by code.
+        tests: [not_null]
+      - name: is_rankable
+        description: Not a SKU paste, and 3-30 characters. The terms worth ranking.
+        tests: [not_null]
+
+  - name: int_search_terms_weekly
+    description: >
+      ONE ROW PER SEARCH TERM PER WEEK, with the channel split and the key that
+      joins to the trending board. 66,633 rows across 24,902 terms and 38 weeks.
+
+      ACCOUNTS, NOT SEARCHES, IS THE DEMAND NUMBER. The two disagree violently
+      and the wrong one flatters: 'mama' is 56 searches from 20 accounts, while
+      one pasted SKU line is 260 searches from one. Rank on ust_accounts.
+
+      THE JOIN TO THE BOARD GOES THROUGH product_key. The board stores a
+      canonicalised name ('mama instant noodles'); customers type 'mama'.
+      Joining search text straight onto the board matches 2 rows in 20 and
+      produces a column of zeros that reads as "nobody searched" rather than
+      "wrong key". int_social_concept_canon is the bridge and takes the match
+      from 54 terms to 418.
+
+      THAT BRIDGE FANS OUT 2x AND IT IS SILENT — it is keyed on (concept_class,
+      concept_norm), so a name on both the dish and item boards has two rows
+      pointing at the same product. Joining on concept_norm alone doubled this
+      model's first draft and nothing looked wrong, because the number was
+      merely bigger. 2,122 of 30,007 names carry the duplicate. The join reads a
+      deduped bridge; the 316 names whose rows disagree are left UNRESOLVED and
+      flagged rather than attributed to whichever sorted first.
+
+      WEEKS HERE ARE NOT THE BOARD'S WEEKS. This covers every week the event log
+      has; the board keeps 13 rolling and is built by a hand-run job, so it was
+      two weeks behind on 2026-10-12. A consumer MUST treat "no board row" as
+      unknown, never zero — a zero where the board has not been run reads as
+      demand vanishing.
+    columns:
+      - name: week_start
+        description: Monday of the week. Aligns to the board's week_start where both exist.
+        tests: [not_null]
+      - name: search_term
+        description: The folded term.
+        tests: [not_null]
+      - name: social_product_key
+        description: >
+          What the trending board calls this thing. NULL means one of two
+          different things and is_ambiguous_concept says which: the social
+          pipeline never named this concept, or it named it twice and disagreed.
+      - name: is_ambiguous_concept
+        description: The canon map points this name at more than one product. 316 names. Left unresolved on purpose.
+        tests: [not_null]
+      - name: reaches_social_board
+        description: Whether this term resolves to a product the board could carry.
+        tests: [not_null]
+      - name: web_searches
+        description: Searches typed on the website.
+      - name: app_searches
+        description: Searches typed in a handheld or tablet app.
+      - name: total_searches
+        description: web_searches + app_searches.
+      - name: customer_searches
+        description: Of those, how many a customer typed. Not a split of web/app — a rep on a PDA counts in app_searches and rep_searches both.
+      - name: rep_searches
+        description: Of those, how many a rep typed.
+      - name: ust_accounts
+        description: DISTINCT ACCOUNTS that searched this term. The demand measure — rank on this.
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, search_term]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "web_searches + app_searches = total_searches"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "ust_accounts <= total_searches"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "week_start <= week_end"
+      # an unresolved name must not also claim a product
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "not is_ambiguous_concept or social_product_key is null"
