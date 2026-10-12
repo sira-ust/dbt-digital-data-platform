@@ -71,6 +71,46 @@ concept_bridge as (
 
 ),
 
+-- ── the same bridge keyed on the FOLDED name, for terms the exact name misses ──
+-- 'ma ma', 'mamas', 'fishsauce', 'instant noodle', 'coconut  milk' are all real
+-- searches for products the board ranks, and all of them failed an exact match.
+-- Folding whitespace and plural recovers 22 board rows across 9 products.
+--
+-- Rule-based, never fuzzy: see search_match_key. An edit-distance rule would
+-- file 38 accounts' 'milk' searches under 'milo'.
+--
+-- Deduped the same way and for the same reason — 181 of 29,338 folded keys point
+-- at more than one product ('meat ball' reaches both 'meatball' and 'meatballs'),
+-- and those resolve to nothing rather than to whichever sorted first.
+concept_bridge_key as (
+
+    select
+        {{ search_match_key('concept_norm') }}                               as match_key,
+        case when count(distinct product_key) = 1 then max(product_key) end  as product_key
+    from {{ ref('int_social_concept_canon') }}
+    group by {{ search_match_key('concept_norm') }}
+
+),
+
+-- one row per term: the exact name WINS, the folded key is only consulted when
+-- the exact name resolved nothing. Ordering it this way means adding the fold
+-- can never change a match that already worked.
+term_map as (
+
+    select
+        t.search_term,
+        coalesce(b.product_key, bk.product_key)                              as product_key,
+        coalesce(b.is_ambiguous_concept, false)                              as is_ambiguous_concept,
+        (b.product_key is null and bk.product_key is not null)               as matched_on_folded_key
+    from (select distinct search_term, search_key from queries) as t
+    left join concept_bridge as b
+        on b.concept_norm = t.search_term
+    left join concept_bridge_key as bk
+        on b.product_key is null
+       and bk.match_key = t.search_key
+
+),
+
 weekly as (
 
     select
@@ -116,6 +156,8 @@ select
     b.product_key                                                            as social_product_key,
     coalesce(b.is_ambiguous_concept, false)                                  as is_ambiguous_concept,
     (b.product_key is not null)                                              as reaches_social_board,
+    -- resolved by folding whitespace/plural rather than by its exact name
+    coalesce(b.matched_on_folded_key, false)                                 as matched_on_folded_key,
 
     w.web_searches,
     w.app_searches,
@@ -130,5 +172,5 @@ select
     w.first_search_at,
     w.last_search_at
 from weekly as w
-left join concept_bridge as b
-    on b.concept_norm = w.search_term
+left join term_map as b
+    on b.search_term = w.search_term

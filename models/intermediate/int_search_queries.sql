@@ -151,6 +151,12 @@ cleaned as (
 
 select
     *,
+    -- the key a term is matched to a social concept on when the exact name does
+    -- not exist: whitespace and plural folded away, nothing else. 'ma ma',
+    -- 'mamas' and 'mama' all land on one key; 'milk' and 'milo' do NOT. See
+    -- search_match_key for why this is rule-based and not an edit distance.
+    {{ search_match_key('search_term') }}                                    as search_key,
+
     -- a search term worth ranking: typed words, not a pasted code, and long
     -- enough to mean something. Published as a flag so a consumer can widen it
     -- rather than re-deriving the rule.

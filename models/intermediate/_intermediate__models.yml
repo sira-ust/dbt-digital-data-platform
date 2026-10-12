@@ -1308,6 +1308,15 @@ models:
       - name: is_rankable
         description: Not a SKU paste, and 3-30 characters. The terms worth ranking.
         tests: [not_null]
+      - name: search_key
+        description: >
+          The key a term is matched to a social concept on when its exact name is
+          not in the canon map: whitespace and a trailing plural folded away,
+          nothing else. 'ma ma', 'mamas' and 'mama' land on one key; 'milk' and
+          'milo' deliberately do not. Rule-based rather than an edit distance,
+          because the near-misses in this data are mostly different products —
+          'milk'/'milo' is one edit and 38 accounts wide. See search_match_key.
+        tests: [not_null]
 
   - name: int_search_terms_weekly
     description: >
@@ -1355,6 +1364,13 @@ models:
         tests: [not_null]
       - name: reaches_social_board
         description: Whether this term resolves to a product the board could carry.
+        tests: [not_null]
+      - name: matched_on_folded_key
+        description: >
+          Resolved by folding whitespace and plural rather than by its exact name
+          ('ma ma' -> mama, 'instant noodle' -> instant noodles). The exact name
+          always wins, so this is only ever true where the exact name matched
+          nothing — adding the fold cannot move a match that already worked.
         tests: [not_null]
       - name: web_searches
         description: Searches typed on the website.
@@ -1450,6 +1466,13 @@ models:
           over the whole product. The demand measure — rank on this, never on
           searches. See the description for why it cannot be summed from the term
           grain.
+
+          A FLOOR, NEVER AN EXACT HEADCOUNT, and it can legitimately be 0 beside a
+          non-zero search count. 11.8% of searches (13,614 of 114,901) carry no
+          customer_key — mostly reps searching before they have picked a customer
+          (PDA 8,613, CatalogFS 2,897) plus 2,050 anonymous searches on the website.
+          That leaves 317 product-weeks with searches and no nameable account. Read
+          those as "somebody looked, we cannot say who", not as "no demand".
         tests: [not_null]
       - name: distinct_terms
         description: How many different spellings rolled up into this row.
