@@ -1386,3 +1386,91 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "not is_ambiguous_concept or social_product_key is null"
+
+  - name: int_search_product_weekly
+    description: >
+      SEARCHES ROLLED UP TO THE PRODUCT THE BOARD RANKS — one row per (product,
+      week). This is what mart_social_trending_items joins to; int_search_terms_weekly
+      stays the place to read what people actually typed.
+
+      THE BOARD CANNOT JUST SUM THE TERM MODEL. ust_accounts is a distinct count,
+      and summing it across the spellings of one product counts an account once
+      per spelling it tried. Measured on live data that overstates 271 of 8,735
+      product-weeks: 'spring rolls' in the week of 2026-09-14 sums to 4 accounts
+      against a true 2. On a thinly-searched product that is the difference
+      between "two customers asked" and "four", which is the difference between
+      ignoring it and sourcing it. Searches and users are plain sums and would
+      have been safe; the account count is the one that is not, and it is the one
+      the business ranks on.
+
+      ONE PRODUCT CAN APPEAR TWICE ON THE BOARD. The board is keyed on
+      (concept_class, concept_norm) and the canon map can point two of those at
+      one product — 'fish sauce' and the Thai spelling were two board rows for one
+      product until concept grouping merged them. Both rows show these same
+      numbers: honest, because the searches really are for that one product, but
+      duplication on screen rather than two populations. Summing a board column
+      down the page would double them.
+
+      WEEKS HERE ARE NOT THE BOARD'S WEEKS. This covers every week the event log
+      has; the board keeps 13 rolling and is hand-run, so it ran two weeks behind
+      on 2026-10-12. Treat a missing search row as zero only INSIDE this model's
+      week range — outside it, zero would mean "we had no search log", which is a
+      very different statement from "nobody searched".
+    columns:
+      - name: product_key
+        description: The product the board ranks. Resolved through the deduped int_social_concept_canon bridge.
+        tests: [not_null]
+      - name: week_start
+        description: Monday of the week. Aligns to the board's week_start.
+        tests: [not_null]
+      - name: top_search_term
+        description: >
+          The spelling the most different accounts used that week — why this
+          product has searches, in the customer's own words. Ranked on accounts
+          then volume, so it is not whichever term one person repeated loudest.
+      - name: web_searches
+        description: Searches typed on the website.
+        tests: [not_null]
+      - name: app_searches
+        description: >
+          Searches typed on a handheld or tablet — PDA, Vegas, CatalogFS,
+          CatalogFC. DEVICE, not audience: this mixes reps and customers, and
+          customer_searches / rep_searches are the audience cut.
+        tests: [not_null]
+      - name: total_searches
+        description: web_searches + app_searches.
+        tests: [not_null]
+      - name: customer_searches
+        description: Of those, how many a customer typed. Not a split of web/app — a rep on a PDA counts in app_searches and rep_searches both.
+      - name: rep_searches
+        description: Of those, how many a rep typed, usually while building an order.
+      - name: ust_accounts
+        description: >
+          DISTINCT ACCOUNTS that searched for this product that week, counted once
+          over the whole product. The demand measure — rank on this, never on
+          searches. See the description for why it cannot be summed from the term
+          grain.
+        tests: [not_null]
+      - name: distinct_terms
+        description: How many different spellings rolled up into this row.
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [product_key, week_start]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "web_searches + app_searches = total_searches"
+      # the distinct count can never exceed the rows it was taken over
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "ust_accounts <= total_searches"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "distinct_users <= total_searches"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "distinct_terms >= 1"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "week_start <= week_end"
