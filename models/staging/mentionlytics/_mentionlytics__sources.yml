@@ -243,7 +243,7 @@ sources:
           Databricks the social.concept_canon Delta table, which the script creates if
           missing.
         config:
-          external_location: "read_parquet('data/mock/mentionlytics/concept_canon.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/mentionlytics/concept_canon.parquet')"
         columns:
           - name: concept_class
             description: dish / item — the board the NAME came from (its own vote; the product's final class is decided across all its names in int_social_concept_canon).
@@ -270,7 +270,7 @@ sources:
           only the board's: promo matching must find a product that never trended. dbt
           only reads this. Append-only; staging keeps the latest label per product.
         config:
-          external_location: "read_parquet('data/mock/mentionlytics/product_profile.parquet')"
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/mentionlytics/product_profile.parquet')"
         columns:
           - name: product_key
             description: Join key to int_social_concept_canon.product_key / int_social_concept_trends.concept_norm.
@@ -278,3 +278,9 @@ sources:
             description: branded / shelf / generic.
           - name: brand
             description: The brand when product_type = branded, else null.
+          - name: product_name
+            description: The product's display name as the labeller wrote it.
+          - name: profiled_at
+            description: When the label was written. Dedup tiebreak within a prompt version -- latest wins.
+          - name: model_version
+            description: Model + prompt version, e.g. databricks-claude-sonnet-5/v1. The highest version wins per product_key.
