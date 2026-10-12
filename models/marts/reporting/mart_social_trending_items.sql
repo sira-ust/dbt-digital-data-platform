@@ -103,6 +103,8 @@ board as (
         t.ingredient_mentions,
         t.unlabelled_mentions,
         t.has_subject_evidence,
+        t.subject_ratio,
+        t.demand_type,
         t.mention_count_wow_pct,
         t.mention_share,
         t.mention_share_change,
@@ -373,36 +375,65 @@ alt_matched as (
 
 -- the concept's tokens, canonicalised the same way, keeping only those the MATCHED
 -- item's own name uses. Catalog vocabulary, so cross-language and spelling noise drops
--- out on its own — a Thai-script concept simply contributes none, and correctly gets
--- no list rather than a wrong one.
-alt_anchor_tokens as (
+-- out on its own.
+--
+-- FALLBACK TO THE MATCHED ITEM'S OWN NAME when the concept contributes nothing. A
+-- Thai- or Vietnamese-script concept shares no letters with an English catalog name,
+-- so it anchors on zero tokens and the SKU list came back empty even though the match
+-- itself was confident: 'น้ำปลา' resolved to 21084 DF FISH SAUCE at 0.95 and showed no
+-- assortment at all, while the English 'fish sauce' row beside it listed 36 SKUs of the
+-- same product (observed 2026-09-10). Anchoring on the matched item's name is not a
+-- guess — that item is already the verified answer for this concept, so its words are
+-- catalog vocabulary for the same thing, and membership still requires the family match
+-- and EVERY anchor token below. Concepts that DO share vocabulary are unaffected: the
+-- fallback only fires where the intersection is empty.
+alt_concept_tokens as (
 
-    select distinct
-        am.concept_norm,
-        am.matched_prtnum,
-        am.item_family,
-        am.matched_item_name,
-        ct.token
+    select
+        t.concept_norm,
+        {{ singularize('coalesce(ab.expansion_norm, t.token)') }}        as token
     from (
         select
-            t.concept_norm,
-            {{ singularize('coalesce(ab.expansion_norm, t.token)') }}    as token
-        from (
-            select
-                concept_norm,
-                {{ unnest("split(" ~ normalize_item_name('concept_norm') ~ ", ' ')") }}
+            concept_norm,
+            {{ unnest("split(" ~ normalize_item_name('concept_norm') ~ ", ' ')") }}
                                                                         as token
-            from alt_matched
-        ) as t
-        left join name_abbreviations as ab
-            on ab.abbreviation_norm = t.token
-        where length(t.token) >= 3
-    ) as ct
+        from alt_matched
+    ) as t
+    left join name_abbreviations as ab
+        on ab.abbreviation_norm = t.token
+    where length(t.token) >= 3
+
+),
+
+-- the shared vocabulary, where there is any
+alt_anchor_direct as (
+
+    select distinct
+        am.concept_norm, am.matched_prtnum, am.item_family, am.matched_item_name,
+        ct.token
+    from alt_concept_tokens as ct
     inner join alt_matched as am
         on am.concept_norm = ct.concept_norm
     inner join item_name_tokens as mt
         on mt.prtnum = am.matched_prtnum
        and mt.token  = ct.token
+
+),
+
+alt_anchor_tokens as (
+
+    select * from alt_anchor_direct
+
+    union all
+
+    -- concepts that shared no word with their own matched item
+    select distinct
+        am.concept_norm, am.matched_prtnum, am.item_family, am.matched_item_name,
+        mt.token
+    from alt_matched as am
+    inner join item_name_tokens as mt
+        on mt.prtnum = am.matched_prtnum
+    where am.concept_norm not in (select concept_norm from alt_anchor_direct)
 
 ),
 
@@ -662,6 +693,8 @@ joined as (
         b.ingredient_mentions,
         b.unlabelled_mentions,
         b.has_subject_evidence,
+        b.subject_ratio,
+        b.demand_type,
         b.mention_count_wow_pct,
         b.mention_share,
         b.mention_share_change,
@@ -748,6 +781,11 @@ select
     -- false means source_links are posts that merely NAMED the concept — there were
     -- no posts about it to show. Read the evidence accordingly.
     j.has_subject_evidence,
+    -- WHY this row ranks, not how strongly: 'talked_about' / 'cooked_with' /
+    -- 'mixed' / 'unlabelled'. trend_score counts every mention, so a staple
+    -- that is in everything can outrank a product people are excited about.
+    j.subject_ratio,
+    j.demand_type,
     j.mention_share,
     j.total_engagement,
     j.total_views,
