@@ -66,6 +66,14 @@
 -- (it starts well after the oldest board weeks); 0 means the log covers it and nobody
 -- searched. The two are not the same statement and the query keeps them apart.
 --
+-- `ust_accounts` 0 BESIDE A NON-ZERO SEARCH COUNT IS REAL, NOT A BUG. 11.8% of searches
+-- (13,614 of 114,901) carry no customer_key at all, so they are counted as searches but
+-- belong to nobody we can name. It happens on 317 product-weeks. The bulk is reps
+-- searching before they have picked a customer — PDA 8,613 and CatalogFS 2,897 — plus
+-- 2,050 anonymous searches on the website. Read that row as "somebody looked, we cannot
+-- say which account", NOT as "no demand". It is also why ust_accounts is a floor on
+-- every row, never an exact headcount.
+--
 -- DO NOT SUM THESE DOWN THE PAGE. They are attributed to the PRODUCT, and the board can
 -- carry one product under two names (an English and a Thai spelling, before concept
 -- grouping merges them) — both rows then show the same numbers. That is one population
