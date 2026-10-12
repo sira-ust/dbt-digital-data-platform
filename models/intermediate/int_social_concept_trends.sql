@@ -716,6 +716,33 @@ with_rank as (
         -- whether source_links for this row are posts ABOUT the concept or merely
         -- posts that named it. Read the links differently in the two cases.
         s.subject_mentions > 0                                         as has_subject_evidence,
+
+        -- ── WHY a row ranks, not how strongly ────────────────────────────────
+        -- trend_score counts EVERY mention, which is right for a wholesaler: 39 posts
+        -- cooking with fish sauce is real demand. But it means a ubiquitous ingredient
+        -- outranks a product people are excited about, and the rank alone cannot tell
+        -- them apart. On 2026-08-31 fish sauce held item rank 1 at a subject share of
+        -- 0.11 while a product on 1.00 sat at 15. Both belong on a sourcing board;
+        -- they are not the same news.
+        --
+        -- UNLABELLED MENTIONS ARE LEFT OUT OF THE DENOMINATOR, not counted as
+        -- ingredient. A week enriched before subject/ingredient labelling existed
+        -- would otherwise read as pure cooking demand rather than as unknown.
+        case
+            when (s.subject_mentions + s.ingredient_mentions) > 0
+                then cast(s.subject_mentions as {{ dbt.type_numeric() }})
+                   / (s.subject_mentions + s.ingredient_mentions)
+        end                                                            as subject_ratio,
+        case
+            when (s.subject_mentions + s.ingredient_mentions) = 0      then 'unlabelled'
+            when cast(s.subject_mentions as {{ dbt.type_numeric() }})
+                 / (s.subject_mentions + s.ingredient_mentions)
+                 >= {{ var('social_trend_talked_about_min_ratio') }}   then 'talked_about'
+            when cast(s.subject_mentions as {{ dbt.type_numeric() }})
+                 / (s.subject_mentions + s.ingredient_mentions)
+                 <= {{ var('social_trend_cooked_with_max_ratio') }}    then 'cooked_with'
+            else 'mixed'
+        end                                                            as demand_type,
         s.channel_count,
         s.author_quality,
         s.is_single_channel,

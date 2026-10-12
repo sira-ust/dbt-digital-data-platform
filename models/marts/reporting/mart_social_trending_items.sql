@@ -103,6 +103,8 @@ board as (
         t.ingredient_mentions,
         t.unlabelled_mentions,
         t.has_subject_evidence,
+        t.subject_ratio,
+        t.demand_type,
         t.mention_count_wow_pct,
         t.mention_share,
         t.mention_share_change,
@@ -662,6 +664,8 @@ joined as (
         b.ingredient_mentions,
         b.unlabelled_mentions,
         b.has_subject_evidence,
+        b.subject_ratio,
+        b.demand_type,
         b.mention_count_wow_pct,
         b.mention_share,
         b.mention_share_change,
@@ -748,6 +752,11 @@ select
     -- false means source_links are posts that merely NAMED the concept — there were
     -- no posts about it to show. Read the evidence accordingly.
     j.has_subject_evidence,
+    -- WHY this row ranks, not how strongly: 'talked_about' / 'cooked_with' /
+    -- 'mixed' / 'unlabelled'. trend_score counts every mention, so a staple
+    -- that is in everything can outrank a product people are excited about.
+    j.subject_ratio,
+    j.demand_type,
     j.mention_share,
     j.total_engagement,
     j.total_views,

@@ -306,6 +306,15 @@ vars:
   # the GENERAL scope (generic categories, commodities, dishes, unlabelled products) has
   # its own, smaller slots and is always listed after the shelf scope — see
   # int_social_trend_board's TWO SCOPES note
+  # demand_type — what KIND of signal a row is, not how strong. trend_score counts every
+  # mention (deliberately: cooking demand is real demand to a distributor), so these bands
+  # are what stop a reader mistaking a ubiquitous ingredient for a product people are
+  # excited about. Measured over 2026-08-17..08-31: soy sauce 5% and oyster sauce 20% are
+  # pure ingredient demand; nutella 63% and nam phrik 78% are genuine product interest;
+  # fish sauce 28% is the case that motivated the split. Widen 'mixed' if too much lands
+  # in the outer two.
+  social_trend_talked_about_min_ratio: 0.5   # subject share at/above this = 'talked_about'
+  social_trend_cooked_with_max_ratio: 0.3    # subject share at/below this = 'cooked_with'
   social_trend_generic_top_n: 8          # with ~25-30 shelf products, keeps the board near 40
   social_trend_generic_stay_rank: 10
   # int_social_product_variants: "which Pepsi?" — a board product's related products
