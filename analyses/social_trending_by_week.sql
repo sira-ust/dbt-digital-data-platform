@@ -44,6 +44,40 @@
 -- many), matched brand first and then rotating across the others. It is derived from item
 -- NAMES, so it is a floor: a SKU whose name uses different words is left out rather than
 -- guessed at. Read a short list as "these are definitely it", not "this is all we have".
+--
+-- WHAT OUR OWN CUSTOMERS TYPED (2026-10). `web_search`, `pda_ipad_search`, `ust_accounts`
+-- and `searched_as` are a SECOND, INDEPENDENT demand signal sitting beside the social one.
+-- Social is reach — what the public internet is talking about, almost none of it from
+-- anyone who buys from us. These are intent: every one is an account we invoice, typing
+-- what it wants into our own search box.
+--
+--   ust_accounts    HOW MANY OF OUR ACCOUNTS searched for it that week. RANK ON THIS.
+--   web_search      searches typed on the website
+--   pda_ipad_search searches typed on a handheld or tablet (PDA, Vegas, CatalogFS/FC).
+--                   DEVICE, not audience — reps and customers both show up here.
+--   searched_as     the spelling the most accounts used. What customers call it.
+--
+-- Searches and accounts disagree violently and the wrong one flatters: a product can show
+-- 56 searches from 20 accounts, while one person re-ordering off a sheet is 260 searches
+-- from one. Breadth of accounts is the demand number; search volume says how hard somebody
+-- looked, never how many people wanted it.
+--
+-- A BLANK IS NOT A ZERO. Blank means the search log does not cover that week at all
+-- (it starts well after the oldest board weeks); 0 means the log covers it and nobody
+-- searched. The two are not the same statement and the query keeps them apart.
+--
+-- `ust_accounts` 0 BESIDE A NON-ZERO SEARCH COUNT IS REAL, NOT A BUG. 11.8% of searches
+-- (13,614 of 114,901) carry no customer_key at all, so they are counted as searches but
+-- belong to nobody we can name. It happens on 317 product-weeks. The bulk is reps
+-- searching before they have picked a customer — PDA 8,613 and CatalogFS 2,897 — plus
+-- 2,050 anonymous searches on the website. Read that row as "somebody looked, we cannot
+-- say which account", NOT as "no demand". It is also why ust_accounts is a floor on
+-- every row, never an exact headcount.
+--
+-- DO NOT SUM THESE DOWN THE PAGE. They are attributed to the PRODUCT, and the board can
+-- carry one product under two names (an English and a Thai spelling, before concept
+-- grouping merges them) — both rows then show the same numbers. That is one population
+-- shown twice, not two.
 
 with observed_weeks as (
 
@@ -69,6 +103,71 @@ prev_week as (
     select concept_class, concept_norm, week_start, board_rank as last_week_rank
     from ust_databricks.ust_reporting.mart_social_trending_items
     where is_top_n
+
+),
+
+-- ── what our own customers typed. See the header ──────────────────────────
+--
+-- The board stores a canonicalised name ('mama instant noodles') and customers type
+-- 'mama', so search text cannot be joined onto the board directly — doing that matches
+-- about 2 rows in 20 and produces a column of zeros that reads as "nobody searched"
+-- rather than "wrong key". Both sides therefore resolve to the same product key through
+-- int_social_concept_canon, which exists for exactly this.
+--
+-- The canon map is keyed on (concept_class, concept_norm), so BOTH of those are joined.
+-- Matching on concept_norm alone silently doubles every row for the 2,122 names that sit
+-- on the dish and item boards at once.
+board_product as (
+
+    select concept_class, concept_norm, product_key
+    from ust_databricks.ust_intermediate.int_social_concept_canon
+
+),
+
+-- already rolled up to one row per (product, week), with accounts counted once over the
+-- whole product. Deliberately NOT the term-grain model: summing a distinct account count
+-- across the spellings of one product counts an account once per spelling it tried, which
+-- overstates 271 of 8,735 product-weeks.
+search as (
+
+    select product_key, week_start, web_searches, app_searches, ust_accounts, top_search_term
+    from ust_databricks.ust_intermediate.int_search_product_weekly
+
+),
+
+-- FALLBACK for board concepts the canon map has never seen — 55 of them, 125 of 836
+-- board rows. Those get no product key, so the join above can never reach them no
+-- matter how hard customers searched, and the column would read 0 for a reason that
+-- has nothing to do with demand.
+--
+-- It costs real signal. Week-aligned against the current 13-week board, a direct name
+-- match recovers 14 rows across three concepts, the best of them well worth having:
+--
+--     Thai Coffee (Oliang)  2026-08-31   17 mentions   10 accounts   (read as 0)
+--     Ice Cream             2026-08-10   29 mentions    2 accounts   (read as 0)
+--
+-- A row showing 17 mentions AND 10 of our own accounts searching is the strongest
+-- corroboration this board can produce, and it was landing as a zero.
+--
+-- This reads the TERM grain, which is safe here precisely because it is one term —
+-- the distinct-account count is taken over that single term and nothing is summed, so
+-- the overcount that forced the product-grain model cannot occur. It fires ONLY where
+-- the canon map has no row at all, so it can never disagree with the bridge or
+-- double-count against it.
+search_by_name as (
+
+    select search_term, week_start, web_searches, app_searches, ust_accounts
+    from ust_databricks.ust_intermediate.int_search_terms_weekly
+
+),
+
+-- which weeks the search log actually covers, so an uncovered week reads blank rather
+-- than 0. The board reaches further back than the event log does, and a 0 there would
+-- say "nobody searched" about a week we simply cannot see.
+search_coverage as (
+
+    select min(week_start) as first_week, max(week_start) as last_week
+    from ust_databricks.ust_intermediate.int_search_product_weekly
 
 )
 
@@ -108,6 +207,21 @@ select
     -- null when the product is not on it
     b.rising_rank,
 
+    -- ── and what OUR customers typed that week. See the header ───────────
+    -- Blank = the search log does not cover this week. 0 = it does, and nobody
+    -- searched. ust_accounts is the demand number; the two search counts say how
+    -- hard people looked, not how many wanted it.
+    case when b.week_start between sc.first_week and sc.last_week
+         then coalesce(s.ust_accounts, sbn.ust_accounts, 0) end   as ust_accounts,
+    case when b.week_start between sc.first_week and sc.last_week
+         then coalesce(s.web_searches, sbn.web_searches, 0) end   as web_search,
+    case when b.week_start between sc.first_week and sc.last_week
+         then coalesce(s.app_searches, sbn.app_searches, 0) end   as pda_ipad_search,
+    -- the spelling the most accounts used — what customers call this thing, which
+    -- is often not what the board calls it. On a fallback row there is only the one
+    -- spelling, which is the board's own name.
+    coalesce(s.top_search_term, sbn.search_term)             as searched_as,
+
     -- "which Pepsi? which Magnum?": related products of the same brand (or longer names
     -- containing this one) with their posts over the last 4 weeks
     concat_ws(', ', b.top_variants)                          as variants,
@@ -142,8 +256,25 @@ left join prev_week as p
       and p.week_start    = date_add(b.week_start, -7)
 left join observed_weeks as ow
        on ow.week_start   = date_add(b.week_start, -7)
--- no de-duplication needed: every spelling of a product is merged upstream
--- (int_social_concept_canon), so the board carries one row per real product
+-- both sides resolve to a product key before meeting; see the board_product comment
+left join board_product as bp
+       on bp.concept_class = b.concept_class
+      and bp.concept_norm  = b.concept_norm
+left join search as s
+       on s.product_key   = bp.product_key
+      and s.week_start    = b.week_start
+-- only where the canon map knows nothing at all; see search_by_name
+left join search_by_name as sbn
+       on bp.product_key is null
+      and sbn.search_term = b.concept_norm
+      and sbn.week_start  = b.week_start
+cross join search_coverage as sc
+-- MOSTLY one row per product: int_social_concept_canon merges spellings upstream and
+-- does it well (28 names fold into 'rice paper', including banh trang, Thai, German and
+-- French). But it only merges names it HAS — 55 board concepts, 125 of 836 rows, have no
+-- canon row at all, and those cannot be merged with anything. 'Rice Paper' and 'Rice
+-- Paper (bánh tráng)' sit on the board as two rows for that reason, not because grouping
+-- failed. So this is not de-duplicated, and a duplicate pair is possible.
 order by b.week_start desc,
          case when b.concept_class = 'item' then 0 else 1 end,
          b.board_rank
