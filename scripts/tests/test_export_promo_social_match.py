@@ -25,6 +25,11 @@ def _row(sheet, row_order, item_no, desc, status, rank=1, **match):
             "engagement_text": None, "caption": None, "link": None, "source": None,
             "match_note": None, "views": None, "likes": None}
     base.update(match)
+    # the mart's item-level columns; one source per item unless a test overrides them
+    src = base["source"]
+    base.setdefault("item_match_status", status)
+    base.setdefault("social_match_status", status if src == "Social Listening" else None)
+    base.setdefault("scraped_match_status", status if src == "Scraped" else None)
     return base
 
 
@@ -85,6 +90,7 @@ def test_sheets_and_header(saved):
     ws = wb["Promo vs Social Listening"]
     assert [c.value for c in ws[1]] == [
         "Promo Sheet", "Item No.", "OCT Promo Item", "Size", "Promo Code", "Match Status",
+        "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok & YouTube)",
         "Matched Content Item", "Channel", "Profile", "Post Date", "Views", "Likes",
         "Approx. Count", "Engagement (as shown)", "Caption", "Link", "Source", "Match Note"]
     h = ws["A1"]
@@ -95,10 +101,10 @@ def test_sheets_and_header(saved):
 
 def test_layout(saved):
     ws = load_workbook(saved)["Promo vs Social Listening"]
-    widths = [ws.column_dimensions[c].width for c in "ABCDEFGHIJKLMNOPQR"]
-    assert widths == [13, 10, 32, 15, 10, 12, 36, 14, 22, 11, 13, 10, 9, 22, 55, 11, 15, 48]
+    widths = [ws.column_dimensions[c].width for c in "ABCDEFGHIJKLMNOPQRST"]
+    assert widths == [13, 10, 32, 15, 10, 12, 16, 16, 36, 14, 22, 11, 13, 10, 9, 22, 55, 11, 18, 48]
     assert ws.freeze_panes == "D2"
-    assert ws.auto_filter.ref == f"A1:R{ws.max_row}"
+    assert ws.auto_filter.ref == f"A1:T{ws.max_row}"
     assert all(ws.row_dimensions[r].height == 39.75 for r in range(2, ws.max_row + 1))
 
 
@@ -121,12 +127,12 @@ def test_rows_order_types_and_formatting(saved):
 def test_views_likes_and_engagement(saved):
     ws = load_workbook(saved)["Promo vs Social Listening"]
     yt = ws[5]                                                               # Fanta Grape, YouTube
-    assert (yt[10].value, yt[11].value) == (176000, 900)
-    assert yt[10].number_format == "#,##0" and yt[10].alignment.horizontal == "right"
-    assert yt[12].value is None                                              # Approx. Count: only TikTok
-    assert yt[13].value == "176,000 views, 900 likes"
+    assert (yt[12].value, yt[13].value) == (176000, 900)
+    assert yt[12].number_format == "#,##0" and yt[12].alignment.horizontal == "right"
+    assert yt[14].value is None                                              # Approx. Count: only TikTok
+    assert yt[15].value == "176,000 views, 900 likes"
     web = ws[4]                                                              # Deedo, a web article
-    assert (web[10].value, web[11].value, web[13].value) == (None, None, "Not reported")
+    assert (web[12].value, web[13].value, web[15].value) == (None, None, "Not reported")
 
 
 def test_banding_by_item(saved):
@@ -143,10 +149,19 @@ def test_status_styles_and_links(saved):
     assert styles == {"Unmatched": ("FFEDEDED", "FF595959"), "Close": ("FFFFEB9C", "FF9C5700"),
                       "Exact": ("FFC6EFCE", "FF006100")}
     assert all(ws[f"F{r}"].font.bold for r in range(2, ws.max_row + 1))
-    link = ws["P4"]
+    link = ws["R4"]
     assert link.value == "Open ↗" and link.hyperlink.target.startswith("https://www.trueid.net/")
     assert link.font.underline == "single" and link.font.color.rgb == "FF0563C1"
-    assert ws["P2"].value is None and ws["P2"].hyperlink is None              # Unmatched: no link
+    assert ws["R2"].value is None and ws["R2"].hyperlink is None              # Unmatched: no link
+
+
+def test_source_columns(saved):
+    ws = load_workbook(saved)["Promo vs Social Listening"]
+    # Deedo (row 4): social listening only; Fanta Grape (row 5): YouTube only
+    assert (ws["G4"].value, ws["H4"].value, ws["S4"].value) == ("Exact", None, "On Trending Social")
+    assert (ws["G5"].value, ws["H5"].value, ws["S5"].value) == (None, "Exact", "Direct Scraping")
+    assert ws["G4"].fill.fgColor.rgb == "FFC6EFCE" and ws["G4"].font.bold
+    assert (ws["G2"].value, ws["H2"].value) == (None, None)                  # Unmatched: both blank
 
 
 def test_summary_formulas_and_footnote(saved):
@@ -171,7 +186,7 @@ def test_summary_sections(saved):
     assert sm["A16"].value == "Matched posts by channel"
     # channels in the rows, plus TikTok (the TikTok step adds it), alphabetical
     assert col_a[17:21] == ["TikTok", "Web", "YouTube", "Total"]
-    assert sm["B18"].value == ("=COUNTIFS('Promo vs Social Listening'!$H:$H,$A18,"
+    assert sm["B18"].value == ("=COUNTIFS('Promo vs Social Listening'!$J:$J,$A18,"
                                "'Promo vs Social Listening'!$F:$F,\"Exact\")")
     i = col_a.index("Unmatched promo items (no post found)") + 1
     assert [c.value for c in sm[i + 1]][:3] == ["Item No.", "OCT Promo Item", "Promo Sheet"]
@@ -208,3 +223,33 @@ def test_summary_formulas_recalculate(saved):
     assert [val(f"C{r}") for r in (11, 12, 13)] == [2, 0, 1]
     # by channel: Web = Bento (Close) + Deedo (Exact); YouTube = 2 Fanta Grape rows
     assert [val("B19"), val("C19"), val("B20")] == [1, 1, 2]
+
+
+def test_own_brand_shows_both_sources(data, tmp_path):
+    """An own-brand item keeps its social listening post AND gets scraped: one item
+    status (the better one) on every row, each source's result in its own column,
+    and it stays on the TikTok list although social listening matched it."""
+    sl = dict(matched_content_item="Bánh tráng Chuồn Chuồn", channel="TikTok", profile="@a",
+              post_date="2026-09-01", engagement_text="12 likes", caption="chuồn chuồn",
+              link="https://www.tiktok.com/@a/video/1", source="Social Listening",
+              match_note="Same brand/product line", views=0, likes=12)
+    yt = dict(matched_content_item="Chuồn Chuồn rice paper", channel="YouTube", profile="Chuon Chuon Eats",
+              post_date="2026-06-03", engagement_text="505 views", caption="bánh tráng",
+              link="https://www.youtube.com/watch?v=y", source="Scraped",
+              match_note="Brand + product/flavor named in video.", views=505, likes=5)
+    both = dict(item_match_status="Exact", social_match_status="Close", scraped_match_status="Exact")
+    data["rows"] = [_row("OCT NEW", 1, "43220", "CHUON CHUON RICE PAPER", "Close", 1, **sl, **both),
+                    _row("OCT NEW", 1, "43220", "CHUON CHUON RICE PAPER", "Exact", 2, **yt, **both)]
+    data["items"] = [_item("OCT NEW", 1, "43220", "CHUON CHUON RICE PAPER", brand="Chuon Chuon",
+                           is_own_brand=True)]
+    path = tmp_path / "own.xlsx"
+    ex.build_workbook(data).save(path)
+    wb = load_workbook(path)
+    ws = wb["Promo vs Social Listening"]
+    assert [ws[f"F{r}"].value for r in (2, 3)] == ["Exact", "Exact"]
+    assert [ws[f"G{r}"].value for r in (2, 3)] == ["Close", "Close"]
+    assert [ws[f"H{r}"].value for r in (2, 3)] == ["Exact", "Exact"]
+    assert [ws[f"S{r}"].value for r in (2, 3)] == ["On Trending Social", "Direct Scraping"]
+    tk = wb["TikTok Search List"]
+    assert tk["A2"].value == 43220
+    assert tk["G2"].value == "Close (On Trending Social); Exact (YouTube)"

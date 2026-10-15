@@ -625,6 +625,19 @@ seeds:
         search_queries: string
         notes: string
         review_status: string
+    # The codes in UST item descriptions (HB = Honeybee, FZ = frozen, ...). The
+    # term drafter reads it as the LLM's glossary; int_promo_items_enriched reads
+    # it for is_own_brand.
+    seed_promo_brand_codes:
+      +tags: ["promo", "reference"]
+      +column_types:
+        code: string
+        kind: string
+        brand: string
+        is_own_brand: boolean
+        aliases: string
+        brand_terms: string
+        notes: string
     # A person's corrections to the LLM's product labels (int_social_product_labels).
     # A blank product_type or brand keeps the LLM's value for that field.
     seed_social_product_overrides:

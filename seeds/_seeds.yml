@@ -545,3 +545,27 @@ seeds:
           - accepted_values:
               arguments:
                 values: ['branded', 'shelf', 'generic']
+
+  - name: seed_promo_brand_codes
+    description: >
+      The codes UST writes into item descriptions, for the monthly promo x social match.
+      kind = brand: the code names a brand (HB = Honeybee); kind = status: it names a
+      state, not a brand (FZ = frozen, DFZ = discontinued frozen). scripts/
+      draft_promo_terms.py hands this list to the LLM as a glossary and forces the
+      brand when a description carries a brand code, so "HB" is never guessed again.
+      is_own_brand marks UST's own brands: int_promo_items_enriched matches an item's
+      brand against aliases, and an own-brand item is matched against Mentionlytics AND
+      always scraped (YouTube, then the TikTok step). Changing this file changes the
+      drafts' version, so the next run re-drafts the latest month's unreviewed items.
+    columns:
+      - name: code
+        tests: [unique, not_null]
+      - name: kind
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['brand', 'status']
+      - name: aliases
+        description: Pipe-separated brand names that count as this brand, compared without case or spaces (Dragonfly is sold in Vietnam as Chuồn Chuồn).
+      - name: brand_terms
+        description: Pipe-separated terms merged into every drafted item that carries the code.

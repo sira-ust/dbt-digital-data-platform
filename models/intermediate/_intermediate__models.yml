@@ -1017,7 +1017,13 @@ models:
               arguments:
                 values: [seed, draft, missing]
       - name: is_branded
-        description: False for generic items and private-label dishes — never searched.
+        description: False for generic items with no searchable brand — never searched.
+        tests: [not_null]
+      - name: is_own_brand
+        description: >
+          The brand is one of UST's own (seed_promo_brand_codes, is_own_brand). Such items
+          are matched against Mentionlytics like any brand AND always scraped (YouTube,
+          then TikTok), even when Mentionlytics found posts.
         tests: [not_null]
       - name: nav_match
         tests: [not_null]

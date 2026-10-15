@@ -32,6 +32,11 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
    judge to title, description and tags, and keeps the top 1–3 Exact videos by views.
 4. **The mart.** `mart_promo_social_match` builds the rows. An item with an Exact post shows
    only Exact posts; otherwise it shows its Close posts, then YouTube, then one `Unmatched` row.
+   UST's own brands show their social listening posts *and* their YouTube videos.
+   In the workbook, **Match Status** is the item's status (the better of the two sources),
+   the same on every row of the item. Beside it, **On Trending Social (Mentionlytics)** and
+   **Direct Scraping (TikTok & YouTube)** show what each source found for the item, and each
+   row's **Source** says which of the two it came from.
 5. **TikTok, by hand.** The workbook's *TikTok Search List* sheet lists every branded item
    social listening didn't match. Open the workbook in Claude in Chrome with
    `scripts/prompts/tiktok_promo_search.md`; Claude adds TikTok rows under each item and
@@ -95,6 +100,35 @@ set `review_status = reviewed` and commit. How terms match:
   judged pairs aren't re-judged unless `JUDGE_PROMPT_VERSION` changes.
 
 To add drafts to the seed for review: `python scripts/draft_promo_terms.py --to-seed`.
+
+### Brand codes and UST's own brands
+
+UST writes codes into item descriptions. `seeds/seed_promo_brand_codes.csv` lists them:
+
+| Code | Means | Searched as |
+|---|---|---|
+| HB | Honeybee (own brand) | honeybee, ฮันนี่บี |
+| DF | Dragonfly (own brand) | dragonfly; in Vietnam it is sold as Chuồn Chuồn |
+| CG | Chung Guang (own brand) | chung guang |
+| FZ | frozen (not a brand) | — |
+| DFZ | discontinued frozen (not a brand) | — |
+
+`draft_promo_terms.py` gives the LLM this list, and a description carrying a brand code
+always gets that brand and its terms. So "FZ DF SESAME DONUT" is a Dragonfly item and
+"HB" is never guessed.
+
+**Own brands are matched AND always scraped.** An item whose brand is an own brand
+(`is_own_brand`, matched on the seed's `aliases`) is matched against Mentionlytics like
+any brand, and also goes to YouTube and the TikTok list even when Mentionlytics found
+posts. Mentionlytics tracks two broad F&B keyword sets that rarely name UST's own brands,
+so scraping is where most own-brand posts come from. Other brands are scraped only when
+Mentionlytics found nothing.
+
+**Adding a code mid-month.** Add the row, commit, and run the job again. Every draft
+records the version it was made with (model, prompt, and a fingerprint of the code
+list), so the run re-drafts the latest month's unreviewed items whose draft is out of
+date, and YouTube searches each re-drafted item again. Reviewed seed rows and older
+months are never re-drafted: edit reviewed rows by hand.
 
 ### Known false-positive patterns
 

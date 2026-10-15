@@ -1,8 +1,9 @@
 """Search YouTube for promo items social listening did not find (step 4).
 
 For every BRANDED promo item of the month with no Social Listening match (no row
-in int_promo_social_matches), run the item's reviewed search_queries through the
-YouTube Data API v3:
+in int_promo_social_matches), and for every UST own-brand item whether matched or
+not (is_own_brand), run the item's reviewed search_queries through the YouTube
+Data API v3:
 
     search.list   top N videos per query            100 quota units each
     videos.list   title, description, tags, views,   1 unit per 50 videos
@@ -14,7 +15,8 @@ judge. int_promo_scraped_matches keeps the top 1-3 judged-Exact videos by views.
 
 THE TABLE IS THE CACHE. Every video returned is stored with its evidence and
 verdict, keyed by (promo_month, item_no). An item that already has rows for the
-month is not searched again — reruns cost no quota. --refresh re-searches.
+month is not searched again — reruns cost no quota — unless its terms were
+re-drafted after that search. --refresh re-searches everything.
 Free quota is 10,000 units a day; at the default 3 queries an item costs ~303.
 
 Shorts: the API has no Shorts flag. youtube.com/shorts/<id> answers 200 for a
@@ -128,10 +130,11 @@ def items_to_search(backend: str, promo_month: str | None) -> tuple[str, list[di
         where i.promo_month = date '{promo_month}'
           and i.is_branded
           and i.search_queries is not null
-          and not exists (
-              select 1 from {sch}.int_promo_social_matches as s
-              where s.promo_month = i.promo_month and s.item_no = i.item_no
-          )
+          and (i.is_own_brand             -- own brands are scraped even when social matched
+               or not exists (
+                   select 1 from {sch}.int_promo_social_matches as s
+                   where s.promo_month = i.promo_month and s.item_no = i.item_no
+               ))
     """)
     seen, out = set(), []
     for r in rows:
@@ -157,13 +160,27 @@ def _attach_siblings(backend, sch, promo_month, items):
 
 
 def already_searched(backend: str, promo_month: str) -> set[str]:
-    spec = LANDING["youtube_videos"]
+    """Items searched this month AFTER their latest terms draft. An item re-drafted
+    since (draft_promo_terms.py re-drafts after a brand-code change, e.g. once "HB" became Honeybee) was
+    searched with the old terms, so it is searched again. Both timestamps are ISO
+    strings, so they compare as text."""
+    spec, draft = LANDING["youtube_videos"], LANDING["item_terms_draft"]
     if backend == "databricks":
-        rows = query(backend, f"select distinct item_no from {spec['dbx']} where promo_month = '{promo_month}'")
+        searched = query(backend, f"select item_no, max(searched_at) as at from {spec['dbx']} "
+                                  f"where promo_month = '{promo_month}' group by item_no")
+        drafted = query(backend, f"select item_no, max(drafted_at) as at from {draft['dbx']} group by item_no")
     else:
-        rows = [r for r in read_local_parquet(landing_path("youtube_videos"))
-                if str(r.get("promo_month"))[:10] == promo_month]
-    return {str(r["item_no"]) for r in rows}
+        searched, drafted = {}, {}
+        for r in read_local_parquet(landing_path("youtube_videos")):
+            if str(r.get("promo_month"))[:10] == promo_month:
+                searched[str(r["item_no"])] = max(searched.get(str(r["item_no"])) or "", str(r.get("searched_at") or ""))
+        for r in read_local_parquet(landing_path("item_terms_draft")):
+            drafted[str(r["item_no"])] = max(drafted.get(str(r["item_no"])) or "", str(r.get("drafted_at") or ""))
+        searched = [{"item_no": k, "at": v} for k, v in searched.items()]
+        drafted = [{"item_no": k, "at": v} for k, v in drafted.items()]
+    last_draft = {str(r["item_no"]): str(r["at"] or "") for r in drafted}
+    return {str(r["item_no"]) for r in searched
+            if str(r["at"] or "") >= last_draft.get(str(r["item_no"]), "")}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -257,7 +274,7 @@ def main(argv=None):
     month, items = items_to_search(args.backend, args.promo_month)
     cached = set() if args.refresh else already_searched(args.backend, month)
     todo = [it for it in items if it["item_no"] not in cached]
-    print(f"{month}: {len(items)} branded item(s) with no social listening match; "
+    print(f"{month}: {len(items)} branded item(s) to search (no social listening match, or own brand); "
           f"{len(items) - len(todo)} already searched this month; {len(todo)} to search "
           f"(~{len(todo) * (args.max_queries * UNITS_SEARCH + 1):,} quota units)")
     for it in todo:

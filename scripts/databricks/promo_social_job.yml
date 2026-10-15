@@ -54,14 +54,18 @@ resources:
             project_directory: ""
             commands:
               - dbt deps
-              - dbt build --select seed_promo_item_terms stg_promo__items stg_promo__item_terms_draft int_promo_items_enriched --indirect-selection cautious
+              - dbt build --select seed_promo_item_terms seed_promo_brand_codes stg_promo__items stg_promo__item_terms_draft int_promo_items_enriched --indirect-selection cautious
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
           environment_key: dbt-default
 
         # 3. LLM-draft terms for any item the seed does not cover yet (a no-op when
-        #    every item has a reviewed row), then rebuild the items to pick them up
+        #    every item has a reviewed row), then rebuild the items to pick them up.
+        #    It also re-drafts the latest month's unreviewed items when the brand-code
+        #    list (seeds/seed_promo_brand_codes.csv), prompt or model has changed since
+        #    they were drafted, and YouTube then re-searches them: a plain rerun is
+        #    enough after adding a code.
         - task_key: draft-terms
           depends_on: [{task_key: dbt-items}]
           spark_python_task:
