@@ -1497,3 +1497,132 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "week_start <= week_end"
+
+  - name: int_customer_invoice_rhythm
+    description: >
+      HOW OFTEN A STORE BUYS, and whether it is late. One row per customer_key.
+
+      PER STORE, ACROSS EVERY SALES CODE — that is the whole point. The
+      invoices_* columns on mart_rep_account_status count only what THIS rep
+      billed, which measures the relationship rather than the shop. PYONE CHO
+      ASIA MARKET has 32 invoices under sales code 028 and none under 032, so on
+      the rep's own column it has never bought anything; 17 of Ryan Tran's 129
+      owned accounts are in that state. Everything here groups on customer_key
+      alone and never references sales_code.
+
+      WHY IT EXISTS: the voice agent's call list sorted on days_since_last_order,
+      which is app orders only, so it ranked the most dormant stores first — for
+      rep 032 that was six accounts with 2-5 invoices in their whole history,
+      silent 150-270 days, with nothing to rescue. Meanwhile KHUN ASIAN GROCERY
+      STORE buys about every 28 days, had been quiet 54, and was flagged 'ok'.
+      That is the call worth making, and it was invisible because 54 days is
+      unremarkable in absolute terms and alarming only against its own habit.
+
+      Hence RATIOS, not day counts. days_past_usual compares a store to itself,
+      so one sort order serves a weekly account and a quarterly one.
+
+      DISTINCT DAYS, NOT INVOICES: a store billed three times on one day (split
+      shipment, correction, separate bill-to lines) went to the shop once, and
+      counting invoices would shorten its apparent gap.
+
+      MEDIAN GAP, NOT MEAN: a weekly store that shut for a six-week holiday
+      reads as fortnightly under a mean and then stops looking late when it is.
+
+      Measured against nav_posted_today(), the same edge the mart publishes as
+      invoice_as_of_date, so a stalled ERP feed freezes the ages instead of
+      making every customer appear to lapse at once.
+    columns:
+      - name: customer_key
+        description: The store. One row each; this is the grain.
+        tests: [not_null, unique]
+      - name: invoice_days_12m
+        description: >
+          Distinct days invoiced in the last var('rhythm_window_days') (365),
+          any sales code. 0 when none — a real zero, not a null.
+        tests: [not_null]
+      - name: invoice_days_all_time
+        description: Distinct days ever invoiced, any sales code.
+        tests: [not_null]
+      - name: last_invoice_any_rep
+        description: Latest posting_date for the store under ANY sales code.
+        tests: [not_null]
+      - name: days_since_last_invoice_any_rep
+        description: >
+          nav_posted_today() minus last_invoice_any_rep. Never negative: the
+          edge is the newest posting date in the ERP replica, which fct_invoices
+          is derived from.
+        tests: [not_null]
+      - name: usual_gap_days
+        description: >
+          Median days between consecutive invoice days in the window. NULL means
+          NO ESTABLISHED GAP — fewer than three invoice days, so at most one gap,
+          and one gap is a pair of dates rather than a habit. Never "no wait".
+
+          On Databricks median() dispatches to percentile_approx; each store
+          contributes a handful of gaps, so it is exact in practice. Noted
+          because the macro name hides it.
+      - name: days_past_usual
+        description: >
+          days_since_last_invoice_any_rep / usual_gap_days, 1 dp. 1.0 is exactly
+          this store's usual wait. NULL wherever usual_gap_days is null, never
+          0 — "we cannot say" and "bang on time" are opposite answers.
+      - name: buyer_type
+        description: >
+          regular (invoice_days_12m >= var('rhythm_regular_min_days'), 6),
+          occasional (1 to that), none (0).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['regular', 'occasional', 'none']
+      - name: rhythm_status
+        description: >
+          Only a REGULAR gets a rhythm verdict, because only a regular has a
+          rhythm to be off: on rhythm (< 1.0), due (1.0-1.5), lapsing (1.5-6),
+          dormant (> 6x or past 180 days). The absolute backstop is tested
+          first, so a 120-day-gap store goes dormant at 180 without reaching 6x.
+          Boundaries inclusive upward: exactly 1.5 is lapsing, exactly 6 still
+          lapsing.
+
+          'former regular' is a non-regular with >= 6 all-time invoice days
+          quiet past 180 days — a win-back call, not a rescue. Otherwise
+          'occasional', or 'no recent buying' when the window is empty.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['on rhythm', 'due', 'lapsing', 'dormant', 'former regular', 'occasional', 'no recent buying']
+      - name: rhythm_priority
+        description: >
+          1 = call first: 1 lapsing, 2 due, 3 on rhythm, 4 former regular,
+          5 everything else. Lapsing outranks due because a store half again
+          past its usual wait is still in the habit and can be caught. Ties
+          break on days_past_usual DESC in the consumer.
+        tests: [not_null]
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "usual_gap_days > 0"
+            where: "usual_gap_days is not null"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "days_past_usual >= 0"
+            where: "days_past_usual is not null"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "invoice_days_12m <= invoice_days_all_time"
+      # the gap is only ever null for want of evidence, never for a regular:
+      # 6 invoice days qualify a regular and 3 establish a gap
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "usual_gap_days is not null"
+            where: "buyer_type = 'regular'"
+      # a rhythm verdict and its sort key must never disagree
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "rhythm_priority = 1"
+            where: "rhythm_status = 'lapsing'"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "rhythm_priority = 4"
+            where: "rhythm_status = 'former regular'"

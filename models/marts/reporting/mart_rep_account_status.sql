@@ -283,6 +283,38 @@ select
     a.as_of_date,
     a.invoice_as_of_date,
 
+    -- ── the STORE's buying rhythm, across every sales code ────────────────
+    -- NOT a restatement of the invoices_* columns above, and the difference is
+    -- the point. Those count what THIS REP billed; these count what the SHOP
+    -- bought, whoever billed it. PYONE CHO ASIA MARKET has 32 invoices under
+    -- sales code 028 and none under 032, so on this rep's own columns it looks
+    -- like it has never bought anything. 17 of Ryan Tran's 129 owned accounts
+    -- are in that state.
+    --
+    -- Judged on ratios rather than day counts, so one sort order serves a
+    -- weekly account and a quarterly one: days_past_usual compares a store to
+    -- its own habit. KHUN ASIAN GROCERY STORE buys about every 28 days and was
+    -- 54 days quiet — unremarkable in absolute terms, nearly twice its own gap,
+    -- and 'ok' on attention_reason.
+    --
+    -- Zero-filled where a store has no invoice history at all: 'none' /
+    -- 'no recent buying' / priority 5 are the correct answers for a shop that
+    -- has never bought, and a null there would make the agent's sort unstable.
+    -- The NULLs that remain are meaningful — see usual_gap_days.
+    coalesce(rh.invoice_days_12m, 0)                                     as invoice_days_12m,
+    coalesce(rh.invoice_days_all_time, 0)                                as invoice_days_all_time,
+    rh.last_invoice_any_rep,
+    rh.days_since_last_invoice_any_rep,
+    -- NULL means no established gap (under three invoice days in the window),
+    -- never "no wait". days_past_usual is null with it.
+    rh.usual_gap_days,
+    rh.days_past_usual,
+    coalesce(rh.buyer_type, 'none')                                      as buyer_type,
+    coalesce(rh.rhythm_status, 'no recent buying')                       as rhythm_status,
+    -- 1 = call first. Independent of attention_priority, which answers a
+    -- different question (is this account a problem) on a different clock.
+    coalesce(rh.rhythm_priority, 5)                                      as rhythm_priority,
+
     -- ── the to-do verdict ─────────────────────────────────────────────────
     -- ONE reason per account, in precedence order, so an assistant reads out a
     -- cause instead of re-deriving one from six columns. Ordering: an inactive
@@ -339,3 +371,8 @@ from (
 ) as a
 left join {{ ref('dim_reps') }} as r
     on r.sales_code = a.sales_code
+-- one row per customer_key, so this cannot change the mart's (sales_code,
+-- customer_key) grain. Joined on the STORE alone — deliberately not on
+-- sales_code, which is what makes it survive an account changing hands.
+left join {{ ref('int_customer_invoice_rhythm') }} as rh
+    on rh.customer_key = a.customer_key

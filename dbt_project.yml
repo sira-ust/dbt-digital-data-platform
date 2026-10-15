@@ -158,6 +158,33 @@ vars:
   # not called on someone.
   rep_account_order_overdue_days: 60
 
+  # int_customer_invoice_rhythm — a STORE's buying rhythm, measured per
+  # customer_key across every sales code. Conventions, like the two above, and
+  # the ones most worth arguing about with the sales managers: they decide which
+  # accounts a voice agent reads out first.
+
+  # the window the rhythm is measured over, ending at NAV's newest posting date.
+  # A year so that a seasonal account is judged against its own seasons.
+  rhythm_window_days: 365
+
+  # distinct invoice days in the window at or above which a store counts as a
+  # REGULAR buyer. 6 in 12 months is roughly every two months — low enough to
+  # admit a slow but dependable account, high enough that two one-off buys in a
+  # year never earn a rhythm the agent would read as broken.
+  rhythm_regular_min_days: 6
+
+  # how far past its own usual gap a regular may drift before each verdict.
+  # Ratios, not days, so a weekly account and a quarterly one are judged on
+  # their own clock: 1.5 = half again its usual wait, 6 = six times it.
+  rhythm_due_max_ratio: 1.5
+  rhythm_lapsing_max_ratio: 6
+
+  # the absolute backstop. Past this many days an account is dormant however
+  # slow its usual gap was, and it is also the line past which a former regular
+  # is called one. Without it a store that used to buy once a year would sit at
+  # 'due' forever.
+  rhythm_dormant_days: 180
+
   # mart_rep_nearby_accounts — "I'm at ABC Market, who else round here has gone
   # quiet?" CONVENTIONS, like the rep_account_* thresholds above: nobody has
   # agreed how far a rep will detour, so argue about these with the sales
