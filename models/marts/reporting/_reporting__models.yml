@@ -1351,6 +1351,112 @@ models:
           attention_priority <= 2 — the two reasons that are genuinely a to-do.
           Deliberately excludes 'inactive account', which the rep cannot act on,
           and 'owned by another rep', which is somebody else's call to make.
+      # ── the STORE's buying rhythm, per customer_key across EVERY sales code ──
+      # Unlike every invoices_*/orders_* column above, which count only what
+      # THIS rep billed or sold. See int_customer_invoice_rhythm.
+      - name: invoice_days_12m
+        description: >
+          Distinct days this STORE was invoiced in the last
+          var('rhythm_window_days') (365), by any rep. 0 when none — a real
+          zero, not a null. Distinct DAYS, not invoices: a store billed three
+          times on one day went to the shop once.
+
+          Per store across all reps, unlike invoices_recent, which counts only
+          this rep's invoices for the account.
+        tests: [not_null]
+      - name: invoice_days_all_time
+        description: >
+          Distinct days this store was ever invoiced, by any rep. 0 when the
+          store has no invoice history at all. Per store across all reps,
+          unlike invoices_all_time.
+        tests: [not_null]
+      - name: last_invoice_any_rep
+        description: >
+          The store's most recent posting_date under ANY sales code. NULL means
+          no invoice on record at all, ever. Distinct from last_invoiced_date,
+          which is the last time THIS rep billed it — PYONE CHO ASIA MARKET has
+          32 invoices under 028 and none under 032, so the two disagree by the
+          whole history of the account.
+      - name: days_since_last_invoice_any_rep
+        description: >
+          invoice_as_of_date minus last_invoice_any_rep. NULL when the store has
+          never been invoiced. Measured against NAV's leading edge, not
+          current_date, so a stalled ERP feed freezes this instead of ageing
+          every account a day per day.
+      - name: usual_gap_days
+        description: >
+          MEDIAN days between consecutive invoice days in the window — how often
+          this shop normally buys.
+
+          NULL means NO ESTABLISHED GAP: fewer than three invoice days in the
+          window, so there is at most one gap and one gap is a pair of dates
+          rather than a habit. It never means "no wait". days_past_usual is null
+          with it, and rhythm_status falls through to occasional.
+
+          Median rather than mean deliberately: a weekly store that shut for a
+          six-week holiday reads as fortnightly under a mean, and then stops
+          looking late when it is.
+      - name: days_past_usual
+        description: >
+          days_since_last_invoice_any_rep / usual_gap_days, 1 dp. How late this
+          store is BY ITS OWN STANDARD — 1.0 is exactly its usual wait, 2.0 is
+          twice it. This is what lets one sort order serve a weekly account and
+          a quarterly one.
+
+          NULL wherever usual_gap_days is null, never 0: "we cannot say" and
+          "bang on time" are opposite answers.
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+                where: "days_past_usual is not null"
+      - name: buyer_type
+        description: >
+          regular (invoice_days_12m >= var('rhythm_regular_min_days'), 6),
+          occasional (1 to that), none (0). Per store across all reps.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['regular', 'occasional', 'none']
+      - name: rhythm_status
+        description: >
+          Whether the store is off its own rhythm. Only a REGULAR gets a rhythm
+          verdict, because only a regular has a rhythm to be off:
+
+            on rhythm      days_past_usual < 1.0
+            due            1.0 to var('rhythm_due_max_ratio') (1.5)
+            lapsing        1.5 to var('rhythm_lapsing_max_ratio') (6)
+            dormant        past 6x, OR past var('rhythm_dormant_days') (180)
+
+          The 180-day backstop is tested first, so a store whose usual gap is
+          120 days goes dormant at 180 without ever reaching 6x. Boundaries are
+          inclusive upward: exactly 1.5 is 'lapsing', exactly 6 is still
+          'lapsing'.
+
+          'former regular' is a non-regular with >= 6 all-time invoice days that
+          has been quiet past 180 days — it had a habit and lost it, which is a
+          win-back call rather than a rescue. Otherwise 'occasional', or
+          'no recent buying' when nothing was bought in the window.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['on rhythm', 'due', 'lapsing', 'dormant', 'former regular', 'occasional', 'no recent buying']
+      - name: rhythm_priority
+        description: >
+          Call-list sort key, 1 = call first: 1 lapsing, 2 due, 3 on rhythm,
+          4 former regular, 5 everything else. Break ties on days_past_usual
+          DESC.
+
+          Lapsing outranks due because a store half again past its usual wait is
+          still in the habit and can be caught, while one merely due may simply
+          not have run out yet.
+
+          INDEPENDENT of attention_priority, which answers a different question
+          (is this account a problem for this rep) on a different clock (app
+          orders, this rep only). Neither supersedes the other.
+        tests: [not_null]
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
