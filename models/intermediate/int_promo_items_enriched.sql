@@ -1,4 +1,13 @@
 {{ config(tags=['promo']) }}
+{#- UST's own-brand names (var promo_brand_codes, own_brand: true), lowercased with
+    spaces removed, so "HB", "Honey Bee" and October's reviewed "Chuon Chuon" all
+    land on their brand. -#}
+{%- set own_brand_aliases = [] -%}
+{%- for c in var('promo_brand_codes', []) if c.own_brand -%}
+    {%- for a in c.aliases -%}
+        {%- do own_brand_aliases.append(a | lower | replace(' ', '')) -%}
+    {%- endfor -%}
+{%- endfor %}
 -- int_promo_items_enriched — one row per promo-workbook row, joined to what the
 -- company knows about the item and to the terms the matcher searches with.
 --
@@ -56,43 +65,6 @@ draft_terms as (
 
     select * from {{ ref('stg_promo__item_terms_draft') }}
 
-),
-
--- UST's own brands (HB = Honeybee, DF = Dragonfly, ...). Matched on the item's
--- brand against every alias, ignoring case and spaces, so "HB", "Honey Bee" and
--- October's reviewed "Chuon Chuon" all land on their brand.
-own_brands as (
-
-    select '|' || lower(replace(aliases, ' ', '')) || '|' as alias_list
-    from {{ ref('seed_promo_brand_codes') }}
-    where is_own_brand
-
-),
-
-terms as (
-
-    select
-        p.*,
-        coalesce(s.brand, d.brand) as brand
-    from promo as p
-    left join seed_terms as s
-        on cast(s.item_no as {{ dbt.type_string() }}) = p.item_no
-    left join draft_terms as d
-        on d.item_no = p.item_no
-
-),
-
--- OWN BRANDS ARE MATCHED AND ALWAYS SCRAPED: like any brand they are matched
--- against Mentionlytics, but they also go to YouTube and the TikTok list even when
--- Mentionlytics found posts, because Mentionlytics tracks two broad F&B keyword
--- sets that rarely name UST's own brands.
-own_brand_items as (
-
-    select distinct t.promo_month, t.promo_sheet, t.row_order
-    from terms as t
-    inner join own_brands as o
-        on o.alias_list like '%|' || lower(replace(t.brand, ' ', '')) || '|%'
-
 )
 
 select
@@ -136,7 +108,17 @@ select
     coalesce(s.flavor_variant, d.flavor_variant)             as flavor_variant,
     coalesce(s.pack_format,    d.pack_format)                as pack_format,
     coalesce(s.is_branded,     d.is_branded, false)          as is_branded,
-    ob.row_order is not null                                 as is_own_brand,
+    -- OWN BRANDS ARE MATCHED AND ALWAYS SCRAPED: like any brand they are matched
+    -- against Mentionlytics, but they also go to YouTube and the TikTok list even
+    -- when Mentionlytics found posts, because Mentionlytics tracks two broad F&B
+    -- keyword sets that rarely name UST's own brands.
+    {% if own_brand_aliases -%}
+    coalesce(lower(replace(coalesce(s.brand, d.brand), ' ', '')) in (
+        {%- for a in own_brand_aliases %}'{{ a }}'{{ ', ' if not loop.last }}{% endfor -%}
+    ), false)
+    {%- else -%}
+    false
+    {%- endif %}                                             as is_own_brand,
     case when s.item_no is not null then s.brand_terms    else d.brand_terms    end as brand_terms,
     case when s.item_no is not null then s.product_terms  else d.product_terms  end as product_terms,
     case when s.item_no is not null then s.flavor_terms   else d.flavor_terms   end as flavor_terms,
@@ -152,7 +134,3 @@ left join seed_terms as s
     on cast(s.item_no as {{ dbt.type_string() }}) = p.item_no
 left join draft_terms as d
     on d.item_no = p.item_no
-left join own_brand_items as ob
-    on  ob.promo_month = p.promo_month
-    and ob.promo_sheet = p.promo_sheet
-    and ob.row_order   = p.row_order

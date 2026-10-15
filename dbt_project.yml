@@ -427,6 +427,41 @@ vars:
   # leaves room for one rerun of a few items the same day.
   promo_youtube_max_queries_per_item: 3
   promo_youtube_results_per_query: 25
+  # The codes UST writes into item descriptions ("FZ DF SESAME DONUT" = a frozen
+  # Dragonfly item). kind brand: the code names a brand; kind status: a state,
+  # never a brand. own_brand marks UST's own brands, which are matched against
+  # Mentionlytics AND always scraped (YouTube + the TikTok list). aliases: brand
+  # names that count as this brand, ignoring case and spaces. brand_terms: merged
+  # into every drafted item that carries the code. Read by draft_promo_terms.py
+  # (the LLM's glossary; a brand code forces the brand) and by
+  # int_promo_items_enriched (is_own_brand). Editing this list changes the drafts'
+  # version, so the next run re-drafts the latest month's unreviewed items.
+  promo_brand_codes:
+    - code: HB
+      kind: brand
+      brand: Honeybee
+      own_brand: true
+      aliases: [Honeybee, Honey Bee, HB]
+      brand_terms: [honeybee, honey bee, "#honeybee", "#honeybeedrink", ฮันนี่บี, ฮันนีบี]
+    - code: DF
+      kind: brand
+      brand: Dragonfly
+      own_brand: true
+      aliases: [Dragonfly, Dragon Fly, DF, Chuon Chuon, Chuồn Chuồn]
+      brand_terms: [dragonfly, dragon fly, "#dragonfly", chuồn chuồn, chuon chuon, chuonchuon, "#chuonchuon"]
+      notes: Sold in Vietnam as Chuồn Chuồn (Vietnamese for dragonfly).
+    - code: CG
+      kind: brand
+      brand: Chung Guang
+      own_brand: true
+      aliases: [Chung Guang, CG]
+      brand_terms: [chung guang, "#chungguang"]
+    - code: FZ
+      kind: status
+      notes: "Frozen. Not a brand: the brand, if any, is another code or word in the description (FZ DF = frozen Dragonfly)."
+    - code: DFZ
+      kind: status
+      notes: Discontinued frozen. Not a brand.
 
 
 
@@ -625,19 +660,6 @@ seeds:
         search_queries: string
         notes: string
         review_status: string
-    # The codes in UST item descriptions (HB = Honeybee, FZ = frozen, ...). The
-    # term drafter reads it as the LLM's glossary; int_promo_items_enriched reads
-    # it for is_own_brand.
-    seed_promo_brand_codes:
-      +tags: ["promo", "reference"]
-      +column_types:
-        code: string
-        kind: string
-        brand: string
-        is_own_brand: boolean
-        aliases: string
-        brand_terms: string
-        notes: string
     # A person's corrections to the LLM's product labels (int_social_product_labels).
     # A blank product_type or brand keeps the LLM's value for that field.
     seed_social_product_overrides:

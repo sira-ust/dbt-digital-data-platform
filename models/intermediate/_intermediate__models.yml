@@ -1021,7 +1021,7 @@ models:
         tests: [not_null]
       - name: is_own_brand
         description: >
-          The brand is one of UST's own (seed_promo_brand_codes, is_own_brand). Such items
+          The brand is one of UST's own (dbt var promo_brand_codes, own_brand: true). Such items
           are matched against Mentionlytics like any brand AND always scraped (YouTube,
           then TikTok), even when Mentionlytics found posts.
         tests: [not_null]

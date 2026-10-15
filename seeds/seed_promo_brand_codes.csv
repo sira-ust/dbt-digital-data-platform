@@ -1,6 +1,0 @@
-code,kind,brand,is_own_brand,aliases,brand_terms,notes
-HB,brand,Honeybee,true,Honeybee|Honey Bee|HB,honeybee|honey bee|#honeybee|#honeybeedrink|ฮันนี่บี|ฮันนีบี,
-DF,brand,Dragonfly,true,Dragonfly|Dragon Fly|DF|Chuon Chuon|Chuồn Chuồn,dragonfly|dragon fly|#dragonfly|chuồn chuồn|chuon chuon|chuonchuon|#chuonchuon,Sold in Vietnam as Chuồn Chuồn (Vietnamese for dragonfly).
-CG,brand,Chung Guang,true,Chung Guang|CG,chung guang|#chungguang,
-FZ,status,,false,,,"Frozen. Not a brand: the brand, if any, is another code or word in the description (FZ DF = frozen Dragonfly)."
-DFZ,status,,false,,,Discontinued frozen. Not a brand.

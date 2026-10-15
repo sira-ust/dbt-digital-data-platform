@@ -103,7 +103,7 @@ To add drafts to the seed for review: `python scripts/draft_promo_terms.py --to-
 
 ### Brand codes and UST's own brands
 
-UST writes codes into item descriptions. `seeds/seed_promo_brand_codes.csv` lists them:
+UST writes codes into item descriptions. The var `promo_brand_codes` in `dbt_project.yml` lists them:
 
 | Code | Means | Searched as |
 |---|---|---|
@@ -124,7 +124,7 @@ posts. Mentionlytics tracks two broad F&B keyword sets that rarely name UST's ow
 so scraping is where most own-brand posts come from. Other brands are scraped only when
 Mentionlytics found nothing.
 
-**Adding a code mid-month.** Add the row, commit, and run the job again. Every draft
+**Adding a code mid-month.** Add it to `promo_brand_codes`, commit, and run the job again. Every draft
 records the version it was made with (model, prompt, and a fingerprint of the code
 list), so the run re-drafts the latest month's unreviewed items whose draft is out of
 date, and YouTube searches each re-drafted item again. Reviewed seed rows and older

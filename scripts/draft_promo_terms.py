@@ -15,7 +15,7 @@ and are used only until a reviewed seed row exists (int_promo_items_enriched.
 terms_source = 'draft'). The match step never calls the LLM for terms.
 
 BRAND CODES. UST writes codes into descriptions (HB = Honeybee, FZ = frozen,
-"FZ DF" = frozen Dragonfly). seeds/seed_promo_brand_codes.csv lists them: the LLM
+"FZ DF" = frozen Dragonfly). The var promo_brand_codes in dbt_project.yml lists them: the LLM
 gets the list as a glossary, and a description that carries a brand code gets that
 brand and its terms whatever the LLM says, so a code is never guessed.
 
@@ -60,7 +60,6 @@ from promo_common import (  # noqa: E402
 
 PROMPT_VERSION = "v2"   # v2: brand-code glossary; no "D " private-label rule
 SEED_PATH = "seeds/seed_promo_item_terms.csv"
-CODES_PATH = "seeds/seed_promo_brand_codes.csv"
 SEED_COLUMNS = ["item_no", "brand", "product", "flavor_variant", "pack_format", "is_branded",
                 "brand_terms", "product_terms", "flavor_terms", "negative_terms",
                 "search_queries", "notes", "review_status"]
@@ -96,8 +95,12 @@ Rules:
 
 
 def load_codes() -> list[dict]:
-    with open(find_project_root() / CODES_PATH, encoding="utf-8", newline="") as f:
-        return list(csv.DictReader(f))
+    """The brand-code list, var promo_brand_codes in dbt_project.yml (the same list
+    int_promo_items_enriched reads for is_own_brand)."""
+    return [{"code": str(c["code"]), "kind": c.get("kind", "brand"), "brand": c.get("brand") or "",
+             "own_brand": bool(c.get("own_brand")), "brand_terms": list(c.get("brand_terms") or []),
+             "notes": c.get("notes") or ""}
+            for c in dbt_var("promo_brand_codes", []) or []]
 
 
 def terms_version(model: str, codes: list[dict]) -> str:
@@ -111,8 +114,9 @@ def system_prompt(codes: list[dict]) -> str:
     lines = []
     for c in codes:
         if c["kind"] == "brand":
-            own = " (UST's own brand)" if c["is_own_brand"].strip().lower() == "true" else ""
-            lines.append(f'- {c["code"]} = brand {c["brand"]}{own}. {c["notes"]} '
+            own = " (UST's own brand)" if c["own_brand"] else ""
+            note = f' {c["notes"]}' if c["notes"] else ""
+            lines.append(f'- {c["code"]} = brand {c["brand"]}{own}.{note} '
                          f'Brand terms: {", ".join(split_terms(c["brand_terms"]))}')
         else:
             lines.append(f'- {c["code"]} = {c["notes"]}')
