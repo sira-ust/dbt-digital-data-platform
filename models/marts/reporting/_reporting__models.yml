@@ -2576,7 +2576,8 @@ models:
       The "Promo vs Social Listening" sheet as a table: at least one row per
       promo-workbook row, in workbook order, each matched post or video on its own
       row. Precedence per item: Social Listening Exact posts, else its Close posts,
-      else up to 3 verified YouTube videos, else one Unmatched row.
+      else up to 3 verified YouTube videos, else one Unmatched row. UST's own brands
+      (is_own_brand) carry their YouTube rows after their social listening rows.
       scripts/export_promo_social_match.py writes the workbook from it.
     tests:
       - dbt_utils.unique_combination_of_columns:
@@ -2584,11 +2585,34 @@ models:
             combination_of_columns: [promo_month, promo_sheet, row_order, match_rank]
     columns:
       - name: match_status
+        description: The row's own status. "Exact means exact" is checked against this.
         tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [Exact, Close, Unmatched]
+      - name: item_match_status
+        description: >
+          The item's status, the same on every row of the item: the better of
+          social_match_status and scraped_match_status, else Unmatched. The workbook's
+          Match Status column, which the Summary counts items by.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Exact, Close, Unmatched]
+      - name: social_match_status
+        description: The item's best status from Social Listening (Mentionlytics), null if none. Workbook column "On Trending Social".
+        tests:
+          - accepted_values:
+              arguments:
+                values: [Exact, Close]
+      - name: scraped_match_status
+        description: The item's best status from scraping (YouTube), null if none. Workbook column "Direct Scraping"; the TikTok step updates it in the workbook.
+        tests:
+          - accepted_values:
+              arguments:
+                values: [Exact, Close]
       - name: source
         tests:
           - accepted_values:

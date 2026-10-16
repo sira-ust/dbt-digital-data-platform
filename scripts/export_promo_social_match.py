@@ -7,14 +7,18 @@ Three sheets, in the layout of the reviewed October workbook (2026-10-07):
                                   re-running anything; then the items nothing was found
                                   for, as of the export.
   2. "Promo vs Social Listening"  one row per matched post / video, or one Unmatched
-                                  row per item. Views and Likes as numbers, the
+                                  row per item. Match Status is the ITEM's status;
+                                  beside it, "On Trending Social" (Mentionlytics) and
+                                  "Direct Scraping" (TikTok & YouTube) show what each
+                                  source found for the item. Views and Likes as numbers, the
                                   platform's own wording beside them, links as "Open ↗";
                                   every other item's rows shaded, so an item reads as
                                   one block; Unmatched rows greyed.
   3. "TikTok Search List"         the items to search on TikTok by hand with Claude in
                                   Chrome (prompt: scripts/prompts/tiktok_promo_search.md):
                                   every branded item social listening did not match,
-                                  with search phrases, required words, exclusions and
+                                  plus every UST own-brand item and every frozen item
+                                  with no brand, with search phrases, required words, exclusions and
                                   a TikTok search link. The prompt has Claude delete
                                   this sheet when done, leaving the 2-sheet deliverable.
 
@@ -44,21 +48,26 @@ except NameError:
     pass
 
 from promo_common import (  # noqa: E402
-    INTERMEDIATE_SCHEMA, REPORTING_SCHEMA, STAGING_SCHEMA, local_data_root, query,
+    INTERMEDIATE_SCHEMA, REPORTING_SCHEMA, STAGING_SCHEMA, dbt_var, flag, local_data_root, query,
     split_terms,
 )
 
 DBX_OUT_DIR = "/Volumes/ust_databricks/social/promo_output"
 SHEET_MAIN, SHEET_SUMMARY, SHEET_TIKTOK = "Promo vs Social Listening", "Summary", "TikTok Search List"
 
-# The layout of the reviewed October workbook (UST_OCT_..._Match 1_2.xlsx, 2026-10-07).
-# Columns A-J keep their letters, so the Summary's formulas (A = Promo Sheet,
-# B = Item No., F = Match Status, H = Channel) hold however many rows are added.
+# The layout of the reviewed October workbook (UST_OCT_..._Match 1_2.xlsx, 2026-10-07),
+# plus the two per-source columns after Match Status (November). The Summary's
+# formulas address columns by letter (A = Promo Sheet, B = Item No., F = Match
+# Status, J = Channel), so they hold however many rows are added.
+SOCIAL_COL, SCRAPED_COL = "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok & YouTube)"
 HEADERS = ["Promo Sheet", "Item No.", "{MON} Promo Item", "Size", "Promo Code", "Match Status",
+           SOCIAL_COL, SCRAPED_COL,
            "Matched Content Item", "Channel", "Profile", "Post Date", "Views", "Likes",
            "Approx. Count", "Engagement (as shown)", "Caption", "Link", "Source", "Match Note"]
-WIDTHS = [13, 10, 32, 15, 10, 12, 36, 14, 22, 11, 13, 10, 9, 22, 55, 11, 15, 48]
+WIDTHS = [13, 10, 32, 15, 10, 12, 16, 16, 36, 14, 22, 11, 13, 10, 9, 22, 55, 11, 18, 48]
 COL = {h: i for i, h in enumerate(HEADERS, start=1)}
+# the mart's source -> the workbook's wording, which matches the two column names
+SOURCE_LABEL = {"Social Listening": "On Trending Social", "Scraped": "Direct Scraping"}
 # status -> (fill, font colour)
 # ARGB, opaque, as Excel writes them (openpyxl would store a 6-digit RGB as 00RRGGBB)
 STATUS_STYLE = {"Exact": ("FFC6EFCE", "FF006100"), "Close": ("FFFFEB9C", "FF9C5700"),
@@ -131,8 +140,10 @@ def footnote(data: dict) -> str:
     items = data["items"]
     src = sorted({i["source_file"] for i in items if i.get("source_file")})
     m = data["mentions"]
-    scraped = (f"Rows with Source = Scraped came from YouTube searches on {_fmt_date(data['searched_at'])}, "
-               f"keeping up to 3 of the highest-view videos that name the exact product."
+    scraped = (f"Rows with Source = Direct Scraping came from YouTube searches on {_fmt_date(data['searched_at'])}, "
+               f"keeping up to 3 videos that name the exact product, highest views first, then "
+               f"likes + comments: only videos posted in the past 2 years when there are any, "
+               f"else older ones (marked in Match Note)."
                if data["searched_at"] else "No YouTube search has run for this month yet.")
     return (f"Promo item counts are distinct Item Nos. Source: {', '.join(src) or 'promo workbook'} "
             f"({len({i['item_no'] for i in items})} items) vs social listening "
@@ -220,7 +231,9 @@ def build_workbook(data: dict):
             "{MON} Promo Item": (row["promo_description"] or "").strip(),
             "Size": _none(row["promo_size"]),
             "Promo Code": _none(row["promo_code"]),
-            "Match Status": row["match_status"],
+            "Match Status": row["item_match_status"],
+            SOCIAL_COL: _none(row.get("social_match_status")),
+            SCRAPED_COL: _none(row.get("scraped_match_status")),
         }
         if not unmatched:
             values.update({
@@ -234,7 +247,7 @@ def build_workbook(data: dict):
                 "Engagement (as shown)": _none(row["engagement_text"]),
                 "Caption": _none(row["caption"]),
                 "Link": LINK_TEXT if _none(row["link"]) else None,
-                "Source": _none(row["source"]),
+                "Source": SOURCE_LABEL.get(row["source"], _none(row["source"])),
                 "Match Note": _none(row["match_note"]),
             })
         for h, c in COL.items():
@@ -246,8 +259,8 @@ def build_workbook(data: dict):
                 cell.font = Font(name="Arial", size=10, color=MUTED)
             if h in ("Views", "Likes"):
                 cell.number_format = "#,##0"
-            elif h == "Match Status":
-                fill, colour = STATUS_STYLE.get(row["match_status"], ("FFFFFFFF", "FF000000"))
+            elif h in ("Match Status", SOCIAL_COL, SCRAPED_COL) and cell.value:
+                fill, colour = STATUS_STYLE.get(cell.value, ("FFFFFFFF", "FF000000"))
                 cell.fill = PatternFill("solid", fgColor=fill)
                 cell.font = Font(name="Arial", size=10, bold=True, color=colour)
             elif h == "Link" and cell.value:
@@ -263,6 +276,7 @@ def build_workbook(data: dict):
     q = f"'{SHEET_MAIN}'"
     rng_a, rng_b, rng_f = (f"{q}!${c}$2:${c}${FORMULA_ROWS}" for c in "ABF")
     distinct = f'COUNTIFS({rng_b},{rng_b}&"",{rng_f},{rng_f}&"")'   # rows per (item, status)
+    channel_col = get_column_letter(COL["Channel"])
     plain = Alignment(vertical="bottom")
     statuses = ["Exact", "Close", "Unmatched"]
 
@@ -311,7 +325,7 @@ def build_workbook(data: dict):
         r = 18 + i
         body_cell(sm, r, 1, channel, plain)
         for c, status in ((2, "Exact"), (3, "Close")):
-            body_cell(sm, r, c, f'=COUNTIFS({q}!$H:$H,$A{r},{q}!$F:$F,"{status}")', plain)
+            body_cell(sm, r, c, f'=COUNTIFS({q}!${channel_col}:${channel_col},$A{r},{q}!$F:$F,"{status}")', plain)
         body_cell(sm, r, 4, f"=SUM(B{r}:C{r})", plain)
     end = 18 + len(channels)
     total_row(end, 18, end - 1, 4)
@@ -342,20 +356,27 @@ def build_workbook(data: dict):
     status_by_row = {}
     for row in data["rows"]:
         key = (row["promo_sheet"], row["row_order"])
-        status_by_row.setdefault(key, (row["match_status"], row["source"]))
+        status_by_row.setdefault(key, (_none(row.get("social_match_status")),
+                                       _none(row.get("scraped_match_status"))))
     r = 2
     for it in data["items"]:
-        status, source = status_by_row.get((it["promo_sheet"], it["row_order"]), ("Unmatched", None))
-        if not it.get("is_branded") or source == "Social Listening":
-            continue                         # unbranded, or social listening already matched it
+        social, scraped = status_by_row.get((it["promo_sheet"], it["row_order"]), (None, None))
+        branded, frozen = flag(it.get("is_branded")), flag(it.get("is_frozen"))
+        if not (branded or frozen) or (social and not flag(it.get("is_own_brand"))):
+            continue                         # neither branded nor frozen, or social listening matched a non-own brand
         phrases = split_terms(it.get("search_queries"))
-        current = "Unmatched" if status == "Unmatched" else f"{status} (YouTube)"
+        if not phrases and not branded:
+            continue                         # a frozen item reviewed before v4 has no queries to search with
+        must_mention = (", ".join(split_terms(it.get("brand_terms"))) if branded else
+                        "(no brand: frozen product) " + ", ".join(split_terms(dbt_var("promo_frozen_terms", ["frozen"]))))
+        current = "; ".join([f"{social} (On Trending Social)"] * bool(social)
+                            + [f"{scraped} (YouTube)"] * bool(scraped)) or "Unmatched"
         values = [
             int(it["item_no"]) if str(it["item_no"]).isdigit() else it["item_no"],
             (it["promo_description"] or "").strip(), _none(it.get("promo_size")),
             _none(it.get("brand")), _none(it.get("product")), _none(it.get("flavor_variant")),
             current, "\n".join(phrases),
-            ", ".join(split_terms(it.get("brand_terms"))),
+            must_mention,
             ", ".join(split_terms(it.get("flavor_terms"))) or "(no flavor to require)",
             ", ".join(split_terms(it.get("negative_terms"))) or "-",
             f"https://www.tiktok.com/search/video?q={urllib.parse.quote(phrases[0])}" if phrases else None,
@@ -397,7 +418,7 @@ def main(argv=None):
         shutil.copyfile(local, path)
     statuses = {}
     for row in data["rows"]:
-        statuses.setdefault(row["match_status"], set()).add(row["item_no"])
+        statuses.setdefault(row["item_match_status"], set()).add(row["item_no"])
     print(f"wrote {path}\n  {len(data['rows'])} rows; "
           + ", ".join(f"{k} {len(v)} items" for k, v in sorted(statuses.items())))
 

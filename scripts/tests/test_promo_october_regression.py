@@ -53,10 +53,17 @@ def test_deedo_sainamphueng_exact_from_social_listening(mart):
 
 
 @pytest.mark.parametrize("item_no", ["34590", "34592",                 # Deedo yogurt juices
-                                     "37350", "37351", "37352", "37353",  # Bento squid flavors
-                                     "43220"])                           # Chuồn Chuồn rice paper
+                                     "37350", "37351", "37352", "37353"])  # Bento squid flavors
 def test_close_from_social_listening(mart, item_no):
     assert mart[item_no] == {("Close", "Social Listening")}
+
+
+# Chuồn Chuồn is Dragonfly, a UST own brand: it keeps its social listening match, and
+# may also carry scraped rows, because own brands are always scraped as well.
+@pytest.mark.parametrize("item_no", ["43220"])
+def test_own_brand_keeps_social_listening(mart, item_no):
+    assert ("Close", "Social Listening") in mart[item_no]
+    assert all(source in ("Social Listening", "Scraped") for _, source in mart[item_no])
 
 
 @pytest.mark.parametrize("item_no", ["22247",                              # Tean's crispy garlic chili
@@ -67,6 +74,7 @@ def test_scraped(mart, item_no):
     assert mart[item_no] == {("Exact", "Scraped")}
 
 
-@pytest.mark.parametrize("item_no", ["86251", "73143", "55027", "71335", "73230"])
+# 71335 and 73230 ("D FZ ...") are Dragonfly frozen, an own brand, since the brand codes
+@pytest.mark.parametrize("item_no", ["86251", "73143", "55027"])
 def test_unbranded_items_stay_unmatched(mart, item_no):
     assert mart[item_no] == {("Unmatched", None)}

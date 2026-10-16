@@ -61,7 +61,11 @@ resources:
           environment_key: dbt-default
 
         # 3. LLM-draft terms for any item the seed does not cover yet (a no-op when
-        #    every item has a reviewed row), then rebuild the items to pick them up
+        #    every item has a reviewed row), then rebuild the items to pick them up.
+        #    It also re-drafts the latest month's unreviewed items when the brand-code
+        #    list (var promo_brand_codes in dbt_project.yml), prompt or model has changed since
+        #    they were drafted, and YouTube then re-searches them: a plain rerun is
+        #    enough after adding a code.
         - task_key: draft-terms
           depends_on: [{task_key: dbt-items}]
           spark_python_task:

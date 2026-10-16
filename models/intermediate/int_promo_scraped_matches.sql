@@ -5,25 +5,55 @@
 -- VERIFIED = Exact by the same rule as social listening: the keyword pass found
 -- brand + product (+ flavor) in the title / description / tags AND the judge
 -- said exact. Scraped rows are Exact or nothing — a Close video is not worth a
--- row when the point of the search is to find the item itself.
+-- row when the point of the search is to find the item itself. EXCEPT a frozen
+-- item with no brand (is_frozen, not is_branded): "frozen" stood in for the brand,
+-- so the video shows the product but cannot confirm the item: its rows are Close.
 --
--- RANKED BY VIEWS. "1-3 depending on how many come back": an item with one
--- verified video gets one row; it is never padded with weaker matches.
+-- RECENT FIRST: an item with any verified video posted within
+-- var('promo_scraped_max_age_months') (24) before the promo month keeps only those.
+-- An item with none falls back to its older videos (is_recent = false; the mart's
+-- Match Note says so). Anchored on the promo month, not today, so a rerun gives the
+-- same answer. The search has no date filter, so older videos are there to fall
+-- back on at no extra quota.
 --
--- Searching is gated upstream (youtube_search.py only searches branded items with
--- no social-listening match), and the mart enforces it again, so a Scraped row
--- can never sit next to a Social Listening row for the same item.
+-- RANKED BY PERFORMANCE: views first, then engagement (likes + comments). "1-3
+-- depending on how many come back": an item with one verified video gets one row;
+-- it is never padded with weaker matches.
+--
+-- Searching is gated upstream (youtube_search.py searches branded items with no
+-- social-listening match, plus every own-brand item), and the mart enforces it
+-- again, so a Scraped row sits next to a Social Listening row only for an own brand.
 
 with videos as (
 
-    select * from {{ ref('stg_promo__youtube_videos') }}
+    select
+        *,
+        cast(published_at as date)
+            >= {{ dbt.dateadd('month', -1 * var('promo_scraped_max_age_months'), 'promo_month') }}
+            as is_recent
+    from {{ ref('stg_promo__youtube_videos') }}
     where verdict = 'exact' and keyword_level = 'exact'
+
+),
+
+-- recent videos when the item has any, otherwise all of them
+eligible as (
+
+    select *
+    from (
+        select
+            *,
+            max(case when is_recent then 1 else 0 end)
+                over (partition by promo_month, item_no) as _item_has_recent
+        from videos
+    ) as v
+    where is_recent or _item_has_recent = 0
 
 ),
 
 items as (
 
-    select promo_month, promo_sheet, row_order, item_no
+    select promo_month, promo_sheet, row_order, item_no, is_branded
     from {{ ref('int_promo_items_enriched') }}
 
 ),
@@ -34,9 +64,11 @@ ranked as (
         v.*,
         row_number() over (
             partition by v.promo_month, v.item_no
-            order by v.view_count desc nulls last, v.like_count desc nulls last, v.video_id
+            order by v.view_count desc nulls last,
+                     coalesce(v.like_count, 0) + coalesce(v.comment_count, 0) desc,
+                     v.video_id
         ) as scraped_rank
-    from videos as v
+    from eligible as v
 
 )
 
@@ -47,7 +79,7 @@ select
     i.item_no,
     r.video_id,
     r.scraped_rank,
-    'Exact'                                                      as match_status,
+    case when i.is_branded then 'Exact' else 'Close' end         as match_status,
     r.matched_content_item,
     case when r.is_short then 'YouTube Shorts' else 'YouTube' end as channel,
     r.channel_title                                              as profile,
@@ -68,7 +100,8 @@ select
     r.match_text,
     r.judge_model,
     r.search_query,
-    r.searched_at
+    r.searched_at,
+    coalesce(r.is_recent, false)                                 as is_recent
 from ranked as r
 inner join items as i
     on i.item_no = r.item_no

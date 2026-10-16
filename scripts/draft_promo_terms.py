@@ -4,9 +4,10 @@ NAV has no brand column and promo descriptions are truncated ("COCONUT MILK
 DRINK (LESS SUGAR"), so for every promo item WITHOUT a row in
 seeds/seed_promo_item_terms.csv the Databricks-hosted LLM drafts:
     brand, product, flavor_variant, pack_format, is_branded
-    brand_terms / product_terms / flavor_terms   English + Thai + Vietnamese, native script
+    brand_terms / product_terms / flavor_terms   English + Thai + Vietnamese + Chinese, native script
     negative_terms                               phrases that mean the brand word is something else
-    search_queries                               up to 3 phrases for YouTube / TikTok search
+    search_queries                               up to 3 phrases for YouTube / TikTok search:
+                                                 home-market language, English, Chinese
 from the promo row plus the NAV catalog (full description, flavor and package
 attributes, category) and the WMS item name.
 
@@ -14,8 +15,24 @@ The SEED IS THE SOURCE OF TRUTH. Drafts go to the item_terms_draft landing table
 and are used only until a reviewed seed row exists (int_promo_items_enriched.
 terms_source = 'draft'). The match step never calls the LLM for terms.
 
+BRAND CODES. UST writes codes into descriptions (HB = Honeybee, FZ = frozen,
+"FZ DF" = frozen Dragonfly). The var promo_brand_codes in dbt_project.yml lists them: the LLM
+gets the list as a glossary, and a description that carries a brand code gets that
+brand and its terms whatever the LLM says, so a code is never guessed. A frozen
+code (FZ, D FZ, FROZEN, DFZ) sets pack_format = frozen; a frozen item with no brand
+still gets product / flavor terms and search queries, so it can be scraped as a
+frozen product.
+
+RE-DRAFTING IS AUTOMATIC. Every draft records the version it was made with
+(model_version = model / prompt version / a fingerprint of the brand-code list).
+A run drafts the items with no terms AND re-drafts the latest month's unreviewed
+items whose draft is from another version, so after a code is added (or the
+prompt or model changes) the next ordinary run brings the current month up to
+date. Reviewed seed rows and older months are never touched. youtube_search.py
+then searches the re-drafted items again.
+
 Review loop (local):
-    python scripts/draft_promo_terms.py                 # drafts missing items -> item_terms_draft
+    python scripts/draft_promo_terms.py                 # drafts missing + out-of-date items -> item_terms_draft
     python scripts/draft_promo_terms.py --to-seed       # appends those drafts to the seed CSV
     # edit seeds/seed_promo_item_terms.csv, set review_status = reviewed, commit
 
@@ -26,6 +43,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import json
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -42,13 +62,14 @@ from promo_common import (  # noqa: E402
     find_project_root, get_llm_client, landing_path, query, split_terms,
 )
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v4"   # v2: brand-code glossary; no "D " private-label rule. v3: Chinese terms + query.
+                        # v4: frozen items with no brand still get product terms + search queries
 SEED_PATH = "seeds/seed_promo_item_terms.csv"
 SEED_COLUMNS = ["item_no", "brand", "product", "flavor_variant", "pack_format", "is_branded",
                 "brand_terms", "product_terms", "flavor_terms", "negative_terms",
                 "search_queries", "notes", "review_status"]
 
-INSTRUCTIONS = """You prepare search terms so a distributor can find social media posts about the exact products it is promoting. The posts are mostly Thai and Vietnamese, plus English, and some Filipino, Japanese, Korean or Indian.
+INSTRUCTIONS = """You prepare search terms so a distributor can find social media posts about the exact products it is promoting. The posts are mostly Thai and Vietnamese, plus English and Chinese, and some Filipino, Japanese, Korean or Indian.
 
 For the item given, return JSON only:
 {
@@ -66,19 +87,63 @@ For the item given, return JSON only:
 }
 
 Rules:
-- is_branded is false when there is no searchable consumer brand: generic commodities (sushi mat, peeled cassava, batter mix) and the distributor's private-label frozen dishes (descriptions starting "D FZ", "DFZ" or "D " followed by a dish name). For those, leave every term list empty.
-- The promo description is uppercase and truncated; prefer the catalog description. "HB" may be an abbreviation; the catalog description resolves it.
+- is_branded is false when there is no searchable consumer brand: generic commodities (sushi mat, peeled cassava, batter mix). For those, leave every term list empty, EXCEPT a frozen item (pack_format "frozen", e.g. a FZ code): it is searched as a frozen product, so give product_terms, flavor_terms and search_queries (each query names it as frozen, e.g. "frozen sugarcane juice", "nước mía đông lạnh", "冷冻甘蔗汁") and leave brand_terms empty.
+- pack_format is "frozen" whenever the description carries a frozen code (see BRAND CODES).
+- The promo description is uppercase and truncated; prefer the catalog description. Codes in the description mean what the BRAND CODES list below says. A brand code IS the brand: the item is branded, use that brand name and its terms. A status code (frozen, discontinued) is never a brand.
 - When the description names no brand, the sibling items from the same manufacturer usually do (e.g. a yogurt juice whose siblings are "DEEDO ... JUICE" is a Deedo product). Use them, and say so in notes.
-- brand_terms: the brand in Latin script plus its native-script spelling(s) and common hashtags (e.g. "deedo", "ดีโด้", "#deedo"). Only include spellings that are clearly the brand. Include common misspellings consumers use.
-- product_terms: how people write this product type in English, Thai and Vietnamese (e.g. "juice", "น้ำผลไม้", "nước ép"). A hashtag that combines brand and product (e.g. "#tracozy") may appear in both brand_terms and product_terms.
+- brand_terms: the brand in Latin script plus its native-script spelling(s) and common hashtags (e.g. "deedo", "ดีโด้", "#deedo"), including its Chinese name when the brand has one in common use (e.g. "芬达" for Fanta, "雀巢" for Nestlé). Only include spellings that are clearly the brand: never invent a Chinese name. Include common misspellings consumers use.
+- CHINESE: wherever a rule below asks for English, Thai and Vietnamese, also give Chinese, in Simplified characters and, when they differ, Traditional too (e.g. "芦荟", "蘆薈").
+- product_terms: how people write this product type in English, Thai, Vietnamese and Chinese (e.g. "juice", "น้ำผลไม้", "nước ép", "果汁"). A hashtag that combines brand and product (e.g. "#tracozy") may appear in both brand_terms and product_terms.
 - flavor_variant is a taste or variety (lychee, BBQ cheese, less sugar, original). A size or dimension (22cm, 330ml) is never a flavor.
-- flavor_terms: the flavor/variant in English, Thai and Vietnamese (e.g. "lychee", "ลิ้นจี่", "vải"). Empty when flavor_variant is null.
+- flavor_terms: the flavor/variant in English, Thai, Vietnamese and Chinese (e.g. "lychee", "ลิ้นจี่", "vải", "荔枝"). Empty when flavor_variant is null.
 - negative_terms: phrases that show the brand word means something else (a person, film, K-pop group, restaurant, an ordinary word). Empty if the brand is unambiguous.
-- search_queries: at most 3 phrases a person would type into YouTube or TikTok to find videos of THIS item, in the language of its home market first (e.g. "trà vải cozy", "deedo cantaloupe"). Empty when is_branded is false.
+- search_queries: exactly 3 phrases a person would type into YouTube or TikTok to find videos of THIS item, in this order: (1) the language of its home market (e.g. "trà vải cozy"), (2) English (e.g. "cozy lychee tea"), (3) Simplified Chinese: the brand as Chinese speakers write it (its Chinese name if it has one, otherwise the Latin name) plus the product and flavor in Chinese (e.g. "Cozy 荔枝茶", "芬达 葡萄"). When the home market is Chinese-speaking, make (1) Chinese and (3) another Chinese wording. Empty when is_branded is false, unless the item is frozen (see above).
 - Keep every term lowercase except proper nouns in scripts without case. No duplicates."""
 
 
+def load_codes() -> list[dict]:
+    """The brand-code list, var promo_brand_codes in dbt_project.yml (the same list
+    int_promo_items_enriched reads for is_own_brand)."""
+    return [{"code": str(c["code"]), "kind": c.get("kind", "brand"), "brand": c.get("brand") or "",
+             "own_brand": bool(c.get("own_brand")), "frozen": bool(c.get("frozen")),
+             "brand_terms": list(c.get("brand_terms") or []), "notes": c.get("notes") or ""}
+            for c in dbt_var("promo_brand_codes", []) or []]
+
+
+def terms_version(model: str, codes: list[dict]) -> str:
+    """What a draft depends on: the model, the prompt and the brand-code list."""
+    fingerprint = hashlib.sha1(json.dumps(codes, sort_keys=True, ensure_ascii=False)
+                               .encode("utf-8")).hexdigest()[:8]
+    return f"{model}/{PROMPT_VERSION}/codes-{fingerprint}"
+
+
+def system_prompt(codes: list[dict]) -> str:
+    lines = []
+    for c in codes:
+        if c["kind"] == "brand":
+            own = " (UST's own brand)" if c["own_brand"] else ""
+            note = f' {c["notes"]}' if c["notes"] else ""
+            lines.append(f'- {c["code"]} = brand {c["brand"]}{own}.{note} '
+                         f'Brand terms: {", ".join(split_terms(c["brand_terms"]))}')
+        else:
+            lines.append(f'- {c["code"]} = {c["notes"]}')
+    return INSTRUCTIONS + "\n\nBRAND CODES in UST item descriptions:\n" + "\n".join(lines)
+
+
+def codes_in(description, codes: list[dict]) -> list[dict]:
+    """The codes written as whole words in a description, longest first so a two-word
+    code wins ("FZ DF SESAME DONUT" -> DF, FZ; "D FZ STIR-FRIED EEL" -> D FZ, FZ)."""
+    text = str(description or "").upper()
+    found = []
+    for c in sorted(codes, key=lambda c: -len(c["code"])):
+        words = r"\s+".join(map(re.escape, c["code"].upper().split()))
+        if re.search(rf"(?<![A-Z0-9]){words}(?![A-Z0-9])", text):
+            found.append(c)
+    return found
+
+
 def _item_prompt(r: dict) -> str:
+    found = [f'{c["code"]} = {c["brand"] or c["notes"]}' for c in r.get("_codes") or []]
     return "\n".join([
         f"item_no: {r.get('item_no')}",
         f"promo description: {r.get('promo_description')}",
@@ -92,6 +157,7 @@ def _item_prompt(r: dict) -> str:
         f"country of origin: {r.get('country_of_origin') or '-'}",
         f"warehouse item name: {r.get('wms_item_name') or '-'}",
         f"vendor: {r.get('vendor_no') or '-'}",
+        f"codes in the description: {'; '.join(found) or '-'}",
         "other catalog items from the same manufacturer (same barcode company prefix): "
         + ("; ".join(r.get("_siblings") or []) or "-"),
     ])
@@ -138,10 +204,22 @@ def attach_siblings(backend: str, rows: list[dict]) -> None:
         r["_siblings"] = [d for n, d in group if n != r["item_no"]][:SIBLING_EXAMPLES]
 
 
-def items_needing_terms(backend: str) -> list[dict]:
-    rel = (f"{INTERMEDIATE_SCHEMA}.int_promo_items_enriched" if backend == "databricks"
-           else "ust_intermediate.int_promo_items_enriched")
-    rows = query(backend, f"select * from {rel} where terms_source = 'missing'")
+def items_needing_terms(backend: str, version: str) -> list[dict]:
+    """Items with no terms yet, plus the latest month's unreviewed items whose draft
+    was made with another version (never a reviewed seed row, never an older
+    month). The newer draft wins in stg_promo__item_terms_draft."""
+    dbx = backend == "databricks"
+    rel = f"{INTERMEDIATE_SCHEMA}.int_promo_items_enriched" if dbx else "ust_intermediate.int_promo_items_enriched"
+    drafts = f"{STAGING_SCHEMA}.stg_promo__item_terms_draft" if dbx else "ust_staging.stg_promo__item_terms_draft"
+    rows = query(backend, f"""
+        select i.*
+        from {rel} as i
+        left join {drafts} as d on d.item_no = i.item_no
+        where i.terms_source = 'missing'
+           or (i.terms_source = 'draft'
+               and i.promo_month = (select max(promo_month) from {rel})
+               and coalesce(d.model_version, '') <> '{version}')
+    """)
     seen, out = set(), []
     for r in rows:                      # one draft per item, however many months list it
         if r["item_no"] not in seen:
@@ -154,12 +232,12 @@ def _as_list(v) -> list[str]:
     return split_terms(v if isinstance(v, (list, tuple)) else ([] if v is None else str(v).split("|")))
 
 
-def draft_one(client, model: str, row: dict) -> dict | None:
+def draft_one(client, model: str, version: str, system: str, row: dict) -> dict | None:
     # Thai and Vietnamese terms are token-hungry: at 900 tokens a third of the
     # October replies were cut off mid-JSON. One retry rides out a stray reply.
     data, stop = None, None
     for _ in range(2):
-        resp = client.messages.create(model=model, max_tokens=2500, system=INSTRUCTIONS,
+        resp = client.messages.create(model=model, max_tokens=2500, system=system,
                                       messages=[{"role": "user", "content": _item_prompt(row)}])
         stop = resp.stop_reason
         data = extract_json("".join(getattr(b, "text", "") for b in resp.content))
@@ -169,6 +247,17 @@ def draft_one(client, model: str, row: dict) -> dict | None:
         print(f"  ! {row['item_no']}: unparseable reply (stop_reason={stop}), skipped — re-run to retry")
         return None
     branded = bool(data.get("is_branded"))
+    # a brand code settles the brand, and a frozen code the pack, whatever the model said
+    brand_codes = [c for c in row.get("_codes") or [] if c["kind"] == "brand"]
+    if brand_codes:
+        branded = True
+        data["brand"] = brand_codes[0]["brand"]
+        data["brand_terms"] = (split_terms(brand_codes[0]["brand_terms"])
+                               + _as_list(data.get("brand_terms")))
+    if any(c["frozen"] for c in row.get("_codes") or []):
+        data["pack_format"] = "frozen"
+    # a frozen item with no brand is still searched, as a frozen product
+    searched = branded or data.get("pack_format") == "frozen"
     return {
         "item_no": row["item_no"],
         "brand": data.get("brand"),
@@ -177,13 +266,13 @@ def draft_one(client, model: str, row: dict) -> dict | None:
         "pack_format": data.get("pack_format"),
         "is_branded": "true" if branded else "false",
         "brand_terms": "|".join(_as_list(data.get("brand_terms"))) if branded else None,
-        "product_terms": "|".join(_as_list(data.get("product_terms"))) if branded else None,
-        "flavor_terms": "|".join(_as_list(data.get("flavor_terms"))) if branded else None,
-        "negative_terms": "|".join(_as_list(data.get("negative_terms"))) if branded else None,
-        "search_queries": "|".join(_as_list(data.get("search_queries"))[:3]) if branded else None,
+        "product_terms": "|".join(_as_list(data.get("product_terms"))) if searched else None,
+        "flavor_terms": "|".join(_as_list(data.get("flavor_terms"))) if searched else None,
+        "negative_terms": "|".join(_as_list(data.get("negative_terms"))) if searched else None,
+        "search_queries": "|".join(_as_list(data.get("search_queries"))[:3]) if searched else None,
         "notes": data.get("notes"),
         "drafted_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds"),
-        "model_version": f"{model}/{PROMPT_VERSION}",
+        "model_version": version,
     }
 
 
@@ -222,14 +311,19 @@ def main(argv=None):
         to_seed()
         return
     ensure_landing(args.backend)
-    rows = items_needing_terms(args.backend)
+    codes = load_codes()
+    version = terms_version(args.model, codes)
+    rows = items_needing_terms(args.backend, version)
     attach_siblings(args.backend, rows)
-    print(f"{len(rows)} promo item(s) with no seed row and no draft")
+    for r in rows:
+        r["_codes"] = codes_in(r.get("promo_description"), codes)
+    system = system_prompt(codes)
+    print(f"{len(rows)} promo item(s) to draft (no terms yet, or drafted before {version})")
     if not rows:
         return
     client = get_llm_client(args.backend)
     with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
-        drafts = [d for d in pool.map(lambda r: draft_one(client, args.model, r), rows) if d]
+        drafts = [d for d in pool.map(lambda r: draft_one(client, args.model, version, system, r), rows) if d]
     append_records(args.backend, drafts, landing_path("item_terms_draft"),
                    LANDING["item_terms_draft"]["dbx"], LANDING["item_terms_draft"]["columns"])
     for d in drafts:

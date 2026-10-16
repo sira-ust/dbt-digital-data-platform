@@ -10,7 +10,7 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
 ### How an item gets its rows
 
 1. **Terms.** `seed_promo_item_terms` holds each item's brand, product and flavor, plus
-   search terms in English, Thai and Vietnamese and *negative* terms. NAV has no brand
+   search terms in English, Thai, Vietnamese and Chinese and *negative* terms. NAV has no brand
    column and the promo text is truncated, so this reviewed file is the source of truth.
    Items not in it get an LLM draft (`draft_promo_terms.py`) that is used until someone
    reviews it.
@@ -27,11 +27,20 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
 
    The judge can lower the keyword level but never raise it. An Exact row always has the
    brand, product and flavor terms in its own text (`assert_promo_exact_has_terms`).
-3. **YouTube.** `youtube_search.py` runs only for branded items with *no* social listening
-   row. It runs each item's `search_queries` (up to 3), applies the same keyword rule and
-   judge to title, description and tags, and keeps the top 1–3 Exact videos by views.
+3. **YouTube.** `youtube_search.py` runs for branded items with *no* social listening
+   row, and for every own-brand item. It runs each item's `search_queries` (up to 3),
+   applies the same keyword rule and judge to title, description and tags, and keeps the
+   top 1–3 Exact videos by views, then engagement (likes + comments). Only videos posted
+   in the past 2 years (`promo_scraped_max_age_months`, counted back from the promo month)
+   count when the item has any; when it has none, its older videos are used instead and
+   their Match Note starts "Older than 2 years".
 4. **The mart.** `mart_promo_social_match` builds the rows. An item with an Exact post shows
    only Exact posts; otherwise it shows its Close posts, then YouTube, then one `Unmatched` row.
+   UST's own brands show their social listening posts *and* their YouTube videos.
+   In the workbook, **Match Status** is the item's status (the better of the two sources),
+   the same on every row of the item. Beside it, **On Trending Social (Mentionlytics)** and
+   **Direct Scraping (TikTok & YouTube)** show what each source found for the item, and each
+   row's **Source** says which of the two it came from.
 5. **TikTok, by hand.** The workbook's *TikTok Search List* sheet lists every branded item
    social listening didn't match. Open the workbook in Claude in Chrome with
    `scripts/prompts/tiktok_promo_search.md`; Claude adds TikTok rows under each item and
@@ -95,6 +104,53 @@ set `review_status = reviewed` and commit. How terms match:
   judged pairs aren't re-judged unless `JUDGE_PROMPT_VERSION` changes.
 
 To add drafts to the seed for review: `python scripts/draft_promo_terms.py --to-seed`.
+
+**Chinese.** Since prompt v3, every draft also carries Chinese terms (Simplified, and
+Traditional where it differs) and its third search phrase is in Chinese, so YouTube and
+the TikTok list search in Chinese too, at no extra quota (still 3 searches per item).
+Rows reviewed before that (October 2026) have no Chinese: add the terms and a Chinese
+phrase by hand if an item needs them.
+
+### Brand codes and UST's own brands
+
+UST writes codes into item descriptions. The var `promo_brand_codes` in `dbt_project.yml` lists them:
+
+| Code | Means | Searched as |
+|---|---|---|
+| HB | Honeybee (own brand) | honeybee, ฮันนี่บี |
+| DF | Dragonfly (own brand) | dragonfly; in Vietnam it is sold as Chuồn Chuồn |
+| D FZ | Dragonfly frozen (own brand, frozen) | as DF |
+| CG | Chung Guang (own brand) | chung guang |
+| FZ, FROZEN | frozen (not a brand) | as a frozen product, see below |
+| DFZ | discontinued frozen (not a brand) | as a frozen product, see below |
+
+The list is kept ASCII-only in `dbt_project.yml` (non-English terms as `\u` escapes):
+dbt reads that file in the system encoding, which on Windows cannot decode some Thai
+bytes.
+
+`draft_promo_terms.py` gives the LLM this list, and a description carrying a brand code
+always gets that brand and its terms. So "FZ DF SESAME DONUT" is a Dragonfly item and
+"HB" is never guessed.
+
+**Own brands are matched AND always scraped.** An item whose brand is an own brand
+(`is_own_brand`, matched on the list's `aliases`) is matched against Mentionlytics like
+any brand, and also goes to YouTube and the TikTok list even when Mentionlytics found
+posts. Mentionlytics tracks two broad F&B keyword sets that rarely name UST's own brands,
+so scraping is where most own-brand posts come from. Other brands are scraped only when
+Mentionlytics found nothing.
+
+**Frozen items with no brand are scraped as frozen products.** A frozen code sets
+`pack_format = frozen` (`is_frozen`). An item that is frozen but has no brand (e.g.
+"FZ PURE SUGARCANE JUICE") still gets product terms and search phrases, goes to YouTube
+and the TikTok list, and a video counts when it names a word for frozen
+(`promo_frozen_terms`) plus the product and shows a frozen, packaged pack. There is no
+brand to confirm, so these rows are **Close**, never Exact.
+
+**Adding a code mid-month.** Add it to `promo_brand_codes`, commit, and run the job again. Every draft
+records the version it was made with (model, prompt, and a fingerprint of the code
+list), so the run re-drafts the latest month's unreviewed items whose draft is out of
+date, and YouTube searches each re-drafted item again. Reviewed seed rows and older
+months are never re-drafted: edit reviewed rows by hand.
 
 ### Known false-positive patterns
 
