@@ -253,3 +253,21 @@ def test_own_brand_shows_both_sources(data, tmp_path):
     tk = wb["TikTok Search List"]
     assert tk["A2"].value == 43220
     assert tk["G2"].value == "Close (On Trending Social); Exact (YouTube)"
+
+
+def test_frozen_item_with_no_brand_is_on_the_tiktok_list(data, tmp_path):
+    """A frozen item with no brand (FZ) is searched as a frozen product: it is on the
+    TikTok list, with the words for frozen standing in for the brand."""
+    data["items"] = [_item("OCT NEW", 1, "73094", "FZ PURE SUGARCANE JUICE", branded=False,
+                           is_frozen=True, flavor_terms=None,
+                           search_queries="nước mía đông lạnh|frozen sugarcane juice|冷冻甘蔗汁"),
+                     _item("OCT NEW", 2, "86251", "BAMBOO SUSHI MAT", branded=False, is_frozen=False)]
+    data["rows"] = [_row("OCT NEW", 1, "73094", "FZ PURE SUGARCANE JUICE", "Unmatched"),
+                    _row("OCT NEW", 2, "86251", "BAMBOO SUSHI MAT", "Unmatched")]
+    path = tmp_path / "frozen.xlsx"
+    ex.build_workbook(data).save(path)
+    tk = load_workbook(path)["TikTok Search List"]
+    rows = list(tk.iter_rows(min_row=2, values_only=True))
+    assert [r[0] for r in rows] == [73094]                                   # not the sushi mat
+    assert rows[0][8].startswith("(no brand: frozen product) frozen")
+    assert "冷冻甘蔗汁" in rows[0][7]

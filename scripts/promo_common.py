@@ -293,19 +293,35 @@ Reply with JSON only, in this order — decide the verdict AFTER writing the rea
  "verdict": "exact" | "close" | "reject"}"""
 
 
+def flag(v) -> bool:
+    """A boolean column as read back from either backend (True, "true", 1, ...)."""
+    return v is True or str(v).strip().lower() in ("true", "1")
+
+
 def judge_user_prompt(item: dict, post: dict, evidence: dict) -> str:
     """item: brand/product/flavor fields (+ optional _siblings, the brand's other
     promo items); post: channel/title/text; evidence: classify()."""
     flavor = item.get("flavor_variant") or "(none — this item has no flavor/variant)"
+    # a frozen item with no brand (is_frozen): judged as a frozen product; the
+    # pipeline records its matches as Close, so the brand rules do not apply
+    no_brand_frozen = flag(item.get("is_frozen")) and not flag(item.get("is_branded"))
     lines = [
         "PROMO ITEM",
         f"  promo description: {item.get('promo_description')}",
         f"  catalog description: {item.get('item_full_description') or '-'}",
-        f"  brand: {item.get('brand')}",
+        f"  brand: {'(none: a frozen product with no brand, see NOTE)' if no_brand_frozen else item.get('brand')}",
         f"  product: {item.get('product')}",
         f"  flavor/variant: {flavor}",
         f"  pack format: {item.get('pack_format') or '-'}",
     ]
+    if no_brand_frozen:
+        lines += [
+            "  NOTE: this item has NO BRAND to match. Ignore the brand rules. Verdict \"exact\" when",
+            "  the post is about a FROZEN, PACKAGED (store-bought) pack of this product (and this",
+            "  flavor/variant, if any), whatever its brand. \"reject\" for homemade, restaurant,",
+            "  street-food or fresh (not frozen) versions, or a different product. The keyword",
+            "  found as \"brand\" below is the word for frozen.",
+        ]
     if item.get("_siblings"):
         lines.append("  NOT THIS ITEM (the same brand's other items on this promo):")
         lines += [f"    - {s}" for s in item["_siblings"]]

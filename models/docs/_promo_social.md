@@ -119,20 +119,32 @@ UST writes codes into item descriptions. The var `promo_brand_codes` in `dbt_pro
 |---|---|---|
 | HB | Honeybee (own brand) | honeybee, ฮันนี่บี |
 | DF | Dragonfly (own brand) | dragonfly; in Vietnam it is sold as Chuồn Chuồn |
+| D FZ | Dragonfly frozen (own brand, frozen) | as DF |
 | CG | Chung Guang (own brand) | chung guang |
-| FZ | frozen (not a brand) | — |
-| DFZ | discontinued frozen (not a brand) | — |
+| FZ, FROZEN | frozen (not a brand) | as a frozen product, see below |
+| DFZ | discontinued frozen (not a brand) | as a frozen product, see below |
+
+The list is kept ASCII-only in `dbt_project.yml` (non-English terms as `\u` escapes):
+dbt reads that file in the system encoding, which on Windows cannot decode some Thai
+bytes.
 
 `draft_promo_terms.py` gives the LLM this list, and a description carrying a brand code
 always gets that brand and its terms. So "FZ DF SESAME DONUT" is a Dragonfly item and
 "HB" is never guessed.
 
 **Own brands are matched AND always scraped.** An item whose brand is an own brand
-(`is_own_brand`, matched on the seed's `aliases`) is matched against Mentionlytics like
+(`is_own_brand`, matched on the list's `aliases`) is matched against Mentionlytics like
 any brand, and also goes to YouTube and the TikTok list even when Mentionlytics found
 posts. Mentionlytics tracks two broad F&B keyword sets that rarely name UST's own brands,
 so scraping is where most own-brand posts come from. Other brands are scraped only when
 Mentionlytics found nothing.
+
+**Frozen items with no brand are scraped as frozen products.** A frozen code sets
+`pack_format = frozen` (`is_frozen`). An item that is frozen but has no brand (e.g.
+"FZ PURE SUGARCANE JUICE") still gets product terms and search phrases, goes to YouTube
+and the TikTok list, and a video counts when it names a word for frozen
+(`promo_frozen_terms`) plus the product and shows a frozen, packaged pack. There is no
+brand to confirm, so these rows are **Close**, never Exact.
 
 **Adding a code mid-month.** Add it to `promo_brand_codes`, commit, and run the job again. Every draft
 records the version it was made with (model, prompt, and a fingerprint of the code

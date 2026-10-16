@@ -108,6 +108,10 @@ select
     coalesce(s.flavor_variant, d.flavor_variant)             as flavor_variant,
     coalesce(s.pack_format,    d.pack_format)                as pack_format,
     coalesce(s.is_branded,     d.is_branded, false)          as is_branded,
+    -- a frozen item (a frozen code such as FZ / D FZ / FROZEN sets pack_format
+    -- frozen when terms are drafted): with no brand it is still scraped, as a frozen
+    -- product, and its scraped videos are Close at best (no brand to match)
+    coalesce(coalesce(s.pack_format, d.pack_format) = 'frozen', false) as is_frozen,
     -- OWN BRANDS ARE MATCHED AND ALWAYS SCRAPED: like any brand they are matched
     -- against Mentionlytics, but they also go to YouTube and the TikTok list even
     -- when Mentionlytics found posts, because Mentionlytics tracks two broad F&B

@@ -17,7 +17,8 @@ Three sheets, in the layout of the reviewed October workbook (2026-10-07):
   3. "TikTok Search List"         the items to search on TikTok by hand with Claude in
                                   Chrome (prompt: scripts/prompts/tiktok_promo_search.md):
                                   every branded item social listening did not match,
-                                  plus every UST own-brand item, with search phrases, required words, exclusions and
+                                  plus every UST own-brand item and every frozen item
+                                  with no brand, with search phrases, required words, exclusions and
                                   a TikTok search link. The prompt has Claude delete
                                   this sheet when done, leaving the 2-sheet deliverable.
 
@@ -47,7 +48,7 @@ except NameError:
     pass
 
 from promo_common import (  # noqa: E402
-    INTERMEDIATE_SCHEMA, REPORTING_SCHEMA, STAGING_SCHEMA, local_data_root, query,
+    INTERMEDIATE_SCHEMA, REPORTING_SCHEMA, STAGING_SCHEMA, dbt_var, flag, local_data_root, query,
     split_terms,
 )
 
@@ -360,9 +361,14 @@ def build_workbook(data: dict):
     r = 2
     for it in data["items"]:
         social, scraped = status_by_row.get((it["promo_sheet"], it["row_order"]), (None, None))
-        if not it.get("is_branded") or (social and not it.get("is_own_brand")):
-            continue                         # unbranded, or social listening matched a non-own brand
+        branded, frozen = flag(it.get("is_branded")), flag(it.get("is_frozen"))
+        if not (branded or frozen) or (social and not flag(it.get("is_own_brand"))):
+            continue                         # neither branded nor frozen, or social listening matched a non-own brand
         phrases = split_terms(it.get("search_queries"))
+        if not phrases and not branded:
+            continue                         # a frozen item reviewed before v4 has no queries to search with
+        must_mention = (", ".join(split_terms(it.get("brand_terms"))) if branded else
+                        "(no brand: frozen product) " + ", ".join(split_terms(dbt_var("promo_frozen_terms", ["frozen"]))))
         current = "; ".join([f"{social} (On Trending Social)"] * bool(social)
                             + [f"{scraped} (YouTube)"] * bool(scraped)) or "Unmatched"
         values = [
@@ -370,7 +376,7 @@ def build_workbook(data: dict):
             (it["promo_description"] or "").strip(), _none(it.get("promo_size")),
             _none(it.get("brand")), _none(it.get("product")), _none(it.get("flavor_variant")),
             current, "\n".join(phrases),
-            ", ".join(split_terms(it.get("brand_terms"))),
+            must_mention,
             ", ".join(split_terms(it.get("flavor_terms"))) or "(no flavor to require)",
             ", ".join(split_terms(it.get("negative_terms"))) or "-",
             f"https://www.tiktok.com/search/video?q={urllib.parse.quote(phrases[0])}" if phrases else None,

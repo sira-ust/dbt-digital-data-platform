@@ -18,7 +18,10 @@ terms_source = 'draft'). The match step never calls the LLM for terms.
 BRAND CODES. UST writes codes into descriptions (HB = Honeybee, FZ = frozen,
 "FZ DF" = frozen Dragonfly). The var promo_brand_codes in dbt_project.yml lists them: the LLM
 gets the list as a glossary, and a description that carries a brand code gets that
-brand and its terms whatever the LLM says, so a code is never guessed.
+brand and its terms whatever the LLM says, so a code is never guessed. A frozen
+code (FZ, D FZ, FROZEN, DFZ) sets pack_format = frozen; a frozen item with no brand
+still gets product / flavor terms and search queries, so it can be scraped as a
+frozen product.
 
 RE-DRAFTING IS AUTOMATIC. Every draft records the version it was made with
 (model_version = model / prompt version / a fingerprint of the brand-code list).
@@ -59,7 +62,8 @@ from promo_common import (  # noqa: E402
     find_project_root, get_llm_client, landing_path, query, split_terms,
 )
 
-PROMPT_VERSION = "v3"   # v2: brand-code glossary; no "D " private-label rule. v3: Chinese terms + query
+PROMPT_VERSION = "v4"   # v2: brand-code glossary; no "D " private-label rule. v3: Chinese terms + query.
+                        # v4: frozen items with no brand still get product terms + search queries
 SEED_PATH = "seeds/seed_promo_item_terms.csv"
 SEED_COLUMNS = ["item_no", "brand", "product", "flavor_variant", "pack_format", "is_branded",
                 "brand_terms", "product_terms", "flavor_terms", "negative_terms",
@@ -83,7 +87,8 @@ For the item given, return JSON only:
 }
 
 Rules:
-- is_branded is false when there is no searchable consumer brand: generic commodities (sushi mat, peeled cassava, batter mix). For those, leave every term list empty.
+- is_branded is false when there is no searchable consumer brand: generic commodities (sushi mat, peeled cassava, batter mix). For those, leave every term list empty, EXCEPT a frozen item (pack_format "frozen", e.g. a FZ code): it is searched as a frozen product, so give product_terms, flavor_terms and search_queries (each query names it as frozen, e.g. "frozen sugarcane juice", "nước mía đông lạnh", "冷冻甘蔗汁") and leave brand_terms empty.
+- pack_format is "frozen" whenever the description carries a frozen code (see BRAND CODES).
 - The promo description is uppercase and truncated; prefer the catalog description. Codes in the description mean what the BRAND CODES list below says. A brand code IS the brand: the item is branded, use that brand name and its terms. A status code (frozen, discontinued) is never a brand.
 - When the description names no brand, the sibling items from the same manufacturer usually do (e.g. a yogurt juice whose siblings are "DEEDO ... JUICE" is a Deedo product). Use them, and say so in notes.
 - brand_terms: the brand in Latin script plus its native-script spelling(s) and common hashtags (e.g. "deedo", "ดีโด้", "#deedo"), including its Chinese name when the brand has one in common use (e.g. "芬达" for Fanta, "雀巢" for Nestlé). Only include spellings that are clearly the brand: never invent a Chinese name. Include common misspellings consumers use.
@@ -92,7 +97,7 @@ Rules:
 - flavor_variant is a taste or variety (lychee, BBQ cheese, less sugar, original). A size or dimension (22cm, 330ml) is never a flavor.
 - flavor_terms: the flavor/variant in English, Thai, Vietnamese and Chinese (e.g. "lychee", "ลิ้นจี่", "vải", "荔枝"). Empty when flavor_variant is null.
 - negative_terms: phrases that show the brand word means something else (a person, film, K-pop group, restaurant, an ordinary word). Empty if the brand is unambiguous.
-- search_queries: exactly 3 phrases a person would type into YouTube or TikTok to find videos of THIS item, in this order: (1) the language of its home market (e.g. "trà vải cozy"), (2) English (e.g. "cozy lychee tea"), (3) Simplified Chinese: the brand as Chinese speakers write it (its Chinese name if it has one, otherwise the Latin name) plus the product and flavor in Chinese (e.g. "Cozy 荔枝茶", "芬达 葡萄"). When the home market is Chinese-speaking, make (1) Chinese and (3) another Chinese wording. Empty when is_branded is false.
+- search_queries: exactly 3 phrases a person would type into YouTube or TikTok to find videos of THIS item, in this order: (1) the language of its home market (e.g. "trà vải cozy"), (2) English (e.g. "cozy lychee tea"), (3) Simplified Chinese: the brand as Chinese speakers write it (its Chinese name if it has one, otherwise the Latin name) plus the product and flavor in Chinese (e.g. "Cozy 荔枝茶", "芬达 葡萄"). When the home market is Chinese-speaking, make (1) Chinese and (3) another Chinese wording. Empty when is_branded is false, unless the item is frozen (see above).
 - Keep every term lowercase except proper nouns in scripts without case. No duplicates."""
 
 
@@ -100,8 +105,8 @@ def load_codes() -> list[dict]:
     """The brand-code list, var promo_brand_codes in dbt_project.yml (the same list
     int_promo_items_enriched reads for is_own_brand)."""
     return [{"code": str(c["code"]), "kind": c.get("kind", "brand"), "brand": c.get("brand") or "",
-             "own_brand": bool(c.get("own_brand")), "brand_terms": list(c.get("brand_terms") or []),
-             "notes": c.get("notes") or ""}
+             "own_brand": bool(c.get("own_brand")), "frozen": bool(c.get("frozen")),
+             "brand_terms": list(c.get("brand_terms") or []), "notes": c.get("notes") or ""}
             for c in dbt_var("promo_brand_codes", []) or []]
 
 
@@ -126,9 +131,15 @@ def system_prompt(codes: list[dict]) -> str:
 
 
 def codes_in(description, codes: list[dict]) -> list[dict]:
-    """The codes written as whole words in a description ("FZ DF SESAME DONUT" -> FZ, DF)."""
-    words = set(re.findall(r"[A-Z0-9]+", str(description or "").upper()))
-    return [c for c in codes if c["code"].upper() in words]
+    """The codes written as whole words in a description, longest first so a two-word
+    code wins ("FZ DF SESAME DONUT" -> DF, FZ; "D FZ STIR-FRIED EEL" -> D FZ, FZ)."""
+    text = str(description or "").upper()
+    found = []
+    for c in sorted(codes, key=lambda c: -len(c["code"])):
+        words = r"\s+".join(map(re.escape, c["code"].upper().split()))
+        if re.search(rf"(?<![A-Z0-9]){words}(?![A-Z0-9])", text):
+            found.append(c)
+    return found
 
 
 def _item_prompt(r: dict) -> str:
@@ -236,13 +247,17 @@ def draft_one(client, model: str, version: str, system: str, row: dict) -> dict 
         print(f"  ! {row['item_no']}: unparseable reply (stop_reason={stop}), skipped — re-run to retry")
         return None
     branded = bool(data.get("is_branded"))
-    # a brand code settles the brand, whatever the model said
+    # a brand code settles the brand, and a frozen code the pack, whatever the model said
     brand_codes = [c for c in row.get("_codes") or [] if c["kind"] == "brand"]
     if brand_codes:
         branded = True
         data["brand"] = brand_codes[0]["brand"]
         data["brand_terms"] = (split_terms(brand_codes[0]["brand_terms"])
                                + _as_list(data.get("brand_terms")))
+    if any(c["frozen"] for c in row.get("_codes") or []):
+        data["pack_format"] = "frozen"
+    # a frozen item with no brand is still searched, as a frozen product
+    searched = branded or data.get("pack_format") == "frozen"
     return {
         "item_no": row["item_no"],
         "brand": data.get("brand"),
@@ -251,10 +266,10 @@ def draft_one(client, model: str, version: str, system: str, row: dict) -> dict 
         "pack_format": data.get("pack_format"),
         "is_branded": "true" if branded else "false",
         "brand_terms": "|".join(_as_list(data.get("brand_terms"))) if branded else None,
-        "product_terms": "|".join(_as_list(data.get("product_terms"))) if branded else None,
-        "flavor_terms": "|".join(_as_list(data.get("flavor_terms"))) if branded else None,
-        "negative_terms": "|".join(_as_list(data.get("negative_terms"))) if branded else None,
-        "search_queries": "|".join(_as_list(data.get("search_queries"))[:3]) if branded else None,
+        "product_terms": "|".join(_as_list(data.get("product_terms"))) if searched else None,
+        "flavor_terms": "|".join(_as_list(data.get("flavor_terms"))) if searched else None,
+        "negative_terms": "|".join(_as_list(data.get("negative_terms"))) if searched else None,
+        "search_queries": "|".join(_as_list(data.get("search_queries"))[:3]) if searched else None,
         "notes": data.get("notes"),
         "drafted_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds"),
         "model_version": version,

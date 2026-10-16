@@ -213,7 +213,9 @@ select
             case when is_recent = false
                  then 'Older than {{ (age // 12) ~ " years" if age % 12 == 0 else age ~ " months" }}: no recent video was found. '
                  else '' end,
-            'Brand + product/flavor named in video. ', coalesce(judge_reason, ''))
+            case when is_branded then 'Brand + product/flavor named in video. '
+                 else 'No brand to match (frozen item); frozen packaged product named in video. ' end,
+            coalesce(judge_reason, ''))
         when match_status = 'Exact' then concat('Brand, product and flavor match. ', coalesce(judge_reason, ''))
         else concat('Same brand/product line; flavor or variant not confirmed. ', coalesce(judge_reason, ''))
     end                                                          as match_note,

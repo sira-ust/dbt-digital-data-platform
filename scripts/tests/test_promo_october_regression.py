@@ -74,6 +74,7 @@ def test_scraped(mart, item_no):
     assert mart[item_no] == {("Exact", "Scraped")}
 
 
-@pytest.mark.parametrize("item_no", ["86251", "73143", "55027", "71335", "73230"])
+# 71335 and 73230 ("D FZ ...") are Dragonfly frozen, an own brand, since the brand codes
+@pytest.mark.parametrize("item_no", ["86251", "73143", "55027"])
 def test_unbranded_items_stay_unmatched(mart, item_no):
     assert mart[item_no] == {("Unmatched", None)}

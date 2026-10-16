@@ -5,7 +5,9 @@
 -- VERIFIED = Exact by the same rule as social listening: the keyword pass found
 -- brand + product (+ flavor) in the title / description / tags AND the judge
 -- said exact. Scraped rows are Exact or nothing — a Close video is not worth a
--- row when the point of the search is to find the item itself.
+-- row when the point of the search is to find the item itself. EXCEPT a frozen
+-- item with no brand (is_frozen, not is_branded): "frozen" stood in for the brand,
+-- so the video shows the product but cannot confirm the item: its rows are Close.
 --
 -- RECENT FIRST: an item with any verified video posted within
 -- var('promo_scraped_max_age_months') (24) before the promo month keeps only those.
@@ -51,7 +53,7 @@ eligible as (
 
 items as (
 
-    select promo_month, promo_sheet, row_order, item_no
+    select promo_month, promo_sheet, row_order, item_no, is_branded
     from {{ ref('int_promo_items_enriched') }}
 
 ),
@@ -77,7 +79,7 @@ select
     i.item_no,
     r.video_id,
     r.scraped_rank,
-    'Exact'                                                      as match_status,
+    case when i.is_branded then 'Exact' else 'Close' end         as match_status,
     r.matched_content_item,
     case when r.is_short then 'YouTube Shorts' else 'YouTube' end as channel,
     r.channel_title                                              as profile,

@@ -1,8 +1,9 @@
 """Search YouTube for promo items social listening did not find (step 4).
 
 For every BRANDED promo item of the month with no Social Listening match (no row
-in int_promo_social_matches), and for every UST own-brand item whether matched or
-not (is_own_brand), run the item's reviewed search_queries through the YouTube
+in int_promo_social_matches), for every UST own-brand item whether matched or not
+(is_own_brand), and for every FROZEN item with no brand (is_frozen: searched as a
+frozen product, "frozen" standing in for the brand), run the item's reviewed search_queries through the YouTube
 Data API v3:
 
     search.list   top N videos per query            100 quota units each
@@ -56,8 +57,8 @@ except NameError:
 
 from promo_common import (  # noqa: E402
     INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, ItemTerms, append_records, dbt_var,
-    ensure_landing, find_project_root, get_llm_client, judge_majority, landing_path, match_text, query,
-    read_local_parquet, split_terms,
+    ensure_landing, find_project_root, flag, get_llm_client, judge_majority, landing_path, match_text,
+    query, read_local_parquet, split_terms,
 )
 
 API = "https://www.googleapis.com/youtube/v3"
@@ -120,7 +121,7 @@ def is_short(video_id: str) -> bool:
 
 ITEM_FIELDS = ["promo_month", "item_no", "promo_description", "item_full_description", "brand",
                "product", "flavor_variant", "pack_format", "brand_terms", "product_terms",
-               "flavor_terms", "negative_terms", "search_queries"]
+               "flavor_terms", "negative_terms", "search_queries", "is_branded", "is_frozen"]
 
 
 def items_to_search(backend: str, promo_month: str | None) -> tuple[str, list[dict]]:
@@ -131,7 +132,7 @@ def items_to_search(backend: str, promo_month: str | None) -> tuple[str, list[di
         select {', '.join('i.' + f for f in ITEM_FIELDS)}
         from {sch}.int_promo_items_enriched as i
         where i.promo_month = date '{promo_month}'
-          and i.is_branded
+          and (i.is_branded or i.is_frozen)   -- a frozen item with no brand is searched too
           and i.search_queries is not null
           and (i.is_own_brand             -- own brands are scraped even when social matched
                or not exists (
@@ -225,7 +226,9 @@ def search_item(key: str, item: dict, max_queries: int, per_query: int) -> tuple
 def verify(client, model: str, item: dict, videos: list[dict], concurrency: int, votes: int = 3) -> list[dict]:
     """Keyword evidence for every video; the judge for keyword-exact ones only
     (a scraped row must be Exact, so a Close video is not worth a call)."""
-    terms = ItemTerms(item["brand_terms"], item["product_terms"], item["flavor_terms"], item["negative_terms"])
+    # a frozen item with no brand: "frozen" (in any language) stands in for the brand
+    brand_terms = item["brand_terms"] if flag(item.get("is_branded")) else dbt_var("promo_frozen_terms", ["frozen"])
+    terms = ItemTerms(brand_terms, item["product_terms"], item["flavor_terms"], item["negative_terms"])
     now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
     todo = []
     for v in videos:

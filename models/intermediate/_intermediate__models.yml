@@ -1019,6 +1019,12 @@ models:
       - name: is_branded
         description: False for generic items with no searchable brand — never searched.
         tests: [not_null]
+      - name: is_frozen
+        description: >
+          pack_format is frozen (a frozen code such as FZ, D FZ or FROZEN forces it when
+          terms are drafted). A frozen item with no brand is still scraped (YouTube + the
+          TikTok list) as a frozen product, and its scraped videos are Close at best.
+        tests: [not_null]
       - name: is_own_brand
         description: >
           The brand is one of UST's own (dbt var promo_brand_codes, own_brand: true). Such items

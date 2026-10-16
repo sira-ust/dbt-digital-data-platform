@@ -44,9 +44,10 @@ The sheet **TikTok Search List** has one row per promo item to search. For each 
 
 ### UST's own brands
 
-Item descriptions use codes. **HB** = Honeybee, **DF** = Dragonfly, **CG** = Chung Guang:
-these are UST's own brands. **FZ** (frozen) and **DFZ** (discontinued frozen) are not
-brands, so "FZ DF SESAME DONUT" is a frozen Dragonfly item. Own-brand items are always
+Item descriptions use codes. **HB** = Honeybee, **DF** = Dragonfly, **D FZ** = Dragonfly
+frozen, **CG** = Chung Guang: these are UST's own brands. **FZ** or **FROZEN** (frozen) and
+**DFZ** (discontinued frozen) are not brands, so "FZ DF SESAME DONUT" is a frozen
+Dragonfly item. Own-brand items are always
 on the search list, even when trending social (Mentionlytics) already found posts for
 them: their **Current Status** then says so, e.g. `Close (On Trending Social)`. Search
 them like any other brand:
@@ -54,6 +55,21 @@ them like any other brand:
 - **Dragonfly**: in Vietnam it is sold as **Chuồn Chuồn**, so search that name too. A
   video counts when it names either Dragonfly or Chuồn Chuồn together with the product.
   "Chuồn chuồn" on its own also means the insect, so it is not enough.
+
+### Frozen items with no brand
+
+A row whose **Must Mention (brand)** starts with `(no brand: frozen product)` is a frozen
+item with no brand (e.g. "FZ PURE SUGARCANE JUICE"). Search its phrases the same way, but
+keep a video only when:
+- it names the **product** and, when the item has one, the **flavor / variant**; and
+- it shows a **frozen, packaged** product: a frozen pack being bought, unboxed, heated or
+  reviewed, whatever its brand.
+
+Throw out homemade recipes, street-food stalls, restaurant dishes and fresh (not frozen)
+versions, even when the dish is the same. These videos can't confirm a brand, so write
+them as **`Close`**, never `Exact` (bold, brown text `9C5700` on yellow fill `FFEB9C`, in
+both F and H), and start column T with `No brand to match (frozen item); frozen packaged
+product named in video.`
 
 ## How to write each video into "Promo vs Social Listening"
 
