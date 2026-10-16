@@ -1049,7 +1049,10 @@ models:
   - name: int_promo_scraped_matches
     description: >
       The top 1-3 (var promo_scraped_max_per_item) judged-Exact YouTube videos per
-      promo item and month, by views. Source = Scraped.
+      promo item and month, ranked by views, then engagement (likes + comments). Only
+      videos posted within var promo_scraped_max_age_months (24) before the promo month
+      when the item has any; otherwise its older videos (is_recent = false).
+      Source = Scraped.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

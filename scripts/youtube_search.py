@@ -11,7 +11,10 @@ Data API v3:
 
 Each video then gets the SAME Exact rule as a social post (promo_common.ItemTerms
 over title + description + tags) and, when the keywords say exact, the same AI
-judge. int_promo_scraped_matches keeps the top 1-3 judged-Exact videos by views.
+judge. int_promo_scraped_matches keeps the top 1-3 judged-Exact videos: those posted
+in the past 2 years if there are any, else older ones; by views, then likes + comments.
+The search itself has no date filter, so an item with no recent video still has
+older ones to fall back on, at no extra quota.
 
 THE TABLE IS THE CACHE. Every video returned is stored with its evidence and
 verdict, keyed by (promo_month, item_no). An item that already has rows for the

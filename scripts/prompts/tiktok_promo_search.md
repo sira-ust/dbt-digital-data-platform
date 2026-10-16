@@ -34,8 +34,13 @@ The sheet **TikTok Search List** has one row per promo item to search. For each 
    - the brand appears only as one hashtag among many, with no product talk.
    A recipe or drink mix still counts when it names this exact item, e.g. "Red Bull mixed
    with Deedo Cantaloupe".
-4. From the videos you kept, take the **top 3 by likes**. Fewer is fine. Never pad the list
-   with weaker matches.
+4. Prefer videos **posted in the past 2 years** (counted back from the start of the
+   promo month, e.g. on or after 2024-11-01 for a NOV 2026 workbook). If the post date
+   isn't shown in the results, open the video to check it. If the item has **no** exact
+   video from the past 2 years, take the older ones instead, and start their Match Note
+   with `Older than 2 years: no recent video was found.`
+5. From the videos you kept, take the **top 3 by performance**: most likes first; for a tie,
+   the one with more comments. Fewer is fine. Never pad the list with weaker matches.
 
 ### UST's own brands
 

@@ -52,7 +52,8 @@ social_kept as (
         judge_model,
         mention_id,
         cast(null as {{ dbt.type_string() }})  as video_id,
-        cast(null as integer)                  as scraped_rank
+        cast(null as integer)                  as scraped_rank,
+        cast(null as boolean)                  as is_recent
     from social
     where match_status = 'Exact' or item_has_exact = 0
 
@@ -68,7 +69,8 @@ scraped as (
         c.product_hit, c.flavor_hit, c.match_text, c.judge_model,
         cast(null as bigint)                   as mention_id,
         c.video_id,
-        c.scraped_rank
+        c.scraped_rank,
+        c.is_recent
     from {{ ref('int_promo_scraped_matches') }} as c
     inner join items as i
         on  i.promo_month = c.promo_month
@@ -128,7 +130,8 @@ joined as (
         m.judge_model,
         m.mention_id,
         m.video_id,
-        m.scraped_rank
+        m.scraped_rank,
+        m.is_recent
     from items as i
     left join matches as m
         on  m.promo_month = i.promo_month
@@ -205,7 +208,12 @@ select
     source,
     case
         when match_status = 'Unmatched' then null
-        when source = 'Scraped' then concat('Brand + product/flavor named in video. ', coalesce(judge_reason, ''))
+        {%- set age = var('promo_scraped_max_age_months') %}
+        when source = 'Scraped' then concat(
+            case when is_recent = false
+                 then 'Older than {{ (age // 12) ~ " years" if age % 12 == 0 else age ~ " months" }}: no recent video was found. '
+                 else '' end,
+            'Brand + product/flavor named in video. ', coalesce(judge_reason, ''))
         when match_status = 'Exact' then concat('Brand, product and flavor match. ', coalesce(judge_reason, ''))
         else concat('Same brand/product line; flavor or variant not confirmed. ', coalesce(judge_reason, ''))
     end                                                          as match_note,

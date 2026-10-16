@@ -140,7 +140,9 @@ def footnote(data: dict) -> str:
     src = sorted({i["source_file"] for i in items if i.get("source_file")})
     m = data["mentions"]
     scraped = (f"Rows with Source = Direct Scraping came from YouTube searches on {_fmt_date(data['searched_at'])}, "
-               f"keeping up to 3 of the highest-view videos that name the exact product."
+               f"keeping up to 3 videos that name the exact product, highest views first, then "
+               f"likes + comments: only videos posted in the past 2 years when there are any, "
+               f"else older ones (marked in Match Note)."
                if data["searched_at"] else "No YouTube search has run for this month yet.")
     return (f"Promo item counts are distinct Item Nos. Source: {', '.join(src) or 'promo workbook'} "
             f"({len({i['item_no'] for i in items})} items) vs social listening "

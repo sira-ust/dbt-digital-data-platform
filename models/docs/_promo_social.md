@@ -27,9 +27,13 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
 
    The judge can lower the keyword level but never raise it. An Exact row always has the
    brand, product and flavor terms in its own text (`assert_promo_exact_has_terms`).
-3. **YouTube.** `youtube_search.py` runs only for branded items with *no* social listening
-   row. It runs each item's `search_queries` (up to 3), applies the same keyword rule and
-   judge to title, description and tags, and keeps the top 1–3 Exact videos by views.
+3. **YouTube.** `youtube_search.py` runs for branded items with *no* social listening
+   row, and for every own-brand item. It runs each item's `search_queries` (up to 3),
+   applies the same keyword rule and judge to title, description and tags, and keeps the
+   top 1–3 Exact videos by views, then engagement (likes + comments). Only videos posted
+   in the past 2 years (`promo_scraped_max_age_months`, counted back from the promo month)
+   count when the item has any; when it has none, its older videos are used instead and
+   their Match Note starts "Older than 2 years".
 4. **The mart.** `mart_promo_social_match` builds the rows. An item with an Exact post shows
    only Exact posts; otherwise it shows its Close posts, then YouTube, then one `Unmatched` row.
    UST's own brands show their social listening posts *and* their YouTube videos.
