@@ -16,10 +16,12 @@ attached workbook and give me the updated file back.
 The sheet **TikTok Search List** has one row per promo item to search. For each row:
 
 1. Open the **TikTok Search Link**, then also search each line of **Search Phrases**.
-   Look at the top results for each search, scrolling once or twice.
+   One phrase is in Chinese (e.g. `芬达 葡萄`): search it like the others. Look at the top
+   results for each search, scrolling once or twice.
 2. Keep a video only if it is an **exact match**. Its caption or on-screen hashtags must name
-   - the **brand**: one of the *Must Mention (brand)* words, any spelling, including Thai or
-     Vietnamese script or a hashtag; and
+   - the **brand**: one of the *Must Mention (brand)* words, any spelling, including Thai,
+     Vietnamese or Chinese script or a hashtag. A Chinese caption often writes the brand in
+     Latin letters ("Cozy 荔枝茶"); that counts; and
    - the **product**: what the item is, e.g. tea, juice, energy drink, rice paper; and
    - the **flavor / variant**: one of the *Flavor Words*. Skip this check when the column says
      "(no flavor to require)".

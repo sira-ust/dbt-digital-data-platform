@@ -4,9 +4,10 @@ NAV has no brand column and promo descriptions are truncated ("COCONUT MILK
 DRINK (LESS SUGAR"), so for every promo item WITHOUT a row in
 seeds/seed_promo_item_terms.csv the Databricks-hosted LLM drafts:
     brand, product, flavor_variant, pack_format, is_branded
-    brand_terms / product_terms / flavor_terms   English + Thai + Vietnamese, native script
+    brand_terms / product_terms / flavor_terms   English + Thai + Vietnamese + Chinese, native script
     negative_terms                               phrases that mean the brand word is something else
-    search_queries                               up to 3 phrases for YouTube / TikTok search
+    search_queries                               up to 3 phrases for YouTube / TikTok search:
+                                                 home-market language, English, Chinese
 from the promo row plus the NAV catalog (full description, flavor and package
 attributes, category) and the WMS item name.
 
@@ -58,13 +59,13 @@ from promo_common import (  # noqa: E402
     find_project_root, get_llm_client, landing_path, query, split_terms,
 )
 
-PROMPT_VERSION = "v2"   # v2: brand-code glossary; no "D " private-label rule
+PROMPT_VERSION = "v3"   # v2: brand-code glossary; no "D " private-label rule. v3: Chinese terms + query
 SEED_PATH = "seeds/seed_promo_item_terms.csv"
 SEED_COLUMNS = ["item_no", "brand", "product", "flavor_variant", "pack_format", "is_branded",
                 "brand_terms", "product_terms", "flavor_terms", "negative_terms",
                 "search_queries", "notes", "review_status"]
 
-INSTRUCTIONS = """You prepare search terms so a distributor can find social media posts about the exact products it is promoting. The posts are mostly Thai and Vietnamese, plus English, and some Filipino, Japanese, Korean or Indian.
+INSTRUCTIONS = """You prepare search terms so a distributor can find social media posts about the exact products it is promoting. The posts are mostly Thai and Vietnamese, plus English and Chinese, and some Filipino, Japanese, Korean or Indian.
 
 For the item given, return JSON only:
 {
@@ -85,12 +86,13 @@ Rules:
 - is_branded is false when there is no searchable consumer brand: generic commodities (sushi mat, peeled cassava, batter mix). For those, leave every term list empty.
 - The promo description is uppercase and truncated; prefer the catalog description. Codes in the description mean what the BRAND CODES list below says. A brand code IS the brand: the item is branded, use that brand name and its terms. A status code (frozen, discontinued) is never a brand.
 - When the description names no brand, the sibling items from the same manufacturer usually do (e.g. a yogurt juice whose siblings are "DEEDO ... JUICE" is a Deedo product). Use them, and say so in notes.
-- brand_terms: the brand in Latin script plus its native-script spelling(s) and common hashtags (e.g. "deedo", "ดีโด้", "#deedo"). Only include spellings that are clearly the brand. Include common misspellings consumers use.
-- product_terms: how people write this product type in English, Thai and Vietnamese (e.g. "juice", "น้ำผลไม้", "nước ép"). A hashtag that combines brand and product (e.g. "#tracozy") may appear in both brand_terms and product_terms.
+- brand_terms: the brand in Latin script plus its native-script spelling(s) and common hashtags (e.g. "deedo", "ดีโด้", "#deedo"), including its Chinese name when the brand has one in common use (e.g. "芬达" for Fanta, "雀巢" for Nestlé). Only include spellings that are clearly the brand: never invent a Chinese name. Include common misspellings consumers use.
+- CHINESE: wherever a rule below asks for English, Thai and Vietnamese, also give Chinese, in Simplified characters and, when they differ, Traditional too (e.g. "芦荟", "蘆薈").
+- product_terms: how people write this product type in English, Thai, Vietnamese and Chinese (e.g. "juice", "น้ำผลไม้", "nước ép", "果汁"). A hashtag that combines brand and product (e.g. "#tracozy") may appear in both brand_terms and product_terms.
 - flavor_variant is a taste or variety (lychee, BBQ cheese, less sugar, original). A size or dimension (22cm, 330ml) is never a flavor.
-- flavor_terms: the flavor/variant in English, Thai and Vietnamese (e.g. "lychee", "ลิ้นจี่", "vải"). Empty when flavor_variant is null.
+- flavor_terms: the flavor/variant in English, Thai, Vietnamese and Chinese (e.g. "lychee", "ลิ้นจี่", "vải", "荔枝"). Empty when flavor_variant is null.
 - negative_terms: phrases that show the brand word means something else (a person, film, K-pop group, restaurant, an ordinary word). Empty if the brand is unambiguous.
-- search_queries: at most 3 phrases a person would type into YouTube or TikTok to find videos of THIS item, in the language of its home market first (e.g. "trà vải cozy", "deedo cantaloupe"). Empty when is_branded is false.
+- search_queries: exactly 3 phrases a person would type into YouTube or TikTok to find videos of THIS item, in this order: (1) the language of its home market (e.g. "trà vải cozy"), (2) English (e.g. "cozy lychee tea"), (3) Simplified Chinese: the brand as Chinese speakers write it (its Chinese name if it has one, otherwise the Latin name) plus the product and flavor in Chinese (e.g. "Cozy 荔枝茶", "芬达 葡萄"). When the home market is Chinese-speaking, make (1) Chinese and (3) another Chinese wording. Empty when is_branded is false.
 - Keep every term lowercase except proper nouns in scripts without case. No duplicates."""
 
 

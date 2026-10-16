@@ -10,7 +10,7 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
 ### How an item gets its rows
 
 1. **Terms.** `seed_promo_item_terms` holds each item's brand, product and flavor, plus
-   search terms in English, Thai and Vietnamese and *negative* terms. NAV has no brand
+   search terms in English, Thai, Vietnamese and Chinese and *negative* terms. NAV has no brand
    column and the promo text is truncated, so this reviewed file is the source of truth.
    Items not in it get an LLM draft (`draft_promo_terms.py`) that is used until someone
    reviews it.
@@ -100,6 +100,12 @@ set `review_status = reviewed` and commit. How terms match:
   judged pairs aren't re-judged unless `JUDGE_PROMPT_VERSION` changes.
 
 To add drafts to the seed for review: `python scripts/draft_promo_terms.py --to-seed`.
+
+**Chinese.** Since prompt v3, every draft also carries Chinese terms (Simplified, and
+Traditional where it differs) and its third search phrase is in Chinese, so YouTube and
+the TikTok list search in Chinese too, at no extra quota (still 3 searches per item).
+Rows reviewed before that (October 2026) have no Chinese: add the terms and a Chinese
+phrase by hand if an item needs them.
 
 ### Brand codes and UST's own brands
 
