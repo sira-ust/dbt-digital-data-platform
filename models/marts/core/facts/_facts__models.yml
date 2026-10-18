@@ -365,10 +365,21 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "line_count > 0"
-      # a credit can equal an invoice but should not exceed it
+      # a credit can equal an invoice but should not exceed it — checkable only on
+      # a FULLY valued invoice. A pre-2026-09-20 invoice with a few lines valued
+      # (value_coverage < 1) set against a fully valued credit goes negative
+      # without anything being wrong: 273 of them on 2026-10-19.
       - dbt_utils.expression_is_true:
           arguments:
-            expression: "net_value is null or net_value <= invoice_value"
+            expression: "net_value is null or value_coverage < 1 or net_value >= 0"
+      # credits USUALLY reduce an invoice, but a NAV price correction (reason PRC)
+      # credits the old price and re-bills the new one, so a net-negative credit is
+      # real — invoice 7514959 / PSC158062, 2026-10-13. Warn, don't fail.
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "returned_value is null or returned_value >= 0"
+          config:
+            severity: warn
       - dbt_utils.expression_is_true:
           arguments:
             expression: "value_coverage is null or value_coverage between 0 and 1"
