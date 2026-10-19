@@ -1,6 +1,14 @@
 -- YouTube search results per promo item and month, typed. One row per
 -- (promo_month, item_no, video_id): the same video can come back from several of an
 -- item's queries, and the latest search wins (fresher view counts).
+--
+-- ONLY THE ITEM'S LATEST SEARCH COUNTS. The landing table only appends, and an item
+-- is searched again when its terms are re-drafted — so its earlier search's videos,
+-- classified against terms that no longer exist, would otherwise stay. Item 24211
+-- (2026-11) kept an Exact from its 10-15 search after the 10-18 re-draft added flavor
+-- terms, failing assert_promo_exact_has_terms. youtube_search.py stamps one
+-- searched_at per item per search, and a search with no results still writes a
+-- marker row, so a re-search that finds nothing correctly empties the item.
 
 with source as (
 
@@ -43,6 +51,17 @@ typed as (
 
 ),
 
+-- before the video_id filter, so a marker row (no results) still counts as a search
+latest_search as (
+
+    select
+        *,
+        max(searched_at) over (partition by promo_month, item_no) as _latest_searched_at
+    from typed
+    where item_no is not null
+
+),
+
 numbered as (
 
     select
@@ -51,8 +70,9 @@ numbered as (
             partition by promo_month, item_no, video_id
             order by searched_at desc, query_rank
         ) as _rn
-    from typed
-    where item_no is not null and video_id is not null
+    from latest_search
+    where video_id is not null
+      and searched_at = _latest_searched_at
 
 )
 
