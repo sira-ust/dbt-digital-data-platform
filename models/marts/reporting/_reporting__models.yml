@@ -2108,9 +2108,16 @@ models:
       - dbt_utils.expression_is_true:
           arguments:
             expression: "valued_lines <= source_lines"
+      # WARN, NOT ERROR: promo_value sums the promo lines' dollars, and NAV invoices
+      # carry reversal lines (negative quantity and value). On a quiet period one
+      # reversal can outweigh the promo sales, so the share goes below 0 without
+      # anything being wrong: 3 rep-periods in Nov 2020, once NAV's history was
+      # re-exported with amounts (2026-10-19).
       - dbt_utils.expression_is_true:
           arguments:
             expression: "promo_value_share is null or promo_value_share between 0 and 1"
+          config:
+            severity: warn
       # an invoice carries at least one line
       - dbt_utils.expression_is_true:
           arguments:

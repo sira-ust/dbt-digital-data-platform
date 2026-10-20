@@ -369,9 +369,17 @@ models:
       # a FULLY valued invoice. A pre-2026-09-20 invoice with a few lines valued
       # (value_coverage < 1) set against a fully valued credit goes negative
       # without anything being wrong: 273 of them on 2026-10-19.
+      # WARN, NOT ERROR, since NAV's history was re-exported WITH amounts
+      # (2026-10-19): real NAV books do it, too. 12 fully valued invoices from
+      # 2021-2026 net negative on 2026-10-20, none from duplicated credit lines —
+      # e.g. 7419402 reverses its own lines (-48, -42) and is credited again, and
+      # 7382426's credit is for an item the invoice never carried (linked to the
+      # wrong invoice in NAV). Worth seeing; not a reason to stop the build.
       - dbt_utils.expression_is_true:
           arguments:
             expression: "net_value is null or value_coverage < 1 or net_value >= 0"
+          config:
+            severity: warn
       # credits USUALLY reduce an invoice, but a NAV price correction (reason PRC)
       # credits the old price and re-bills the new one, so a net-negative credit is
       # real — invoice 7514959 / PSC158062, 2026-10-13. Warn, don't fail.
