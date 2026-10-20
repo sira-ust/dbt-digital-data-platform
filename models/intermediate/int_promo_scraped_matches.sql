@@ -1,6 +1,16 @@
 {{ config(tags=['promo']) }}
--- int_promo_scraped_matches — the best verified YouTube videos per promo item and
--- month, at most var('promo_scraped_max_per_item') (3). Source = 'Scraped'.
+-- int_promo_scraped_matches — the best verified YouTube videos per promo item, month
+-- AND SEARCH LANGUAGE, at most var('promo_scraped_max_per_item') (3) of each.
+-- Source = 'Scraped'.
+--
+-- PER LANGUAGE, so no language's results crowd out another's. An item is searched
+-- with phrases in several languages (English, Thai, Vietnamese, Chinese...); ranked
+-- together, the English search's bigger view counts took every slot and the
+-- Vietnamese and Chinese finds never reached the workbook (2026-11: 4 of 5 Chinese
+-- Exact videos dropped). The workbook gives each language its own column block.
+-- search_language is the language of the phrase that FIRST returned the video
+-- (youtube_search.py keeps one row per video), so a video both an English and a
+-- Chinese phrase returned is listed once, under the phrase searched first.
 --
 -- VERIFIED = Exact by the same rule as social listening: the keyword pass found
 -- brand + product (+ flavor) in the title / description / tags AND the judge
@@ -9,16 +19,16 @@
 -- item with no brand (is_frozen, not is_branded): "frozen" stood in for the brand,
 -- so the video shows the product but cannot confirm the item: its rows are Close.
 --
--- RECENT FIRST: an item with any verified video posted within
+-- RECENT FIRST, PER LANGUAGE: an item-language with any verified video posted within
 -- var('promo_scraped_max_age_months') (24) before the promo month keeps only those.
--- An item with none falls back to its older videos (is_recent = false; the mart's
+-- One with none falls back to its older videos (is_recent = false; the mart's
 -- Match Note says so). Anchored on the promo month, not today, so a rerun gives the
 -- same answer. The search has no date filter, so older videos are there to fall
 -- back on at no extra quota.
 --
--- RANKED BY PERFORMANCE: views first, then engagement (likes + comments). "1-3
--- depending on how many come back": an item with one verified video gets one row;
--- it is never padded with weaker matches.
+-- RANKED BY PERFORMANCE within each language: views first, then engagement (likes +
+-- comments). "1-3 depending on how many come back": a language with one verified
+-- video gets one row; it is never padded with weaker matches.
 --
 -- Searching is gated upstream (youtube_search.py searches branded items with no
 -- social-listening match, plus every own-brand item), and the mart enforces it
@@ -30,13 +40,17 @@ with videos as (
         *,
         cast(published_at as date)
             >= {{ dbt.dateadd('month', -1 * var('promo_scraped_max_age_months'), 'promo_month') }}
-            as is_recent
+            as is_recent,
+        {{ promo_search_language('search_query') }}             as search_language
     from {{ ref('stg_promo__youtube_videos') }}
     where verdict = 'exact' and keyword_level = 'exact'
+      -- Khmer is not searched (no workbook block since 2026-10-20); drop what an
+      -- earlier search stored
+      and {{ promo_search_language('search_query') }} <> 'Khmer'
 
 ),
 
--- recent videos when the item has any, otherwise all of them
+-- recent videos when the item-language has any, otherwise all of them
 eligible as (
 
     select *
@@ -44,10 +58,10 @@ eligible as (
         select
             *,
             max(case when is_recent then 1 else 0 end)
-                over (partition by promo_month, item_no) as _item_has_recent
+                over (partition by promo_month, item_no, search_language) as _lang_has_recent
         from videos
     ) as v
-    where is_recent or _item_has_recent = 0
+    where is_recent or _lang_has_recent = 0
 
 ),
 
@@ -63,7 +77,7 @@ ranked as (
     select
         v.*,
         row_number() over (
-            partition by v.promo_month, v.item_no
+            partition by v.promo_month, v.item_no, v.search_language
             order by v.view_count desc nulls last,
                      coalesce(v.like_count, 0) + coalesce(v.comment_count, 0) desc,
                      v.video_id
@@ -78,6 +92,7 @@ select
     i.row_order,
     i.item_no,
     r.video_id,
+    r.search_language,
     r.scraped_rank,
     case when i.is_branded then 'Exact' else 'Close' end         as match_status,
     r.matched_content_item,

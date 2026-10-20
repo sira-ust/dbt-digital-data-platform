@@ -58,7 +58,7 @@ except NameError:
 from promo_common import (  # noqa: E402
     INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, ItemTerms, append_records, dbt_var,
     ensure_landing, find_project_root, flag, get_llm_client, judge_majority, landing_path, match_text,
-    query, read_local_parquet, split_terms,
+    query, read_local_parquet, search_phrases,
 )
 
 API = "https://www.googleapis.com/youtube/v3"
@@ -194,7 +194,7 @@ def already_searched(backend: str, promo_month: str) -> set[str]:
 def search_item(key: str, item: dict, max_queries: int, per_query: int) -> tuple[list[dict], int]:
     """Every distinct video the item's queries return, with stats. -> (videos, quota units)."""
     units, order, first_query = 0, [], {}
-    for q in split_terms(item["search_queries"])[:max_queries]:
+    for q in search_phrases(item["search_queries"])[:max_queries]:
         res = _get("search", {"part": "snippet", "type": "video", "maxResults": per_query, "q": q, "key": key})
         units += UNITS_SEARCH
         for rank, hit in enumerate(res.get("items", []), start=1):
@@ -284,7 +284,7 @@ def main(argv=None):
           f"{len(items) - len(todo)} already searched this month; {len(todo)} to search "
           f"(~{len(todo) * (args.max_queries * UNITS_SEARCH + 1):,} quota units)")
     for it in todo:
-        print(f"  {it['item_no']} {it['promo_description'][:32]:32s} {split_terms(it['search_queries'])[:args.max_queries]}")
+        print(f"  {it['item_no']} {it['promo_description'][:32]:32s} {search_phrases(it['search_queries'])[:args.max_queries]}")
     if args.dry_run or not todo:
         return
 

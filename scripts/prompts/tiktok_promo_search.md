@@ -15,9 +15,11 @@ attached workbook and give me the updated file back.
 
 The sheet **TikTok Search List** has one row per promo item to search. For each row:
 
-1. Open the **TikTok Search Link**, then also search each line of **Search Phrases**.
-   One phrase is in Chinese (e.g. `芬达 葡萄`): search it like the others. Look at the top
-   results for each search, scrolling once or twice.
+1. Search **each line of Search Phrases** on TikTok (the **TikTok Search Link** opens the
+   first one). Each line starts with its language in brackets, e.g. `[Chinese] 芬达 葡萄`:
+   search only the text after the brackets, and remember the language: it decides where
+   the video goes on the main sheet. Look at the top results for each search, scrolling
+   once or twice.
 2. Keep a video only if it is an **exact match**. Its caption or on-screen hashtags must name
    - the **brand**: one of the *Must Mention (brand)* words, any spelling, including Thai,
      Vietnamese or Chinese script or a hashtag. A Chinese caption often writes the brand in
@@ -36,11 +38,14 @@ The sheet **TikTok Search List** has one row per promo item to search. For each 
    with Deedo Cantaloupe".
 4. Prefer videos **posted in the past 2 years** (counted back from the start of the
    promo month, e.g. on or after 2024-11-01 for a NOV 2026 workbook). If the post date
-   isn't shown in the results, open the video to check it. If the item has **no** exact
-   video from the past 2 years, take the older ones instead, and start their Match Note
-   with `Older than 2 years: no recent video was found.`
-5. From the videos you kept, take the **top 3 by performance**: most likes first; for a tie,
-   the one with more comments. Fewer is fine. Never pad the list with weaker matches.
+   isn't shown in the results, open the video to check it. If a language has **no** exact
+   video from the past 2 years, take its older ones instead and mark them `older` (see
+   below). Decide this per language, not per item.
+5. **Per language**, take the **top 3 by performance** from the videos you kept: most likes
+   first; for a tie, the one with more comments. Fewer is fine. Never pad with weaker
+   matches. Keep every language's results: a strong English video must never push out a
+   Vietnamese or Chinese one. A video that two phrases both found counts once, under the
+   first phrase that found it.
 
 ### UST's own brands
 
@@ -66,58 +71,64 @@ keep a video only when:
   reviewed, whatever its brand.
 
 Throw out homemade recipes, street-food stalls, restaurant dishes and fresh (not frozen)
-versions, even when the dish is the same. These videos can't confirm a brand, so write
-them as **`Close`**, never `Exact` (bold, brown text `9C5700` on yellow fill `FFEB9C`, in
-both F and H), and start column T with `No brand to match (frozen item); frozen packaged
-product named in video.`
+versions, even when the dish is the same. These videos can't confirm a brand, so they are
+**`Close`**, never `Exact`: give their cells the yellow Close fill, and start their cell
+note with `No brand to match (frozen item); frozen packaged product named in video.`
 
 ## How to write each video into "Promo vs Social Listening"
 
-Find the item's rows on that sheet. Its **Item No.** matches column B.
+That sheet has **one row per item**: find it by **Item No.** in column B. Never add rows.
 
-- If the item's only row says **Unmatched**, overwrite that row with your first video and
-  insert the others **directly below it**.
-- If the item already has rows (trending social posts or YouTube videos), insert your
-  rows **directly below its last row**.
-- Copy columns A–E (Promo Sheet, Item No., Promo Item, Size, Promo Code) from the item's
-  existing row, unchanged.
-- Formatting, copied from the item's existing row: Arial 10, thin grey borders, top-aligned
-  and wrapped, row height 39.75. Every other item is shaded light blue `EEF3F8` so an item's
-  rows read as one block: if the item's row is shaded, shade your new rows the same; if not,
-  leave them unshaded. A row you overwrite from Unmatched stops being grey: use black text.
+After the item's columns (A–I) come the **result blocks**, three cells each:
+*Trending Social 1–3*, then one block per search language, e.g. *English 1–3*,
+*Thai 1–3*, *Vietnamese 1–3*, *Chinese 1–3*. Put each video in the block of **the
+language of the phrase that found it**, in the first empty cell of that block. A cell
+holding `–` means the item was not searched in that language; you may overwrite it if
+you did search that language.
 
-Fill the other columns like this:
+**A full block.** If the language's three cells already hold results (YouTube videos the
+pipeline found), compare likes: a YouTube cell shows them as `… · 900 likes · …`. Your
+video replaces the result with the fewest likes only if yours has more; a YouTube cell
+without a likes figure counts as 0. Otherwise leave the block as it is. Never move a
+result into another language's block to make room.
+
+**Each result cell:**
+- **Text**: `TikTok · <likes> likes · <post date>`, e.g. `TikTok · 3,706 likes · 2025-02-14`.
+  Likes as TikTok shows them; if it shows only an abbreviation, open the video for the
+  exact number, and if none exists write it with a tilde: `~3.7K likes`. Post date as
+  `YYYY-MM-DD`, or `YYYY-MM` if TikTok shows only a month; leave it out if unknown. Add
+  ` · older` at the end for a video older than 2 years (step 4).
+- **Link**: the cell hyperlinks to the video's own URL,
+  `https://www.tiktok.com/@handle/video/<id>`, never a search or discover page. Blue text
+  `0563C1`, underlined, Arial 10.
+- **Fill**: green `C6EFCE` for an Exact video, yellow `FFEB9C` for a Close one (frozen items
+  with no brand).
+- **Note** (a cell comment), four parts separated by blank lines: the product name as the
+  video writes it, native script kept with English in parentheses, e.g.
+  `Trà Vải Cozy (Cozy Lychee Tea)`; the creator's handle with the `@`, plus ` (brand)` if
+  it is the brand's own account; the full caption, hashtags included; and
+  `Brand + product/flavor named in video.` plus any caveat, e.g. pack size differs or it is
+  the powder version. For an older video, start the last part with
+  `Older than 2 years: no recent video was found.`
+
+**Then update the item's columns:**
 
 | Column | Value |
 |---|---|
-| F Match Status | the ITEM's status, the same on every row of the item: `Exact` if any of its rows is Exact, else `Close`. Bold; Exact is dark green text `006100` on green fill `C6EFCE`, Close is brown text `9C5700` on yellow fill `FFEB9C`. Update the item's existing rows too if your video raises it (e.g. Close → Exact) |
-| G On Trending Social (Mentionlytics) | copy from the item's existing row, unchanged (blank if the item had no row) |
-| H Direct Scraping (TikTok & YouTube) | the item's best scraped status, YouTube and TikTok together: `Exact` here for your rows. Set the same value on every row of the item, with the same styling as F |
-| I Matched Content Item | the product name as the video writes it. Keep native script and add English in parentheses, e.g. `Trà Vải Cozy (Cozy Lychee Tea)` |
-| J Channel | `TikTok` |
-| K Profile | the creator's handle with the `@`, e.g. `@cozyvietnam`. Add ` (brand)` if it is the brand's own account |
-| L Post Date | `YYYY-MM-DD` if TikTok shows a full date; `YYYY-MM` if it shows only a month; otherwise leave blank |
-| M Views | leave blank (TikTok shows likes, not views) |
-| N Likes | the like count as a **number**, format `#,##0`, right-aligned. If TikTok shows `3.7K`, open the video for the exact number. If only an abbreviation exists, convert it (`3.7K` → `3700`, `1.2M` → `1200000`) |
-| O Approx. Count | `Yes`, centred, only when the Likes number came from an abbreviation; otherwise blank |
-| P Engagement (as shown) | the count as TikTok shows it, with a unit: `3,706 likes`, or `~3.7K likes` for an abbreviation |
-| Q Caption | the full caption text, hashtags included |
-| R Link | the text `Open ↗`, hyperlinked to the video's own URL, `https://www.tiktok.com/@handle/video/<id>`, never a search or discover page. Blue `0563C1`, underlined |
-| S Source | `Direct Scraping` |
-| T Match Note | `Brand + product/flavor named in video.` plus any caveat, e.g. pack size differs or it is the powder version |
+| F Match Status | the item's best status across everything on its row: `Exact` if any result is Exact, else `Close`. Bold; Exact is dark green text `006100` on green fill `C6EFCE`, Close is brown text `9C5700` on yellow fill `FFEB9C`. An item that was Unmatched stops being grey: use black text in A–E and I |
+| G On Trending Social (Mentionlytics) | unchanged |
+| H Direct Scraping (TikTok & YouTube) | the best scraped status, YouTube and TikTok together, styled like F |
+| I Posts | a formula: leave it alone, it recounts by itself |
 
 ## When you are done
 
 1. Delete the **TikTok Search List** sheet. The finished workbook has exactly two sheets,
    in this order: *Summary* (first) and *Promo vs Social Listening*.
-2. On the **Summary** sheet, leave every formula alone; they recount automatically. Then:
-   - In **Unmatched promo items (no post found)**, delete the rows of items you just
-     matched, so the list keeps only items with no post at all. Keep the grey note under
-     the list.
-   - Check that the Total "Promo Items" (first table) still equals the number of promo
-     items in the footnote. If it is higher, an item still has an `Unmatched` row next to
-     a new `Exact` row; fix that row.
-3. On *Promo vs Social Listening*, keep the header row, the freeze at D2, and the filter on
-   the header row, extended to the last row.
-4. Save as the same file name and give it back to me, with a short list of which items got
-   TikTok rows and which you searched but found nothing exact for.
+2. On the **Summary** sheet, leave every formula alone; they recount automatically. Then
+   in **Unmatched promo items (no post found)**, delete the rows of items you just matched,
+   so the list keeps only items with no post at all. Keep the grey note under the list.
+3. On *Promo vs Social Listening*, keep the header row, the freeze at D2 and the filter on
+   the header row. The sheet still has exactly one row per promo item.
+4. Save as the same file name and give it back to me, with a list of every item you
+   searched: for each, which phrases you searched (by language) and how many exact videos
+   you kept per language, including the ones where you found none.

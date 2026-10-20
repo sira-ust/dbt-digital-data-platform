@@ -10,9 +10,9 @@
 --      keeps every item to one status so the Summary sheet's per-status item
 --      counts add up to the item count.
 --   2. otherwise Social Listening Close posts;
---   3. otherwise up to 3 verified YouTube videos (Source = Scraped) — for an item
---      with NO social-listening row, which is also the kind of item
---      youtube_search.py searches;
+--   3. otherwise up to 3 verified YouTube videos PER SEARCH LANGUAGE (Source =
+--      Scraped) — for an item with NO social-listening row, which is also the kind
+--      of item youtube_search.py searches;
 --   4. otherwise one row with status Unmatched and every match field blank.
 -- EXCEPT UST's own brands (is_own_brand): they are always scraped, so their
 -- YouTube rows follow their social-listening rows instead of replacing them.
@@ -52,6 +52,7 @@ social_kept as (
         judge_model,
         mention_id,
         cast(null as {{ dbt.type_string() }})  as video_id,
+        cast(null as {{ dbt.type_string() }})  as search_language,
         cast(null as integer)                  as scraped_rank,
         cast(null as boolean)                  as is_recent
     from social
@@ -69,6 +70,7 @@ scraped as (
         c.product_hit, c.flavor_hit, c.match_text, c.judge_model,
         cast(null as bigint)                   as mention_id,
         c.video_id,
+        c.search_language,
         c.scraped_rank,
         c.is_recent
     from {{ ref('int_promo_scraped_matches') }} as c
@@ -130,6 +132,7 @@ joined as (
         m.judge_model,
         m.mention_id,
         m.video_id,
+        m.search_language,
         m.scraped_rank,
         m.is_recent
     from items as i
@@ -165,6 +168,7 @@ select
         order by
             case source when 'Social Listening' then 0 when 'Scraped' then 1 else 2 end,
             case match_status when 'Exact' then 0 when 'Close' then 1 else 2 end,
+            search_language,
             coalesce(scraped_rank, 0),
             coalesce(views, 0) desc,
             coalesce(likes, 0) desc,
@@ -206,6 +210,8 @@ select
     caption,
     link,
     source,
+    -- the workbook's column block for a scraped row; null for social listening
+    search_language,
     case
         when match_status = 'Unmatched' then null
         {%- set age = var('promo_scraped_max_age_months') %}

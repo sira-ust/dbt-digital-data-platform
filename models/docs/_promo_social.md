@@ -30,21 +30,25 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
 3. **YouTube.** `youtube_search.py` runs for branded items with *no* social listening
    row, and for every own-brand item. It runs each item's `search_queries` (up to 3),
    applies the same keyword rule and judge to title, description and tags, and keeps the
-   top 1–3 Exact videos by views, then engagement (likes + comments). Only videos posted
-   in the past 2 years (`promo_scraped_max_age_months`, counted back from the promo month)
-   count when the item has any; when it has none, its older videos are used instead and
-   their Match Note starts "Older than 2 years".
-4. **The mart.** `mart_promo_social_match` builds the rows. An item with an Exact post shows
-   only Exact posts; otherwise it shows its Close posts, then YouTube, then one `Unmatched` row.
-   UST's own brands show their social listening posts *and* their YouTube videos.
-   In the workbook, **Match Status** is the item's status (the better of the two sources),
-   the same on every row of the item. Beside it, **On Trending Social (Mentionlytics)** and
-   **Direct Scraping (TikTok & YouTube)** show what each source found for the item, and each
-   row's **Source** says which of the two it came from.
+   top 1–3 Exact videos **per search language** (the script of the phrase that found the
+   video: English, Thai, Vietnamese, Chinese; a Khmer phrase is skipped) by views, then engagement (likes +
+   comments), so an English search's view counts never crowd out the Vietnamese or Chinese
+   finds. Only videos posted in the past 2 years (`promo_scraped_max_age_months`, counted
+   back from the promo month) count when the item-language has any; when it has none, its
+   older videos are used instead and are marked "older".
+4. **The mart.** `mart_promo_social_match` holds every match, one row per post. An item with
+   an Exact post shows only Exact posts; otherwise its Close posts, then YouTube, then one
+   `Unmatched` row. UST's own brands show their social listening posts *and* their YouTube
+   videos. **The workbook pivots it wide: one row per item.** Match Status is the item's
+   status (the better of the two sources); beside it, **On Trending Social (Mentionlytics)**
+   and **Direct Scraping (TikTok & YouTube)** show what each source found, and **Posts**
+   counts the results. Then the results: *Trending Social 1–3*, and a block of 3 cells per
+   search language. A result cell is clickable, coloured by status, and carries the caption
+   as a cell note; `–` means the item was not searched in that language.
 5. **TikTok, by hand.** The workbook's *TikTok Search List* sheet lists every branded item
-   social listening didn't match. Open the workbook in Claude in Chrome with
-   `scripts/prompts/tiktok_promo_search.md`; Claude adds TikTok rows under each item and
-   deletes that sheet. TikTok has no search API open to a for-profit company: the Research
+   social listening didn't match, each phrase tagged with its language. Open the workbook in
+   Claude in Chrome with `scripts/prompts/tiktok_promo_search.md`; Claude writes each TikTok
+   video into its language block on the item's row and deletes that sheet. TikTok has no search API open to a for-profit company: the Research
    API is academic-only and the Commercial Content API covers EU ads only.
 
 ### Running a new month on Databricks

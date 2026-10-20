@@ -1,30 +1,33 @@
 """Write UST_<MON>_Promo_Social_Listening_Match.xlsx from mart_promo_social_match (step 5).
 
-Three sheets, in the layout of the reviewed October workbook (2026-10-07):
-  1. "Summary"                    opens first. Counts per status, per promo sheet and
-                                  per channel, all LIVE formulas over sheet 2, so rows
-                                  added afterwards (TikTok) are counted without
-                                  re-running anything; then the items nothing was found
-                                  for, as of the export.
-  2. "Promo vs Social Listening"  one row per matched post / video, or one Unmatched
-                                  row per item. Match Status is the ITEM's status;
-                                  beside it, "On Trending Social" (Mentionlytics) and
-                                  "Direct Scraping" (TikTok & YouTube) show what each
-                                  source found for the item. Views and Likes as numbers, the
-                                  platform's own wording beside them, links as "Open ↗";
-                                  every other item's rows shaded, so an item reads as
-                                  one block; Unmatched rows greyed.
+Three sheets:
+  1. "Summary"                    opens first. Counts per status, per promo sheet, per
+                                  channel and per column block, all LIVE formulas over
+                                  sheet 2, so results added afterwards (TikTok) are
+                                  counted without re-running anything; then the items
+                                  nothing was found for, as of the export.
+  2. "Promo vs Social Listening"  ONE ROW PER ITEM (since 2026-10-20; before, one row per
+                                  post). Match Status is the item's status; beside it,
+                                  "On Trending Social" (Mentionlytics) and "Direct
+                                  Scraping" (TikTok & YouTube) show what each source
+                                  found, and Posts counts the item's results (a live
+                                  formula). Then the RESULTS, WIDE: Trending Social 1-3,
+                                  then a block of 3 cells per search language (English,
+                                  Thai, Vietnamese, Chinese: the languages searched
+                                  this month), so one language's finds never push out
+                                  another's. A result cell reads "YouTube · 176,000 views ·
+                                  900 likes · 2022-03-14", links to the post, is coloured
+                                  by its status, and carries the caption and match note as
+                                  a cell note. "–" = not searched in that language; blank
+                                  = searched, nothing found.
   3. "TikTok Search List"         the items to search on TikTok by hand with Claude in
                                   Chrome (prompt: scripts/prompts/tiktok_promo_search.md):
                                   every branded item social listening did not match,
                                   plus every UST own-brand item and every frozen item
-                                  with no brand, with search phrases, required words, exclusions and
-                                  a TikTok search link. The prompt has Claude delete
-                                  this sheet when done, leaving the 2-sheet deliverable.
-
-Unlike the October workbook, "Promo Items" on the Summary is a formula too (a
-distinct count of Item No. per status). October typed numbers in, which go stale
-the moment a TikTok row turns an Unmatched item into Exact.
+                                  with no brand, with search phrases (each tagged with
+                                  its language block), required words, exclusions and a
+                                  TikTok search link. The prompt has Claude delete this
+                                  sheet when done, leaving the 2-sheet deliverable.
 
     python scripts/export_promo_social_match.py                       # latest month, local
     python scripts/export_promo_social_match.py --promo-month 2026-10-01 --out-dir C:/somewhere
@@ -48,34 +51,31 @@ except NameError:
     pass
 
 from promo_common import (  # noqa: E402
-    INTERMEDIATE_SCHEMA, REPORTING_SCHEMA, STAGING_SCHEMA, dbt_var, flag, local_data_root, query,
-    split_terms,
+    INTERMEDIATE_SCHEMA, LANGUAGES, REPORTING_SCHEMA, STAGING_SCHEMA, dbt_var, flag, local_data_root,
+    phrase_language, query, search_phrases, split_terms,
 )
 
 DBX_OUT_DIR = "/Volumes/ust_databricks/social/promo_output"
 SHEET_MAIN, SHEET_SUMMARY, SHEET_TIKTOK = "Promo vs Social Listening", "Summary", "TikTok Search List"
 
-# The layout of the reviewed October workbook (UST_OCT_..._Match 1_2.xlsx, 2026-10-07),
-# plus the two per-source columns after Match Status (November). The Summary's
-# formulas address columns by letter (A = Promo Sheet, B = Item No., F = Match
-# Status, J = Channel), so they hold however many rows are added.
+# Item columns, then Posts, then the result blocks. The Summary's formulas address
+# columns by letter (A = Promo Sheet, F = Match Status, I = Posts, J onward = results).
 SOCIAL_COL, SCRAPED_COL = "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok & YouTube)"
-HEADERS = ["Promo Sheet", "Item No.", "{MON} Promo Item", "Size", "Promo Code", "Match Status",
-           SOCIAL_COL, SCRAPED_COL,
-           "Matched Content Item", "Channel", "Profile", "Post Date", "Views", "Likes",
-           "Approx. Count", "Engagement (as shown)", "Caption", "Link", "Source", "Match Note"]
-WIDTHS = [13, 10, 32, 15, 10, 12, 16, 16, 36, 14, 22, 11, 13, 10, 9, 22, 55, 11, 18, 48]
-COL = {h: i for i, h in enumerate(HEADERS, start=1)}
-# the mart's source -> the workbook's wording, which matches the two column names
-SOURCE_LABEL = {"Social Listening": "On Trending Social", "Scraped": "Direct Scraping"}
+ITEM_HEADERS = ["Promo Sheet", "Item No.", "{MON} Promo Item", "Size", "Promo Code", "Match Status",
+                SOCIAL_COL, SCRAPED_COL, "Posts"]
+ITEM_WIDTHS = [13, 10, 32, 15, 10, 12, 16, 16, 8]
+SLOTS = 3                    # result cells per block: var promo_scraped_max_per_item
+SOCIAL_BLOCK = "Trending Social"
+RESULT_WIDTH = 27
+NOT_SEARCHED = "–"           # an en dash: the item was not searched in this language
 # status -> (fill, font colour)
 # ARGB, opaque, as Excel writes them (openpyxl would store a 6-digit RGB as 00RRGGBB)
 STATUS_STYLE = {"Exact": ("FFC6EFCE", "FF006100"), "Close": ("FFFFEB9C", "FF9C5700"),
                 "Unmatched": ("FFEDEDED", "FF595959")}
 HEADER_FILL, BORDER_COLOR, LINK_COLOR = "FF1F4E78", "FFBFBFBF", "FF0563C1"
-BAND_FILL = "FFEEF3F8"       # every other ITEM, all of its rows, so an item reads as one block
+BLOCK_FILLS = ("FF1F4E78", "FF2E75B6")   # result blocks' headers alternate, to read as blocks
+BAND_FILL = "FFEEF3F8"       # every other item
 MUTED, NOTE_GREY = "FF808080", "FF595959"
-LINK_TEXT = "Open ↗"
 HEADER_HEIGHT, ROW_HEIGHT, SUMMARY_ROW_HEIGHT = 27.75, 39.75, 15
 FORMULA_ROWS = 5000          # Summary formulas cover this many sheet-1 rows
 
@@ -140,16 +140,17 @@ def footnote(data: dict) -> str:
     items = data["items"]
     src = sorted({i["source_file"] for i in items if i.get("source_file")})
     m = data["mentions"]
-    scraped = (f"Rows with Source = Direct Scraping came from YouTube searches on {_fmt_date(data['searched_at'])}, "
-               f"keeping up to 3 videos that name the exact product, highest views first, then "
-               f"likes + comments: only videos posted in the past 2 years when there are any, "
-               f"else older ones (marked in Match Note)."
+    scraped = (f"The language columns came from YouTube searches on {_fmt_date(data['searched_at'])}: "
+               f"each holds up to 3 videos that name the exact product, found by that language's "
+               f"search phrase, highest views first, then likes + comments; only videos posted in the "
+               f"past 2 years when there are any, else older ones (marked \"older\")."
                if data["searched_at"] else "No YouTube search has run for this month yet.")
-    return (f"Promo item counts are distinct Item Nos. Source: {', '.join(src) or 'promo workbook'} "
+    return (f"One row per promo item. Source: {', '.join(src) or 'promo workbook'} "
             f"({len({i['item_no'] for i in items})} items) vs social listening "
             f"({int(m['n'] or 0):,} posts, {_fmt_date(m['first_at'])} – {_fmt_date(m['last_at'])}). "
-            f"{scraped} YouTube shows views; TikTok shows likes. TikTok rows are added by hand "
-            f"from the TikTok Search List sheet.")
+            f"{scraped} {NOT_SEARCHED} = not searched in that language; blank = searched, nothing found. "
+            f"Hover a result for its caption. YouTube shows views; TikTok shows likes. TikTok results "
+            f"are added by hand from the TikTok Search List sheet.")
 
 
 def _none(v):
@@ -177,8 +178,74 @@ def _count(v):
     return n if n > 0 else None
 
 
+def on_search_list(it: dict, social_status) -> bool:
+    """Whether an item is searched by hand on TikTok (the TikTok Search List): every
+    branded item social listening did not match, plus every own-brand item and every
+    frozen item with no brand that has phrases to search with. The same items, less
+    any that are not own brands, are the ones youtube_search.py searches."""
+    branded, frozen = flag(it.get("is_branded")), flag(it.get("is_frozen"))
+    if not (branded or frozen) or (social_status and not flag(it.get("is_own_brand"))):
+        return False
+    # a frozen item reviewed before v4 has no queries to search with
+    return branded or bool(search_phrases(it.get("search_queries")))
+
+
+def item_results(data: dict) -> list[dict]:
+    """The mart's rows (one per post) grouped into items, in workbook order: the
+    item's first row, its social listening posts, its scraped videos by search
+    language, and the languages it is searched in (from its phrases)."""
+    by_key = {(i["promo_sheet"], i["row_order"]): i for i in data["items"]}
+    out, index = [], {}
+    for row in data["rows"]:
+        key = (row["promo_sheet"], row["row_order"])
+        if key not in index:
+            it = by_key.get(key, {})
+            searched = on_search_list(it, _none(row.get("social_match_status")))
+            index[key] = {"row": row, "all": [], "social": [], "scraped": {},
+                          "searched_langs": {phrase_language(p) for p in search_phrases(it.get("search_queries"))}
+                                            if searched else set()}
+            out.append(index[key])
+        entry = index[key]
+        if row["match_status"] == "Unmatched":
+            continue
+        entry["all"].append(row)
+        if row.get("source") == "Scraped":
+            entry["scraped"].setdefault(_none(row.get("search_language")) or "English", []).append(row)
+        else:
+            entry["social"].append(row)
+    return out
+
+
+def result_languages(items: list[dict]) -> list[str]:
+    """The language blocks this month needs, in LANGUAGES order: every language an item
+    was searched in or has a result in."""
+    used = set().union(*(set(it["scraped"]) | it["searched_langs"] for it in items)) if items else set()
+    return [lang for lang in LANGUAGES if lang in used] + sorted(used - set(LANGUAGES))
+
+
+def result_text(m: dict) -> str:
+    """A result cell: "YouTube · 176,000 views · 900 likes · 2022-03-14"."""
+    engagement = (_none(m.get("engagement_text")) or "").replace(", ", " · ")
+    date_ = str(m["post_date"])[:10] if _none(m.get("post_date")) else None
+    parts = [_none(m.get("channel")), engagement or None, date_]
+    if str(m.get("match_note") or "").startswith("Older than"):
+        parts.append("older")
+    return " · ".join(str(p) for p in parts if p)
+
+
+def result_note(m: dict) -> str:
+    """A result cell's note: what the post calls the product, who posted it, the
+    caption, and why it matched."""
+    caption = str(_none(m.get("caption")) or "")
+    caption = caption[:500] + ("…" if len(caption) > 500 else "")
+    return "\n\n".join(str(p) for p in (
+        _none(m.get("matched_content_item")), _none(m.get("profile")), caption or None,
+        _none(m.get("match_note"))) if p)
+
+
 def build_workbook(data: dict):
     from openpyxl import Workbook
+    from openpyxl.comments import Comment
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
@@ -210,73 +277,79 @@ def build_workbook(data: dict):
     sm.title = SHEET_SUMMARY
     ws = wb.create_sheet(SHEET_MAIN)
 
-    # ── Promo vs Social Listening ────────────────────────────────────────────
-    header_row(ws, HEADERS, WIDTHS)
+    # ── Promo vs Social Listening: one row per item, results wide ────────────
+    items = item_results(data)
+    langs = result_languages(items)
+    blocks = [SOCIAL_BLOCK] + langs
+    headers = ITEM_HEADERS + [f"{b} {n}" for b in blocks for n in range(1, SLOTS + 1)]
+    header_row(ws, headers, ITEM_WIDTHS + [RESULT_WIDTH] * (len(blocks) * SLOTS))
     ws.row_dimensions[1].height = HEADER_HEIGHT
-    numbers = Alignment(horizontal="right", vertical="top")
+    first_res = len(ITEM_HEADERS) + 1
+    for b in range(len(blocks)):             # each block's headers in turn, so blocks read apart
+        for n in range(SLOTS):
+            ws.cell(row=1, column=first_res + b * SLOTS + n).fill = \
+                PatternFill("solid", fgColor=BLOCK_FILLS[b % 2])
+    last_col = get_column_letter(len(headers))
+    res_cols = f"{get_column_letter(first_res)}{{r}}:{last_col}{{r}}"
     centred = Alignment(horizontal="center", vertical="top")
-    band, last_item = False, None
-    for r, row in enumerate(data["rows"], start=2):
-        key = (row["promo_sheet"], row["row_order"])
-        if key != last_item:                 # a new item: flip the band
-            band, last_item = (not band) if last_item is not None else False, key
-        unmatched = row["match_status"] == "Unmatched"
-        views, likes = (None, None) if unmatched else (_count(row.get("views")), _count(row.get("likes")))
-        if not unmatched and views is None and row.get("source") == "Scraped" \
-                and str(row.get("channel") or "").startswith("YouTube"):
-            views = 0                        # YouTube always reports views, even none
-        values = {
-            "Promo Sheet": row["promo_sheet"],
-            "Item No.": int(row["item_no_int"]) if _none(row.get("item_no_int")) is not None else row["item_no"],
-            "{MON} Promo Item": (row["promo_description"] or "").strip(),
-            "Size": _none(row["promo_size"]),
-            "Promo Code": _none(row["promo_code"]),
-            "Match Status": row["item_match_status"],
-            SOCIAL_COL: _none(row.get("social_match_status")),
-            SCRAPED_COL: _none(row.get("scraped_match_status")),
-        }
-        if not unmatched:
-            values.update({
-                "Matched Content Item": _none(row["matched_content_item"]),
-                "Channel": _none(row["channel"]),
-                "Profile": _none(row["profile"]),
-                "Post Date": _none(row["post_date"]),
-                "Views": views,
-                "Likes": likes,
-                "Approx. Count": None,       # set by the TikTok step when TikTok shows only "~3.7K"
-                "Engagement (as shown)": _none(row["engagement_text"]),
-                "Caption": _none(row["caption"]),
-                "Link": LINK_TEXT if _none(row["link"]) else None,
-                "Source": SOURCE_LABEL.get(row["source"], _none(row["source"])),
-                "Match Note": _none(row["match_note"]),
-            })
-        for h, c in COL.items():
-            align = numbers if h in ("Views", "Likes") else centred if h == "Approx. Count" else wrap_top
-            cell = body_cell(ws, r, c, values.get(h), align)
+    muted_font = Font(name="Arial", size=10, color=MUTED)
+
+    for r, it in enumerate(items, start=2):
+        band = r % 2 == 1                    # every other item
+        row = it["row"]
+        unmatched = row["item_match_status"] == "Unmatched"
+        values = [row["promo_sheet"],
+                  int(row["item_no_int"]) if _none(row.get("item_no_int")) is not None else row["item_no"],
+                  (row["promo_description"] or "").strip(), _none(row["promo_size"]), _none(row["promo_code"]),
+                  row["item_match_status"], _none(row.get("social_match_status")),
+                  _none(row.get("scraped_match_status")),
+                  # live, so results the TikTok step adds are counted
+                  f'=COUNTA({res_cols.format(r=r)})-COUNTIF({res_cols.format(r=r)},"{NOT_SEARCHED}")']
+        for c, v in enumerate(values, start=1):
+            cell = body_cell(ws, r, c, v, centred if c == len(values) else wrap_top)
             if band:
                 cell.fill = band_fill
             if unmatched:
-                cell.font = Font(name="Arial", size=10, color=MUTED)
-            if h in ("Views", "Likes"):
-                cell.number_format = "#,##0"
-            elif h in ("Match Status", SOCIAL_COL, SCRAPED_COL) and cell.value:
-                fill, colour = STATUS_STYLE.get(cell.value, ("FFFFFFFF", "FF000000"))
+                cell.font = muted_font
+            if c in (6, 7, 8) and v:         # the three status columns
+                fill, colour = STATUS_STYLE.get(v, ("FFFFFFFF", "FF000000"))
                 cell.fill = PatternFill("solid", fgColor=fill)
                 cell.font = Font(name="Arial", size=10, bold=True, color=colour)
-            elif h == "Link" and cell.value:
-                cell.hyperlink, cell.font = str(row["link"]), link_font
+        for b, block in enumerate(blocks):
+            found = it["social"] if block == SOCIAL_BLOCK else it["scraped"].get(block, [])
+            searched = block == SOCIAL_BLOCK or block in it["searched_langs"] or found
+            for n in range(SLOTS):
+                cell = body_cell(ws, r, first_res + b * SLOTS + n, None)
+                if band:
+                    cell.fill = band_fill
+                if n < len(found):
+                    m = found[n]
+                    text = result_text(m)
+                    if n == SLOTS - 1 and len(found) > SLOTS:
+                        text += f" (+{len(found) - SLOTS} more)"
+                    cell.value = text
+                    fill, _ = STATUS_STYLE.get(m["match_status"], ("FFFFFFFF", None))
+                    cell.fill = PatternFill("solid", fgColor=fill)
+                    cell.font = link_font
+                    if _none(m.get("link")):
+                        cell.hyperlink = str(m["link"])
+                    note = Comment(result_note(m), "UST promo match")
+                    note.width, note.height = 320, 220
+                    cell.comment = note
+                elif n == 0 and not searched:
+                    cell.value, cell.font, cell.alignment = NOT_SEARCHED, muted_font, centred
         ws.row_dimensions[r].height = ROW_HEIGHT
-    last = len(data["rows"]) + 1
+    last = len(items) + 1
     ws.freeze_panes = "D2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(HEADERS))}{last}"
+    ws.auto_filter.ref = f"A1:{last_col}{last}"
 
     # ── Summary ──────────────────────────────────────────────────────────────
-    # Every count is a LIVE formula over the main sheet, so rows the TikTok step adds
-    # are counted without re-running anything.
+    # Every count is a LIVE formula over the main sheet, so results the TikTok step
+    # adds are counted without re-running anything. One row per item, so an item
+    # count is a plain COUNTIF on Match Status (F), and a post count sums Posts (I).
     q = f"'{SHEET_MAIN}'"
-    rng_a, rng_b, rng_f = (f"{q}!${c}$2:${c}${FORMULA_ROWS}" for c in "ABF")
-    distinct = f'COUNTIFS({rng_b},{rng_b}&"",{rng_f},{rng_f}&"")'   # rows per (item, status)
-    channel_col = get_column_letter(COL["Channel"])
+    rng_a, rng_f, rng_i = (f"{q}!${c}$2:${c}${FORMULA_ROWS}" for c in "AFI")
+    rng_res = f"{q}!${get_column_letter(first_res)}$2:${last_col}${FORMULA_ROWS}"
     plain = Alignment(vertical="bottom")
     statuses = ["Exact", "Close", "Unmatched"]
 
@@ -289,12 +362,12 @@ def build_workbook(data: dict):
             col = get_column_letter(c)
             body_cell(sm, r, c, f"=SUM({col}{first}:{col}{last_r})", plain)
 
-    header_row(sm, ["Match Status", "Promo Items", "Matched Posts (rows)"], [16, 34, 22, 10],
+    header_row(sm, ["Match Status", "Promo Items", "Matched Posts"], [16, 34, 22, 10],
                align=Alignment(horizontal="center", vertical="center", wrap_text=True))
     for r, status in enumerate(statuses, start=2):
         body_cell(sm, r, 1, status)
-        body_cell(sm, r, 2, f"=SUMPRODUCT(({rng_f}=A{r})/{distinct})")      # distinct Item Nos.
-        body_cell(sm, r, 3, f'=IF(A{r}="Unmatched",0,COUNTIF({q}!F:F,A{r}))')
+        body_cell(sm, r, 2, f"=COUNTIF({rng_f},A{r})")
+        body_cell(sm, r, 3, f"=SUMIF({rng_f},A{r},{rng_i})")
     body_cell(sm, 5, 1, "Total").font = bold_font
     body_cell(sm, 5, 2, "=SUM(B2:B4)")
     body_cell(sm, 5, 3, "=SUM(C2:C4)")
@@ -303,40 +376,52 @@ def build_workbook(data: dict):
     note.alignment = Alignment(vertical="top", wrap_text=False)
 
     # promo items by sheet, one column per promo sheet in workbook order
-    sheets = list(dict.fromkeys(row["promo_sheet"] for row in data["rows"]))
+    sheets = list(dict.fromkeys(it["row"]["promo_sheet"] for it in items))
     title(9, "Promo items by sheet")
     header_row(sm, ["Match Status"] + sheets + ["Total"], None, row=10, align=plain)
     for i, status in enumerate(statuses):
         r = 11 + i
         body_cell(sm, r, 1, status, plain)
         for c, sheet in enumerate(sheets, start=2):
-            body_cell(sm, r, c, f'=SUMPRODUCT(({rng_a}="{sheet}")*({rng_f}=$A{r})/{distinct})', plain)
+            body_cell(sm, r, c, f'=COUNTIFS({rng_a},"{sheet}",{rng_f},$A{r})', plain)
         body_cell(sm, r, len(sheets) + 2,
                   f"=SUM(B{r}:{get_column_letter(len(sheets) + 1)}{r})", plain)
     total_row(14, 11, 13, len(sheets) + 2)
 
-    # matched posts by channel; TikTok is always listed, because the TikTok step adds it
-    channels = sorted({str(row["channel"]) for row in data["rows"]
-                       if row["match_status"] != "Unmatched" and _none(row.get("channel"))} | {"TikTok"},
-                      key=str.casefold)
+    # matched posts by channel: a result cell starts with its channel and " · ";
+    # TikTok is always listed, because the TikTok step adds it
+    channels = sorted({str(m["channel"]) for it in items for m in it["all"] if _none(m.get("channel"))}
+                      | {"TikTok"}, key=str.casefold)
     title(16, "Matched posts by channel")
-    header_row(sm, ["Channel", "Exact", "Close", "Total"], None, row=17, align=plain)
+    header_row(sm, ["Channel", "Posts"], None, row=17, align=plain)
     for i, channel in enumerate(channels):
         r = 18 + i
         body_cell(sm, r, 1, channel, plain)
-        for c, status in ((2, "Exact"), (3, "Close")):
-            body_cell(sm, r, c, f'=COUNTIFS({q}!${channel_col}:${channel_col},$A{r},{q}!$F:$F,"{status}")', plain)
-        body_cell(sm, r, 4, f"=SUM(B{r}:C{r})", plain)
+        body_cell(sm, r, 2, f'=COUNTIF({rng_res},$A{r}&" ·*")', plain)
     end = 18 + len(channels)
-    total_row(end, 18, end - 1, 4)
+    total_row(end, 18, end - 1, 2)
+
+    # matched posts by column block: Trending Social, then each search language
+    start = end + 2
+    title(start, "Matched posts by search language")
+    header_row(sm, ["Column Block", "Posts"], None, row=start + 1, align=plain)
+    for i, block in enumerate(blocks):
+        r = start + 2 + i
+        c0 = first_res + i * SLOTS
+        rng = f"{q}!${get_column_letter(c0)}$2:${get_column_letter(c0 + SLOTS - 1)}${FORMULA_ROWS}"
+        body_cell(sm, r, 1, block, plain)
+        body_cell(sm, r, 2, f'=COUNTA({rng})-COUNTIF({rng},"{NOT_SEARCHED}")', plain)
+    end = start + 2 + len(blocks)
+    total_row(end, start + 2, end - 1, 2)
 
     # the items nothing was found for, as of this export (the TikTok step updates it)
     start = end + 2
     title(start, "Unmatched promo items (no post found)")
     header_row(sm, ["Item No.", f"{mon} Promo Item", "Promo Sheet"], None, row=start + 1, align=plain)
     r = start + 2
-    for row in data["rows"]:
-        if row["match_status"] == "Unmatched":
+    for it in items:
+        row = it["row"]
+        if row["item_match_status"] == "Unmatched":
             item_no = int(row["item_no_int"]) if _none(row.get("item_no_int")) is not None else row["item_no"]
             body_cell(sm, r, 1, item_no, plain)
             body_cell(sm, r, 2, (row["promo_description"] or "").strip(), plain)
@@ -361,12 +446,10 @@ def build_workbook(data: dict):
     r = 2
     for it in data["items"]:
         social, scraped = status_by_row.get((it["promo_sheet"], it["row_order"]), (None, None))
-        branded, frozen = flag(it.get("is_branded")), flag(it.get("is_frozen"))
-        if not (branded or frozen) or (social and not flag(it.get("is_own_brand"))):
-            continue                         # neither branded nor frozen, or social listening matched a non-own brand
-        phrases = split_terms(it.get("search_queries"))
-        if not phrases and not branded:
-            continue                         # a frozen item reviewed before v4 has no queries to search with
+        if not on_search_list(it, social):
+            continue
+        branded = flag(it.get("is_branded"))
+        phrases = search_phrases(it.get("search_queries"))
         must_mention = (", ".join(split_terms(it.get("brand_terms"))) if branded else
                         "(no brand: frozen product) " + ", ".join(split_terms(dbt_var("promo_frozen_terms", ["frozen"]))))
         current = "; ".join([f"{social} (On Trending Social)"] * bool(social)
@@ -375,7 +458,8 @@ def build_workbook(data: dict):
             int(it["item_no"]) if str(it["item_no"]).isdigit() else it["item_no"],
             (it["promo_description"] or "").strip(), _none(it.get("promo_size")),
             _none(it.get("brand")), _none(it.get("product")), _none(it.get("flavor_variant")),
-            current, "\n".join(phrases),
+            # each tagged with its language block on the main sheet
+            current, "\n".join(f"[{phrase_language(p)}] {p}" for p in phrases),
             must_mention,
             ", ".join(split_terms(it.get("flavor_terms"))) or "(no flavor to require)",
             ", ".join(split_terms(it.get("negative_terms"))) or "-",

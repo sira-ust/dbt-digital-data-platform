@@ -144,6 +144,29 @@ def split_terms(value) -> list[str]:
     return out
 
 
+# The workbook's search-language blocks, in column order. KEEP IN STEP with the dbt
+# macro promo_search_language, which labels each scraped video by the same rule.
+# Khmer is detected but NOT searched (dropped 2026-10-20): search_phrases() leaves its
+# phrases out, so YouTube spends no quota on them and TikTok never sees them.
+LANGUAGES = ["English", "Thai", "Vietnamese", "Chinese"]
+_LANG_SCRIPT = [("Chinese", re.compile(r"[一-鿿]")), ("Thai", re.compile(r"[฀-๿]")),
+                ("Khmer", re.compile(r"[ក-៿]")),
+                ("Vietnamese", re.compile(r"[ăâđêôơưàảãáạằẳẵắặầẩẫấậèẻẽéẹềểễếệìỉĩíịòỏõóọồổỗốộờởỡớợùủũúụừửữứựỳỷỹýỵ]"))]
+
+
+def phrase_language(phrase) -> str | None:
+    """The language of a search phrase, read from its script (see LANGUAGES)."""
+    if phrase is None:
+        return None
+    text = str(phrase).lower()
+    return next((lang for lang, rx in _LANG_SCRIPT if rx.search(text)), "English")
+
+
+def search_phrases(value) -> list[str]:
+    """An item's search_queries, less any in a language that is not searched (Khmer)."""
+    return [p for p in split_terms(value) if phrase_language(p) in LANGUAGES]
+
+
 def compile_term(term):
     """(token, regex, scope) for one term. token is stored as the hit; scope says
     which half of match_text() the regex may search: 'norm' (the text as
