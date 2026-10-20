@@ -364,9 +364,31 @@ def test_khmer_phrases_are_not_searched(data, tmp_path):
     assert ex.search_phrases("ទឹកត្រី|fish sauce") == ["fish sauce"]
 
 
+def test_japanese_phrases_are_not_searched(data, tmp_path):
+    """A Japanese import's old home-market phrase mixes kana and kanji. It is not searched
+    and must not be filed under Chinese (NOV 2026: Hata, Morinaga Moonlight landed in the
+    Chinese block)."""
+    data["items"] = [_item("OCT NEW", 1, "34705", "HATA SODA WHITE PEACH", brand="Hata",
+                           search_queries="ハタ鉱泉 ソーダ 白桃|hata white peach soda|Hata 白桃汽水")]
+    data["rows"] = [_row("OCT NEW", 1, "34705", "HATA SODA WHITE PEACH", "Unmatched")]
+    path = tmp_path / "japanese.xlsx"
+    ex.build_workbook(data).save(path)
+    wb = load_workbook(path)
+    assert wb["TikTok Search List"]["H2"].value == "[English] hata white peach soda\n[Chinese] Hata 白桃汽水"
+    assert [c.value for c in wb[MAIN][1]][12::3] == ["English 1", "Chinese 1"]
+    assert ex.search_phrases("ハタ鉱泉 ソーダ 白桃|Hata 白桃汽水") == ["Hata 白桃汽水"]
+
+
 @pytest.mark.parametrize("phrase, language", [
     ("fanta grape", "English"), ("แฟนต้า องุ่น", "Thai"), ("芬达 葡萄", "Chinese"),
     ("kẹo dẻo hoshi xoài", "Vietnamese"), ("Bánh Tráng", "Vietnamese"), ("ទឹកត្រី", "Khmer"),
-    ("Sunflower 沙丁鱼罐头", "Chinese"), ("keo deo hoshi", "English")])
+    ("Sunflower 沙丁鱼罐头", "Chinese"), ("keo deo hoshi", "English"),
+    # kana makes it Japanese however much kanji it carries; kanji alone stays Chinese
+    ("ハタ鉱泉 ソーダ グレープ", "Japanese"), ("ハタ鉱泉 ソーダ 白桃", "Japanese"),
+    ("森永 ムーンライト さつまいも", "Japanese"), ("ｿｰﾀﾞ", "Japanese"),
+    ("Hata 葡萄汽水", "Chinese"), ("乐事 烤牛肉味 薯片", "Chinese"), ("芬达 白桃 汽水", "Chinese"),
+    ("森永 白桃", "Chinese"),
+    ("ฮันนี่บี ชานมไข่มุก", "Thai"), ("nước mía đông lạnh", "Vietnamese"),
+    ("marca piña toyo", "English")])                      # ñ is not a Vietnamese letter
 def test_phrase_language(phrase, language):
     assert ex.phrase_language(phrase) == language

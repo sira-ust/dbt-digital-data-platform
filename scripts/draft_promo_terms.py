@@ -64,6 +64,10 @@ from promo_common import (  # noqa: E402
 
 PROMPT_VERSION = "v4"   # v2: brand-code glossary; no "D " private-label rule. v3: Chinese terms + query.
                         # v4: frozen items with no brand still get product terms + search queries
+                        # (2026-10-20, still v4: the first query's language is limited to Thai,
+                        # Vietnamese or Chinese. NOT bumped on purpose: a bump re-drafts the latest
+                        # month and YouTube re-searches every re-drafted item — two days of quota
+                        # for NOV — while search_phrases() already drops the old Japanese phrases.)
 SEED_PATH = "seeds/seed_promo_item_terms.csv"
 SEED_COLUMNS = ["item_no", "brand", "product", "flavor_variant", "pack_format", "is_branded",
                 "brand_terms", "product_terms", "flavor_terms", "negative_terms",
@@ -97,7 +101,7 @@ Rules:
 - flavor_variant is a taste or variety (lychee, BBQ cheese, less sugar, original). A size or dimension (22cm, 330ml) is never a flavor.
 - flavor_terms: the flavor/variant in English, Thai, Vietnamese and Chinese (e.g. "lychee", "ลิ้นจี่", "vải", "荔枝"). Empty when flavor_variant is null.
 - negative_terms: phrases that show the brand word means something else (a person, film, K-pop group, restaurant, an ordinary word). Empty if the brand is unambiguous.
-- search_queries: exactly 3 phrases a person would type into YouTube or TikTok to find videos of THIS item, in this order: (1) the language of its home market (e.g. "trà vải cozy"), (2) English (e.g. "cozy lychee tea"), (3) Simplified Chinese: the brand as Chinese speakers write it (its Chinese name if it has one, otherwise the Latin name) plus the product and flavor in Chinese (e.g. "Cozy 荔枝茶", "芬达 葡萄"). When the home market is Chinese-speaking, make (1) Chinese and (3) another Chinese wording. Empty when is_branded is false, unless the item is frozen (see above).
+- search_queries: exactly 3 phrases a person would type into YouTube or TikTok to find videos of THIS item, in this order: (1) the language of its home market when that is Thai, Vietnamese or Chinese (e.g. "trà vải cozy"); for any other home market (Japanese, Korean, Filipino, Indian, English...) write (1) in Thai or Vietnamese, whichever this item's shoppers more likely search in, and never in any other script, (2) English (e.g. "cozy lychee tea"), (3) Simplified Chinese: the brand as Chinese speakers write it (its Chinese name if it has one, otherwise the Latin name) plus the product and flavor in Chinese (e.g. "Cozy 荔枝茶", "芬达 葡萄"). When the home market is Chinese-speaking, make (1) Chinese and (3) another Chinese wording. Empty when is_branded is false, unless the item is frozen (see above).
 - Keep every term lowercase except proper nouns in scripts without case. No duplicates."""
 
 

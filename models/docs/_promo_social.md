@@ -31,7 +31,7 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
    row, and for every own-brand item. It runs each item's `search_queries` (up to 3),
    applies the same keyword rule and judge to title, description and tags, and keeps the
    top 1–3 Exact videos **per search language** (the script of the phrase that found the
-   video: English, Thai, Vietnamese, Chinese; a Khmer phrase is skipped) by views, then engagement (likes +
+   video: English, Thai, Vietnamese, Chinese; a Khmer or Japanese phrase is skipped, Japanese read from its kana before checking for Chinese, since kanji are Chinese characters) by views, then engagement (likes +
    comments), so an English search's view counts never crowd out the Vietnamese or Chinese
    finds. Only videos posted in the past 2 years (`promo_scraped_max_age_months`, counted
    back from the promo month) count when the item-language has any; when it has none, its

@@ -146,10 +146,18 @@ def split_terms(value) -> list[str]:
 
 # The workbook's search-language blocks, in column order. KEEP IN STEP with the dbt
 # macro promo_search_language, which labels each scraped video by the same rule.
-# Khmer is detected but NOT searched (dropped 2026-10-20): search_phrases() leaves its
-# phrases out, so YouTube spends no quota on them and TikTok never sees them.
+# Khmer and Japanese are detected but NOT searched (2026-10-20): search_phrases() leaves
+# their phrases out, so YouTube spends no quota on them and TikTok never sees them. The
+# drafting prompt no longer writes them (a non-Thai/Vietnamese/Chinese home market gets a
+# Thai or Vietnamese phrase); older drafts still carry some.
+# JAPANESE IS CHECKED BEFORE CHINESE: a Japanese phrase mixes kana with kanji (ハタ鉱泉
+# ソーダ 白桃), and kanji ARE Chinese characters, so a Chinese-first check filed the
+# Japanese imports' home-market phrases under Chinese (NOV 2026: Hata, Morinaga
+# Moonlight). Any kana makes it Japanese; Chinese characters with no kana stay Chinese.
+# A kanji-only Japanese phrase (森永 白桃) still reads as Chinese, which is harmless.
 LANGUAGES = ["English", "Thai", "Vietnamese", "Chinese"]
-_LANG_SCRIPT = [("Chinese", re.compile(r"[一-鿿]")), ("Thai", re.compile(r"[฀-๿]")),
+_LANG_SCRIPT = [("Japanese", re.compile(r"[ぁ-ゟ゠-ヿㇰ-ㇿｦ-ﾟ]")),     # hiragana, katakana, half-width
+                ("Chinese", re.compile(r"[一-鿿㐀-䶿]")), ("Thai", re.compile(r"[฀-๿]")),
                 ("Khmer", re.compile(r"[ក-៿]")),
                 ("Vietnamese", re.compile(r"[ăâđêôơưàảãáạằẳẵắặầẩẫấậèẻẽéẹềểễếệìỉĩíịòỏõóọồổỗốộờởỡớợùủũúụừửữứựỳỷỹýỵ]"))]
 
@@ -163,7 +171,8 @@ def phrase_language(phrase) -> str | None:
 
 
 def search_phrases(value) -> list[str]:
-    """An item's search_queries, less any in a language that is not searched (Khmer)."""
+    """An item's search_queries, less any in a language that is not searched (Khmer,
+    Japanese)."""
     return [p for p in split_terms(value) if phrase_language(p) in LANGUAGES]
 
 

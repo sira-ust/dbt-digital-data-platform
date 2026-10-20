@@ -1107,7 +1107,7 @@ models:
         description: >
           Chinese / Thai / Vietnamese / English — the language of the search phrase that
           first returned the video (macro promo_search_language). The workbook's column
-          block. Khmer is detected but not searched, and its videos are left out.
+          block. Khmer and Japanese are detected but not searched; their videos are left out.
         tests:
           - not_null
           - accepted_values:

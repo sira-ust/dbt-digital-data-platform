@@ -44,9 +44,10 @@ with videos as (
         {{ promo_search_language('search_query') }}             as search_language
     from {{ ref('stg_promo__youtube_videos') }}
     where verdict = 'exact' and keyword_level = 'exact'
-      -- Khmer is not searched (no workbook block since 2026-10-20); drop what an
-      -- earlier search stored
-      and {{ promo_search_language('search_query') }} <> 'Khmer'
+      -- only the searched languages have a workbook block (2026-10-20): drop what an
+      -- earlier search stored for Khmer or Japanese. KEEP IN STEP with LANGUAGES in
+      -- scripts/promo_common.py
+      and {{ promo_search_language('search_query') }} in ('English', 'Thai', 'Vietnamese', 'Chinese')
 
 ),
 
