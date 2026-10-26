@@ -1,37 +1,42 @@
 """Write UST_<MON>_Promo_Social_Listening_Match.xlsx from mart_promo_social_match (step 5).
 
-Three sheets:
+Four sheets:
   1. "Summary"                    opens first. Counts per status, per promo sheet, per
                                   channel and per column block, all LIVE formulas over
-                                  sheet 2, so results added afterwards (TikTok) are
+                                  sheet 2, so results added afterwards (TikTok, RedNote) are
                                   counted without re-running anything; then the items
                                   nothing was found for, as of the export.
   2. "Promo vs Social Listening"  ONE ROW PER ITEM (since 2026-10-20; before, one row per
                                   post). Match Status is the item's status; beside it,
                                   "On Trending Social" (Mentionlytics) and "Direct
-                                  Scraping" (TikTok & YouTube) show what each source
+                                  Scraping" (TikTok, YouTube & RedNote) show what each source
                                   found, and Posts counts the item's results (a live
                                   formula). Then the RESULTS, WIDE: Trending Social 1-3,
                                   then a block of 3 cells per search language (English,
                                   Thai, Vietnamese, Chinese: the languages searched
                                   this month), so one language's finds never push out
-                                  another's. A result cell reads "YouTube · 176,000 views ·
+                                  another's. The Chinese block is filled only by the
+                                  RedNote step: YouTube and TikTok search no Chinese. A result cell reads "YouTube · 176,000 views ·
                                   900 likes · 2022-03-14", links to the post, is coloured
                                   by its status, and carries the caption and match note as
                                   a cell note. "–" = not searched in that language; blank
                                   = searched, nothing found.
   3. "TikTok Search List"         the items to search on TikTok by hand with Claude in
-                                  Chrome (prompt: scripts/prompts/tiktok_promo_search.md):
+                                  Chrome (prompt: scripts/promo/prompts/tiktok_promo_search.md):
                                   every branded item social listening did not match,
                                   plus every UST own-brand item and every frozen item
                                   with no brand, with search phrases (each tagged with
-                                  its language block), required words, exclusions and a
-                                  TikTok search link. The prompt has Claude delete this
-                                  sheet when done, leaving the 2-sheet deliverable.
+                                  its language block; no Chinese), required words,
+                                  exclusions and a TikTok search link.
+  4. "RedNote Search List"        the same items, with their CHINESE phrases only, for
+                                  RedNote (Xiaohongshu) by hand
+                                  (prompt: scripts/promo/prompts/rednote_promo_search.md).
+                                  An item with no Chinese phrase is left off.
+  Each prompt has Claude delete its sheet when done, leaving the 2-sheet deliverable.
 
-    python scripts/export_promo_social_match.py                       # latest month, local
-    python scripts/export_promo_social_match.py --promo-month 2026-10-01 --out-dir C:/somewhere
-    python scripts/export_promo_social_match.py --backend databricks  # -> the promo_output Volume
+    python scripts/promo/export_promo_social_match.py                       # latest month, local
+    python scripts/promo/export_promo_social_match.py --promo-month 2026-10-01 --out-dir C:/somewhere
+    python scripts/promo/export_promo_social_match.py --backend databricks  # -> the promo_output Volume
 """
 
 from __future__ import annotations
@@ -44,7 +49,7 @@ import urllib.parse
 from datetime import date, datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path.cwd() / "scripts" / "promo"))
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 except NameError:
@@ -52,15 +57,16 @@ except NameError:
 
 from promo_common import (  # noqa: E402
     INTERMEDIATE_SCHEMA, LANGUAGES, REPORTING_SCHEMA, STAGING_SCHEMA, dbt_var, flag, local_data_root,
-    phrase_language, query, search_phrases, split_terms,
+    phrase_language, platform_phrases, query, search_phrases, split_terms,
 )
 
 DBX_OUT_DIR = "/Volumes/ust_databricks/social/promo_output"
-SHEET_MAIN, SHEET_SUMMARY, SHEET_TIKTOK = "Promo vs Social Listening", "Summary", "TikTok Search List"
+SHEET_MAIN, SHEET_SUMMARY = "Promo vs Social Listening", "Summary"
+SHEET_TIKTOK, SHEET_REDNOTE = "TikTok Search List", "RedNote Search List"
 
 # Item columns, then Posts, then the result blocks. The Summary's formulas address
 # columns by letter (A = Promo Sheet, F = Match Status, I = Posts, J onward = results).
-SOCIAL_COL, SCRAPED_COL = "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok & YouTube)"
+SOCIAL_COL, SCRAPED_COL = "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok, YouTube & RedNote)"
 ITEM_HEADERS = ["Promo Sheet", "Item No.", "{MON} Promo Item", "Size", "Promo Code", "Match Status",
                 SOCIAL_COL, SCRAPED_COL, "Posts"]
 ITEM_WIDTHS = [13, 10, 32, 15, 10, 12, 16, 16, 8]
@@ -79,10 +85,13 @@ MUTED, NOTE_GREY = "FF808080", "FF595959"
 HEADER_HEIGHT, ROW_HEIGHT, SUMMARY_ROW_HEIGHT = 27.75, 39.75, 15
 FORMULA_ROWS = 5000          # Summary formulas cover this many sheet-1 rows
 
-TIKTOK_HEADERS = ["Item No.", "{MON} Promo Item", "Size", "Brand", "Product", "Flavor / Variant",
+# the hand-search sheets: (sheet, platform for platform_phrases, name, search URL + phrase)
+SEARCH_LISTS = [(SHEET_TIKTOK, "tiktok", "TikTok", "https://www.tiktok.com/search/video?q="),
+                (SHEET_REDNOTE, "rednote", "RedNote", "https://www.xiaohongshu.com/search_result?keyword=")]
+SEARCH_HEADERS = ["Item No.", "{MON} Promo Item", "Size", "Brand", "Product", "Flavor / Variant",
                   "Current Status", "Search Phrases", "Must Mention (brand)", "Flavor Words",
-                  "Exclude If", "TikTok Search Link"]
-TIKTOK_WIDTHS = [10, 34, 16, 14, 22, 22, 14, 40, 36, 36, 30, 45]
+                  "Exclude If", "{PLATFORM} Search Link"]
+SEARCH_WIDTHS = [10, 34, 16, 14, 22, 22, 14, 40, 36, 36, 30, 45]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -145,12 +154,13 @@ def footnote(data: dict) -> str:
                f"search phrase, highest views first, then likes + comments; only videos posted in the "
                f"past 2 years when there are any, else older ones (marked \"older\")."
                if data["searched_at"] else "No YouTube search has run for this month yet.")
+    scraped += " The Chinese columns come only from RedNote (Xiaohongshu), searched by hand."
     return (f"One row per promo item. Source: {', '.join(src) or 'promo workbook'} "
             f"({len({i['item_no'] for i in items})} items) vs social listening "
             f"({int(m['n'] or 0):,} posts, {_fmt_date(m['first_at'])} – {_fmt_date(m['last_at'])}). "
             f"{scraped} {NOT_SEARCHED} = not searched in that language; blank = searched, nothing found. "
-            f"Hover a result for its caption. YouTube shows views; TikTok shows likes. TikTok results "
-            f"are added by hand from the TikTok Search List sheet.")
+            f"Hover a result for its caption. YouTube shows views; TikTok and RedNote show likes. TikTok "
+            f"and RedNote results are added by hand from their Search List sheets.")
 
 
 def _none(v):
@@ -179,10 +189,11 @@ def _count(v):
 
 
 def on_search_list(it: dict, social_status) -> bool:
-    """Whether an item is searched by hand on TikTok (the TikTok Search List): every
-    branded item social listening did not match, plus every own-brand item and every
-    frozen item with no brand that has phrases to search with. The same items, less
-    any that are not own brands, are the ones youtube_search.py searches."""
+    """Whether an item is searched by hand on TikTok and RedNote (the Search List
+    sheets; RedNote only when it has a Chinese phrase): every branded item social
+    listening did not match, plus every own-brand item and every frozen item with no
+    brand that has phrases to search with. The same items, less any that are not own
+    brands, are the ones youtube_search.py searches."""
     branded, frozen = flag(it.get("is_branded")), flag(it.get("is_frozen"))
     if not (branded or frozen) or (social_status and not flag(it.get("is_own_brand"))):
         return False
@@ -303,7 +314,7 @@ def build_workbook(data: dict):
                   (row["promo_description"] or "").strip(), _none(row["promo_size"]), _none(row["promo_code"]),
                   row["item_match_status"], _none(row.get("social_match_status")),
                   _none(row.get("scraped_match_status")),
-                  # live, so results the TikTok step adds are counted
+                  # live, so results the TikTok and RedNote steps add are counted
                   f'=COUNTA({res_cols.format(r=r)})-COUNTIF({res_cols.format(r=r)},"{NOT_SEARCHED}")']
         for c, v in enumerate(values, start=1):
             cell = body_cell(ws, r, c, v, centred if c == len(values) else wrap_top)
@@ -344,8 +355,8 @@ def build_workbook(data: dict):
     ws.auto_filter.ref = f"A1:{last_col}{last}"
 
     # ── Summary ──────────────────────────────────────────────────────────────
-    # Every count is a LIVE formula over the main sheet, so results the TikTok step
-    # adds are counted without re-running anything. One row per item, so an item
+    # Every count is a LIVE formula over the main sheet, so results the TikTok and
+    # RedNote steps add are counted without re-running anything. One row per item, so an item
     # count is a plain COUNTIF on Match Status (F), and a post count sums Posts (I).
     q = f"'{SHEET_MAIN}'"
     rng_a, rng_f, rng_i = (f"{q}!${c}$2:${c}${FORMULA_ROWS}" for c in "AFI")
@@ -389,9 +400,9 @@ def build_workbook(data: dict):
     total_row(14, 11, 13, len(sheets) + 2)
 
     # matched posts by channel: a result cell starts with its channel and " · ";
-    # TikTok is always listed, because the TikTok step adds it
+    # TikTok and RedNote are always listed, because their hand steps add them
     channels = sorted({str(m["channel"]) for it in items for m in it["all"] if _none(m.get("channel"))}
-                      | {"TikTok"}, key=str.casefold)
+                      | {"TikTok", "RedNote"}, key=str.casefold)
     title(16, "Matched posts by channel")
     header_row(sm, ["Channel", "Posts"], None, row=17, align=plain)
     for i, channel in enumerate(channels):
@@ -414,7 +425,7 @@ def build_workbook(data: dict):
     end = start + 2 + len(blocks)
     total_row(end, start + 2, end - 1, 2)
 
-    # the items nothing was found for, as of this export (the TikTok step updates it)
+    # the items nothing was found for, as of this export (the hand steps update it)
     start = end + 2
     title(start, "Unmatched promo items (no post found)")
     header_row(sm, ["Item No.", f"{mon} Promo Item", "Promo Sheet"], None, row=start + 1, align=plain)
@@ -434,44 +445,46 @@ def build_workbook(data: dict):
         if any(sm.cell(row=i, column=c).value is not None for c in range(1, 5)):
             sm.row_dimensions[i].height = SUMMARY_ROW_HEIGHT
 
-    # ── TikTok Search List (deleted by the TikTok step when it is done) ─────
-    tk = wb.create_sheet(SHEET_TIKTOK)
-    header_row(tk, TIKTOK_HEADERS, TIKTOK_WIDTHS,
-               align=Alignment(horizontal="center", vertical="center", wrap_text=True))
+    # ── TikTok and RedNote Search Lists (each deleted by its step when done) ─
     status_by_row = {}
     for row in data["rows"]:
         key = (row["promo_sheet"], row["row_order"])
         status_by_row.setdefault(key, (_none(row.get("social_match_status")),
                                        _none(row.get("scraped_match_status"))))
-    r = 2
-    for it in data["items"]:
-        social, scraped = status_by_row.get((it["promo_sheet"], it["row_order"]), (None, None))
-        if not on_search_list(it, social):
-            continue
-        branded = flag(it.get("is_branded"))
-        phrases = search_phrases(it.get("search_queries"))
-        must_mention = (", ".join(split_terms(it.get("brand_terms"))) if branded else
-                        "(no brand: frozen product) " + ", ".join(split_terms(dbt_var("promo_frozen_terms", ["frozen"]))))
-        current = "; ".join([f"{social} (On Trending Social)"] * bool(social)
-                            + [f"{scraped} (YouTube)"] * bool(scraped)) or "Unmatched"
-        values = [
-            int(it["item_no"]) if str(it["item_no"]).isdigit() else it["item_no"],
-            (it["promo_description"] or "").strip(), _none(it.get("promo_size")),
-            _none(it.get("brand")), _none(it.get("product")), _none(it.get("flavor_variant")),
-            # each tagged with its language block on the main sheet
-            current, "\n".join(f"[{phrase_language(p)}] {p}" for p in phrases),
-            must_mention,
-            ", ".join(split_terms(it.get("flavor_terms"))) or "(no flavor to require)",
-            ", ".join(split_terms(it.get("negative_terms"))) or "-",
-            f"https://www.tiktok.com/search/video?q={urllib.parse.quote(phrases[0])}" if phrases else None,
-        ]
-        for c, v in enumerate(values, start=1):
-            cell = body_cell(tk, r, c, v)
-            if c == 12 and v:
-                cell.hyperlink, cell.font = v, link_font
-        r += 1
-    tk.freeze_panes = "C2"
-    tk.auto_filter.ref = f"A1:L{max(r - 1, 1)}"
+    for sheet, platform, name, search_url in SEARCH_LISTS:
+        sl = wb.create_sheet(sheet)
+        header_row(sl, [h.replace("{PLATFORM}", name) for h in SEARCH_HEADERS], SEARCH_WIDTHS,
+                   align=Alignment(horizontal="center", vertical="center", wrap_text=True))
+        r = 2
+        for it in data["items"]:
+            social, scraped = status_by_row.get((it["promo_sheet"], it["row_order"]), (None, None))
+            phrases = platform_phrases(it.get("search_queries"), platform)
+            # RedNote searches only Chinese: an item with no Chinese phrase has nothing to search
+            if not on_search_list(it, social) or (platform == "rednote" and not phrases):
+                continue
+            branded = flag(it.get("is_branded"))
+            must_mention = (", ".join(split_terms(it.get("brand_terms"))) if branded else
+                            "(no brand: frozen product) " + ", ".join(split_terms(dbt_var("promo_frozen_terms", ["frozen"]))))
+            current = "; ".join([f"{social} (On Trending Social)"] * bool(social)
+                                + [f"{scraped} (YouTube)"] * bool(scraped)) or "Unmatched"
+            values = [
+                int(it["item_no"]) if str(it["item_no"]).isdigit() else it["item_no"],
+                (it["promo_description"] or "").strip(), _none(it.get("promo_size")),
+                _none(it.get("brand")), _none(it.get("product")), _none(it.get("flavor_variant")),
+                # each tagged with its language block on the main sheet
+                current, "\n".join(f"[{phrase_language(p)}] {p}" for p in phrases),
+                must_mention,
+                ", ".join(split_terms(it.get("flavor_terms"))) or "(no flavor to require)",
+                ", ".join(split_terms(it.get("negative_terms"))) or "-",
+                f"{search_url}{urllib.parse.quote(phrases[0])}" if phrases else None,
+            ]
+            for c, v in enumerate(values, start=1):
+                cell = body_cell(sl, r, c, v)
+                if c == 12 and v:
+                    cell.hyperlink, cell.font = v, link_font
+            r += 1
+        sl.freeze_panes = "C2"
+        sl.auto_filter.ref = f"A1:L{max(r - 1, 1)}"
     return wb
 
 

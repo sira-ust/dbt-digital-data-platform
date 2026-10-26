@@ -350,16 +350,18 @@ then the same with `--confirm`. Safe to re-run: it inserts only rows not already
 `parse_mentions.py` is append-only; `stg_mentionlytics__mentions` dedupes on
 mention_id by latest loaded_at, so overlapping weekly drops self-reconcile.
 
-## Monthly promo × social match run order
+## Monthly promo × social match
 
-    load_promo_list.py -> dbt (items) -> draft_promo_terms.py -> dbt
-      -> match_promo_social.py (keywords over every raw post + AI judge) -> dbt
-      -> youtube_search.py -> dbt build --select tag:promo
-      -> export_promo_social_match.py -> TikTok by hand (scripts/prompts/tiktok_promo_search.md)
+Runbook (monthly steps, local runs, credentials, fixes): **`scripts/promo/README.md`**.
+How the matching works: `models/docs/_promo_social.md`.
 
-Monthly, run by hand after uploading the workbook (`scripts/databricks/promo_social_job.yml`); the daily job
-excludes `tag:promo`. How to run a month, edit `seed_promo_item_terms`, and the
-known false-positive patterns: `models/docs/_promo_social.md`.
+    merge the month's files with Claude (scripts/promo/prompts/promo_merge_input.md)
+      -> validate_promo_input.py -> upload -> Databricks job ust-promo-social-match:
+         load -> draft terms -> match Mentionlytics -> YouTube -> dbt tests -> export
+      -> TikTok by hand (prompts/tiktok_promo_search.md)
+      -> RedNote by hand, Chinese only (prompts/rednote_promo_search.md)
+
+All promo code lives in `scripts/promo/`. The daily job excludes `tag:promo`.
 
 ## Repo structure
 
@@ -383,6 +385,8 @@ known false-positive patterns: `models/docs/_promo_social.md`.
 │   │                                   #   between mentions in one call? run after prompt
 │   │                                   #   or batch-size changes, not on a schedule
 │   ├── check_fold_consistency.py       # ad hoc: concept-folding sanity check
+│   ├── promo/                          # monthly promo x social match: scripts, Claude
+│   │                                   #   prompts, tests; runbook in its README.md
 │   └── databricks/
 │       ├── parse_mentions.py           # social step 1, DATABRICKS: xlsx in a Volume ->
 │       │                               #   social.mentions. Wired as a spark_python_task

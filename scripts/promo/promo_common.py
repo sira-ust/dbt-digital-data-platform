@@ -60,7 +60,7 @@ def find_project_root() -> Path:
     the working directory — same approach as enrich_mentions.py."""
     candidates = []
     try:
-        candidates.append(Path(__file__).resolve().parents[1])
+        candidates.append(Path(__file__).resolve().parents[2])   # scripts/promo/ -> the project
     except NameError:
         pass
     cur = Path.cwd()
@@ -174,6 +174,20 @@ def search_phrases(value) -> list[str]:
     """An item's search_queries, less any in a language that is not searched (Khmer,
     Japanese)."""
     return [p for p in split_terms(value) if phrase_language(p) in LANGUAGES]
+
+
+# Which platform searches which language (2026-10-23): Chinese phrases are searched
+# ONLY on RedNote (Xiaohongshu), by hand, and every other language only on YouTube and
+# TikTok. So the workbook's Chinese block holds RedNote posts and nothing else. KEEP IN
+# STEP with the language filter in int_promo_scraped_matches.
+REDNOTE_LANGUAGES = {"Chinese"}
+
+
+def platform_phrases(value, platform: str) -> list[str]:
+    """search_phrases() for one platform: 'rednote' gets the Chinese phrases, 'youtube'
+    and 'tiktok' get the rest."""
+    on_rednote = platform == "rednote"
+    return [p for p in search_phrases(value) if (phrase_language(p) in REDNOTE_LANGUAGES) == on_rednote]
 
 
 def compile_term(term):

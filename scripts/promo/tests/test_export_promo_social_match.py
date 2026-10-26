@@ -2,7 +2,7 @@
 
 No database needed — build_workbook() takes the same dict read_inputs() returns.
 The formula tests need the optional `formulas` package (a spreadsheet engine) and
-are skipped without it. Run:  python -m pytest scripts/tests
+are skipped without it. Run:  python -m pytest scripts/promo/tests
 """
 
 import sys
@@ -106,14 +106,14 @@ def test_file_name(data):
 
 def test_sheets_and_header(saved):
     wb = load_workbook(saved)
-    assert wb.sheetnames == ["Summary", MAIN, "TikTok Search List"]
+    assert wb.sheetnames == ["Summary", MAIN, "TikTok Search List", "RedNote Search List"]
     assert wb.active.title == "Summary"                                   # opens on the Summary
     ws = wb[MAIN]
     # the item, then a block of 3 per source: Trending Social, then each language searched
     # (English and Thai here, from the Fanta items' phrases), in a fixed order
     assert [c.value for c in ws[1]] == [
         "Promo Sheet", "Item No.", "OCT Promo Item", "Size", "Promo Code", "Match Status",
-        "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok & YouTube)", "Posts",
+        "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok, YouTube & RedNote)", "Posts",
         "Trending Social 1", "Trending Social 2", "Trending Social 3",
         "English 1", "English 2", "English 3", "Thai 1", "Thai 2", "Thai 3"]
     h = ws["A1"]
@@ -200,24 +200,24 @@ def test_posts_is_a_live_count(saved):
 
 
 def test_more_than_three_results_in_a_language_are_capped_but_another_language_keeps_its_own(data, tmp_path):
-    """The point of the blocks: 3 English videos do not push the Chinese one out."""
+    """The point of the blocks: 3 English videos do not push the Thai one out."""
     en = [_row("OCT PROMO", 2, "34662", "FANTA GRAPE FLAVOR", "Exact", n,
                **{**YT, "search_language": "English", "link": f"https://youtu.be/{n}",
                   "engagement_text": f"{n},000 views"}) for n in range(1, 4)]
-    zh = _row("OCT PROMO", 2, "34662", "FANTA GRAPE FLAVOR", "Exact", 4,
-              **{**YT, "search_language": "Chinese", "link": "https://youtu.be/zh", "engagement_text": "12 views"})
+    th = _row("OCT PROMO", 2, "34662", "FANTA GRAPE FLAVOR", "Exact", 4,
+              **{**YT, "search_language": "Thai", "link": "https://youtu.be/th", "engagement_text": "12 views"})
     social = [_row("OCT PROMO", 1, "34585", "DEEDO SAINAMPHUENG FRUIT JUICE", "Exact", n,
                    **{**SL, "link": f"https://t.co/{n}"}) for n in range(1, 6)]
-    data["rows"] = social + en + [zh]
+    data["rows"] = social + en + [th]
     data["items"] = [_item("OCT PROMO", 1, "34585", "DEEDO SAINAMPHUENG FRUIT JUICE"),
                      _item("OCT PROMO", 2, "34662", "FANTA GRAPE FLAVOR",
-                           search_queries="fanta grape|芬达 葡萄")]
+                           search_queries="fanta grape|แฟนต้า องุ่น")]
     path = tmp_path / "blocks.xlsx"
     ex.build_workbook(data).save(path)
     ws = load_workbook(path)[MAIN]
     header = [c.value for c in ws[1]]
     assert header[9:] == ["Trending Social 1", "Trending Social 2", "Trending Social 3",
-                          "English 1", "English 2", "English 3", "Chinese 1", "Chinese 2", "Chinese 3"]
+                          "English 1", "English 2", "English 3", "Thai 1", "Thai 2", "Thai 3"]
     assert [ws.cell(3, c).value for c in (13, 14, 15)] == [
         "YouTube · 1,000 views · 2022-03-14 · older", "YouTube · 2,000 views · 2022-03-14 · older",
         "YouTube · 3,000 views · 2022-03-14 · older"]
@@ -246,8 +246,8 @@ def test_summary_sections(saved):
     assert sm["B11"].value == f"=COUNTIFS('{MAIN}'!$A$2:$A$5000,\"OCT NEW\",'{MAIN}'!$F$2:$F$5000,$A11)"
     assert sm["D11"].value == "=SUM(B11:C11)" and sm["A14"].value == "Total"
     assert sm["A16"].value == "Matched posts by channel"
-    # channels in the results, plus TikTok (the TikTok step adds it), alphabetical
-    assert col_a[17:21] == ["TikTok", "Web", "YouTube", "Total"]
+    # channels in the results, plus TikTok and RedNote (their hand steps add them), alphabetical
+    assert col_a[17:22] == ["RedNote", "TikTok", "Web", "YouTube", "Total"]
     assert sm["B18"].value == f"=COUNTIF('{MAIN}'!$J$2:$R$5000,$A18&\" ·*\")"
     i = col_a.index("Matched posts by search language") + 1
     assert [sm.cell(i + n, 1).value for n in range(2, 6)] == ["Trending Social", "English", "Thai", "Total"]
@@ -266,9 +266,10 @@ def test_summary_formulas_recalculate(saved):
     # by sheet: OCT NEW has the sushi mat (Unmatched) and Bento (Close); OCT PROMO the rest
     assert [val("Summary", f"B{r}") for r in (11, 12, 13)] == [0, 1, 1]
     assert [val("Summary", f"C{r}") for r in (11, 12, 13)] == [2, 0, 1]
-    # by channel: TikTok 0, Web 2 (Bento, Deedo), YouTube 2; by block: social 2, English 1, Thai 1
-    assert [val("Summary", f"B{r}") for r in (18, 19, 20, 21)] == [0, 2, 2, 4]
-    assert [val("Summary", f"B{r}") for r in (25, 26, 27, 28)] == [2, 1, 1, 4]
+    # by channel: RedNote 0, TikTok 0, Web 2 (Bento, Deedo), YouTube 2;
+    # by block: social 2, English 1, Thai 1
+    assert [val("Summary", f"B{r}") for r in (18, 19, 20, 21, 22)] == [0, 0, 2, 2, 4]
+    assert [val("Summary", f"B{r}") for r in (26, 27, 28, 29)] == [2, 1, 1, 4]
 
 
 def test_a_result_added_by_hand_is_counted(saved):
@@ -278,8 +279,8 @@ def test_a_result_added_by_hand_is_counted(saved):
     wb.save(saved)
     val = _calc(saved)
     assert val(MAIN, "I6") == 1
-    assert val("Summary", "B18") == 1                                        # TikTok
-    assert val("Summary", "B26") == 2                                        # English
+    assert val("Summary", "B19") == 1                                        # TikTok
+    assert val("Summary", "B27") == 2                                        # English
 
 
 def test_tiktok_list_has_unmatched_branded_items_only(saved):
@@ -292,6 +293,31 @@ def test_tiktok_list_has_unmatched_branded_items_only(saved):
     assert tk["H2"].value == "[Thai] แฟนต้า องุ่น\n[English] fanta grape"     # tagged with its block
     assert tk["J3"].value == "(no flavor to require)"
     assert tk["L2"].hyperlink.target.startswith("https://www.tiktok.com/search/video?q=")
+
+
+def test_chinese_is_searched_only_on_rednote(data, tmp_path):
+    """Chinese phrases go to the RedNote list and nowhere else; the other languages to
+    TikTok (and YouTube) only. An item with no Chinese phrase is not on the RedNote list."""
+    data["items"] = [_item("OCT PROMO", 1, "34662", "FANTA GRAPE FLAVOR",
+                           search_queries="แฟนต้า องุ่น|fanta grape|芬达 葡萄"),
+                     _item("OCT PROMO", 2, "34658", "FANTA ORANGE FLAVOR")]
+    data["rows"] = [_row("OCT PROMO", 1, "34662", "FANTA GRAPE FLAVOR", "Unmatched"),
+                    _row("OCT PROMO", 2, "34658", "FANTA ORANGE FLAVOR", "Unmatched")]
+    path = tmp_path / "rednote.xlsx"
+    ex.build_workbook(data).save(path)
+    wb = load_workbook(path)
+    tk, rn = wb["TikTok Search List"], wb["RedNote Search List"]
+    assert [r[0] for r in tk.iter_rows(min_row=2, values_only=True)] == [34662, 34658]
+    assert tk["H2"].value == "[Thai] แฟนต้า องุ่น\n[English] fanta grape"
+    assert [r[0] for r in rn.iter_rows(min_row=2, values_only=True)] == [34662]
+    assert rn["L1"].value == "RedNote Search Link"
+    assert rn["H2"].value == "[Chinese] 芬达 葡萄"
+    assert rn["L2"].hyperlink.target.startswith("https://www.xiaohongshu.com/search_result?keyword=%E8%8A%AC")
+    # the Chinese block is still there, blank, for the RedNote step to fill
+    header = [c.value for c in wb[MAIN][1]]
+    assert wb[MAIN].cell(2, header.index("Chinese 1") + 1).value is None
+    assert ex.platform_phrases("fanta grape|芬达 葡萄|ハタ ソーダ", "youtube") == ["fanta grape"]
+    assert ex.platform_phrases("fanta grape|芬达 葡萄|ハタ ソーダ", "rednote") == ["芬达 葡萄"]
 
 
 def test_own_brand_shows_both_sources(data, tmp_path):
@@ -342,7 +368,9 @@ def test_frozen_item_with_no_brand_is_on_the_tiktok_list(data, tmp_path):
     rows = list(tk.iter_rows(min_row=2, values_only=True))
     assert [r[0] for r in rows] == [73094]                                   # not the sushi mat
     assert rows[0][8].startswith("(no brand: frozen product) frozen")
-    assert rows[0][7] == "[Vietnamese] nước mía đông lạnh\n[English] frozen sugarcane juice\n[Chinese] 冷冻甘蔗汁"
+    assert rows[0][7] == "[Vietnamese] nước mía đông lạnh\n[English] frozen sugarcane juice"
+    rn = list(wb["RedNote Search List"].iter_rows(min_row=2, values_only=True))
+    assert [(r[0], r[7]) for r in rn] == [(73094, "[Chinese] 冷冻甘蔗汁")]
     header = [c.value for c in wb[MAIN][1]]
     assert header[12:] == ["English 1", "English 2", "English 3", "Vietnamese 1", "Vietnamese 2",
                            "Vietnamese 3", "Chinese 1", "Chinese 2", "Chinese 3"]
@@ -357,8 +385,8 @@ def test_khmer_phrases_are_not_searched(data, tmp_path):
     path = tmp_path / "khmer.xlsx"
     ex.build_workbook(data).save(path)
     wb = load_workbook(path)
-    assert wb["TikTok Search List"]["H2"].value == ("[English] trey kanchanhchras fish sauce\n"
-                                                   "[Chinese] Trey Kanchanhchras 鱼露")
+    assert wb["TikTok Search List"]["H2"].value == "[English] trey kanchanhchras fish sauce"
+    assert wb["RedNote Search List"]["H2"].value == "[Chinese] Trey Kanchanhchras 鱼露"
     assert "q=trey%20kanchanhchras%20fish%20sauce" in wb["TikTok Search List"]["L2"].value
     assert not any(str(c.value).startswith("Khmer") for c in wb[MAIN][1])
     assert ex.search_phrases("ទឹកត្រី|fish sauce") == ["fish sauce"]
@@ -374,7 +402,8 @@ def test_japanese_phrases_are_not_searched(data, tmp_path):
     path = tmp_path / "japanese.xlsx"
     ex.build_workbook(data).save(path)
     wb = load_workbook(path)
-    assert wb["TikTok Search List"]["H2"].value == "[English] hata white peach soda\n[Chinese] Hata 白桃汽水"
+    assert wb["TikTok Search List"]["H2"].value == "[English] hata white peach soda"
+    assert wb["RedNote Search List"]["H2"].value == "[Chinese] Hata 白桃汽水"
     assert [c.value for c in wb[MAIN][1]][12::3] == ["English 1", "Chinese 1"]
     assert ex.search_phrases("ハタ鉱泉 ソーダ 白桃|Hata 白桃汽水") == ["Hata 白桃汽水"]
 

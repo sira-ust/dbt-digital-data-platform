@@ -4,7 +4,8 @@ For every BRANDED promo item of the month with no Social Listening match (no row
 in int_promo_social_matches), for every UST own-brand item whether matched or not
 (is_own_brand), and for every FROZEN item with no brand (is_frozen: searched as a
 frozen product, "frozen" standing in for the brand), run the item's reviewed search_queries through the YouTube
-Data API v3:
+Data API v3. Chinese phrases are left out: Chinese is searched only on RedNote,
+by hand (promo_common.platform_phrases), so an item costs ~2 searches, not 3:
 
     search.list   top N videos per query            100 quota units each
     videos.list   title, description, tags, views,   1 unit per 50 videos
@@ -30,9 +31,9 @@ API key: local runs read YOUTUBE_API_KEY from the environment or .env; on
 Databricks it comes from secret scope ust-social, key youtube-api-key (the job's
 run-as identity needs READ on that scope).
 
-    python scripts/youtube_search.py --dry-run      # list items + queries, no API calls
-    python scripts/youtube_search.py                # search, verify, judge
-    python scripts/youtube_search.py --backend databricks
+    python scripts/promo/youtube_search.py --dry-run      # list items + queries, no API calls
+    python scripts/promo/youtube_search.py                # search, verify, judge
+    python scripts/promo/youtube_search.py --backend databricks
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path.cwd() / "scripts" / "promo"))
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 except NameError:
@@ -58,7 +59,7 @@ except NameError:
 from promo_common import (  # noqa: E402
     INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, ItemTerms, append_records, dbt_var,
     ensure_landing, find_project_root, flag, get_llm_client, judge_majority, landing_path, match_text,
-    query, read_local_parquet, search_phrases,
+    platform_phrases, query, read_local_parquet,
 )
 
 API = "https://www.googleapis.com/youtube/v3"
@@ -194,7 +195,7 @@ def already_searched(backend: str, promo_month: str) -> set[str]:
 def search_item(key: str, item: dict, max_queries: int, per_query: int) -> tuple[list[dict], int]:
     """Every distinct video the item's queries return, with stats. -> (videos, quota units)."""
     units, order, first_query = 0, [], {}
-    for q in search_phrases(item["search_queries"])[:max_queries]:
+    for q in platform_phrases(item["search_queries"], "youtube")[:max_queries]:
         res = _get("search", {"part": "snippet", "type": "video", "maxResults": per_query, "q": q, "key": key})
         units += UNITS_SEARCH
         for rank, hit in enumerate(res.get("items", []), start=1):
@@ -284,7 +285,7 @@ def main(argv=None):
           f"{len(items) - len(todo)} already searched this month; {len(todo)} to search "
           f"(~{len(todo) * (args.max_queries * UNITS_SEARCH + 1):,} quota units)")
     for it in todo:
-        print(f"  {it['item_no']} {it['promo_description'][:32]:32s} {search_phrases(it['search_queries'])[:args.max_queries]}")
+        print(f"  {it['item_no']} {it['promo_description'][:32]:32s} {platform_phrases(it['search_queries'], 'youtube')[:args.max_queries]}")
     if args.dry_run or not todo:
         return
 

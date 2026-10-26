@@ -8,6 +8,8 @@
 -- together, the English search's bigger view counts took every slot and the
 -- Vietnamese and Chinese finds never reached the workbook (2026-11: 4 of 5 Chinese
 -- Exact videos dropped). The workbook gives each language its own column block.
+-- Since 2026-10-23 Chinese is searched only on RedNote, by hand, so no Chinese
+-- video is kept here: the workbook's Chinese block is RedNote's alone.
 -- search_language is the language of the phrase that FIRST returned the video
 -- (youtube_search.py keeps one row per video), so a video both an English and a
 -- Chinese phrase returned is listed once, under the phrase searched first.
@@ -21,10 +23,11 @@
 --
 -- RECENT FIRST, PER LANGUAGE: an item-language with any verified video posted within
 -- var('promo_scraped_max_age_months') (24) before the promo month keeps only those.
--- One with none falls back to its older videos (is_recent = false; the mart's
--- Match Note says so). Anchored on the promo month, not today, so a rerun gives the
--- same answer. The search has no date filter, so older videos are there to fall
--- back on at no extra quota.
+-- One with none falls back to its best older videos (is_recent = false; the mart's
+-- Match Note says so): older content beats no content (confirmed 2026-10-26).
+-- Anchored on the promo month, not today, so a rerun gives the same answer. The
+-- search has no date filter, so older videos are there to fall back on at no extra
+-- quota.
 --
 -- RANKED BY PERFORMANCE within each language: views first, then engagement (likes +
 -- comments). "1-3 depending on how many come back": a language with one verified
@@ -44,25 +47,36 @@ with videos as (
         {{ promo_search_language('search_query') }}             as search_language
     from {{ ref('stg_promo__youtube_videos') }}
     where verdict = 'exact' and keyword_level = 'exact'
-      -- only the searched languages have a workbook block (2026-10-20): drop what an
-      -- earlier search stored for Khmer or Japanese. KEEP IN STEP with LANGUAGES in
-      -- scripts/promo_common.py
-      and {{ promo_search_language('search_query') }} in ('English', 'Thai', 'Vietnamese', 'Chinese')
+      -- only the languages YouTube searches: drop what an earlier search stored for
+      -- Khmer or Japanese (not searched, 2026-10-20) or Chinese (searched only on
+      -- RedNote, by hand, 2026-10-23). KEEP IN STEP with LANGUAGES and
+      -- REDNOTE_LANGUAGES in scripts/promo/promo_common.py
+      and {{ promo_search_language('search_query') }} in ('English', 'Thai', 'Vietnamese')
+
+),
+
+-- the item-languages with at least one recent video. A GROUP BY and a join, not a
+-- window: on DuckDB 1.5.3 a max() over() on this view fails with "invalid
+-- unordered_map<K, T> key" (2026-10-26)
+lang_has_recent as (
+
+    select promo_month, item_no, search_language
+    from videos
+    where is_recent
+    group by promo_month, item_no, search_language
 
 ),
 
 -- recent videos when the item-language has any, otherwise all of them
 eligible as (
 
-    select *
-    from (
-        select
-            *,
-            max(case when is_recent then 1 else 0 end)
-                over (partition by promo_month, item_no, search_language) as _lang_has_recent
-        from videos
-    ) as v
-    where is_recent or _lang_has_recent = 0
+    select v.*
+    from videos as v
+    left join lang_has_recent as h
+        on h.promo_month = v.promo_month
+       and h.item_no = v.item_no
+       and h.search_language = v.search_language
+    where v.is_recent or h.item_no is null
 
 ),
 

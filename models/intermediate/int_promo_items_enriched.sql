@@ -20,7 +20,7 @@
 -- and the catalog fields ride along as evidence for the reviewer and the AI judge.
 --
 -- TERMS SOURCE, in order: the seed (reviewed by a person) > the latest LLM draft
--- (scripts/draft_promo_terms.py, used so a new month can run before review) >
+-- (scripts/promo/draft_promo_terms.py, used so a new month can run before review) >
 -- nothing. terms_source says which; 'missing' means draft_promo_terms.py has not
 -- run for the item yet, and such an item cannot be searched.
 --

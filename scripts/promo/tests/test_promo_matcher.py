@@ -1,7 +1,7 @@
-"""The keyword matcher and judge plumbing in scripts/promo_common.py.
+"""The keyword matcher and judge plumbing in scripts/promo/promo_common.py.
 
 Every case here is a real failure mode met while building the October run — see
-the comments. Run:  python -m pytest scripts/tests
+the comments. Run:  python -m pytest scripts/promo/tests
 """
 
 import sys

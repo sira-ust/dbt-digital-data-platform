@@ -2,9 +2,12 @@
 
 ## Monthly promo × social match
 
-Each month's promo workbook (`UST <YYYY> <MON> NEW PROMO.xlsx`, sheets `<MON> NEW` and
-`<MON> PROMO`) is matched against everything social listening has collected. Items it
-can't find are searched on YouTube, and then on TikTok by hand. The output is
+Each month's promo list (`<MON> NEW` and `<MON> PROMO`), merged with the month's
+description file into one INPUT workbook (see *Running it*), is matched against
+everything social listening has collected. Items it
+can't find are searched on YouTube, then on TikTok and RedNote (Xiaohongshu) by hand.
+Chinese phrases are searched only on RedNote; the other languages only on YouTube and
+TikTok. The output is
 `UST_<MON>_Promo_Social_Listening_Match.xlsx`, in the layout of the October 2026 workbook.
 
 ### How an item gets its rows
@@ -29,11 +32,12 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
    brand, product and flavor terms in its own text (`assert_promo_exact_has_terms`).
 3. **YouTube.** `youtube_search.py` runs for branded items with *no* social listening
    row, and for every own-brand item. It runs each item's `search_queries` (up to 3),
+   **except the Chinese ones** (those go to RedNote, step 6),
    applies the same keyword rule and judge to title, description and tags, and keeps the
    top 1–3 Exact videos **per search language** (the script of the phrase that found the
-   video: English, Thai, Vietnamese, Chinese; a Khmer or Japanese phrase is skipped, Japanese read from its kana before checking for Chinese, since kanji are Chinese characters) by views, then engagement (likes +
-   comments), so an English search's view counts never crowd out the Vietnamese or Chinese
-   finds. Only videos posted in the past 2 years (`promo_scraped_max_age_months`, counted
+   video: English, Thai, Vietnamese; a Khmer or Japanese phrase is skipped, Japanese read from its kana before checking for Chinese, since kanji are Chinese characters) by views, then engagement (likes +
+   comments), so an English search's view counts never crowd out the Thai or Vietnamese
+   finds. Chinese videos an earlier search stored are dropped in `int_promo_scraped_matches`. Only videos posted in the past 2 years (`promo_scraped_max_age_months`, counted
    back from the promo month) count when the item-language has any; when it has none, its
    older videos are used instead and are marked "older".
 4. **The mart.** `mart_promo_social_match` holds every match, one row per post. An item with
@@ -41,51 +45,33 @@ can't find are searched on YouTube, and then on TikTok by hand. The output is
    `Unmatched` row. UST's own brands show their social listening posts *and* their YouTube
    videos. **The workbook pivots it wide: one row per item.** Match Status is the item's
    status (the better of the two sources); beside it, **On Trending Social (Mentionlytics)**
-   and **Direct Scraping (TikTok & YouTube)** show what each source found, and **Posts**
+   and **Direct Scraping (TikTok, YouTube & RedNote)** show what each source found, and **Posts**
    counts the results. Then the results: *Trending Social 1–3*, and a block of 3 cells per
    search language. A result cell is clickable, coloured by status, and carries the caption
-   as a cell note; `–` means the item was not searched in that language.
+   as a cell note; `–` means the item was not searched in that language. The *Chinese*
+   block is left blank for the RedNote step to fill.
 5. **TikTok, by hand.** The workbook's *TikTok Search List* sheet lists every branded item
-   social listening didn't match, each phrase tagged with its language. Open the workbook in
-   Claude in Chrome with `scripts/prompts/tiktok_promo_search.md`; Claude writes each TikTok
+   social listening didn't match, each phrase tagged with its language (no Chinese). Open the workbook in
+   Claude in Chrome with `scripts/promo/prompts/tiktok_promo_search.md`; Claude writes each TikTok
    video into its language block on the item's row and deletes that sheet. TikTok has no search API open to a for-profit company: the Research
    API is academic-only and the Commercial Content API covers EU ads only.
+6. **RedNote, by hand.** The *RedNote Search List* sheet lists the same items, with their
+   Chinese phrases only; an item with no Chinese phrase is left off. Open the workbook in
+   Claude in Chrome, signed in to RedNote, with `scripts/promo/prompts/rednote_promo_search.md`.
+   Claude writes up to 3 Exact notes into the item's *Chinese* block, by likes, and deletes
+   that sheet. RedNote has no public search API either, and search works only when signed in.
+   The TikTok and RedNote steps can run in either order: each writes only its own blocks.
 
-### Running a new month on Databricks
+### Running it
 
-Upload the workbook to `/Volumes/ust_databricks/social/promo_landing/`, then open the
-job `ust-promo-social-match` (`scripts/databricks/promo_social_job.yml`) and click
-**Run now** — it is started by hand, not by the upload. It runs in this order:
-load → dbt → draft terms → dbt → match social → dbt → YouTube → dbt (with all promo tests)
-→ export. The workbook lands in `/Volumes/ust_databricks/social/promo_output/`. Then do
-the TikTok step.
+The monthly steps (merge the files into the INPUT workbook, validate, upload, run the job,
+then TikTok and RedNote by hand), local runs, credentials and common fixes are in the
+runbook: **`scripts/promo/README.md`**.
 
-New items get LLM-drafted terms automatically. To review them, see *Editing the terms*.
-
-### Running a month locally (DuckDB)
-
-```
-python scripts/load_promo_list.py "UST 2026 OCT NEW PROMO.xlsx"
-dbt seed --select seed_promo_item_terms && dbt run --select +int_promo_items_enriched
-python scripts/draft_promo_terms.py             # only if terms_source = 'missing' anywhere
-dbt run --select int_promo_items_enriched stg_mentionlytics__mentions
-python scripts/match_promo_social.py            # --dry-run: keyword pass only, no LLM
-dbt run --select stg_promo__social_judgments int_promo_social_matches
-python scripts/youtube_search.py                # --dry-run: list items + queries, no API
-dbt build --select tag:promo
-python scripts/export_promo_social_match.py
-```
-
-**To test on real data without writing to Databricks:** run
-`python scripts/pull_real_snapshot.py` (read-only SELECTs into `data/real/`, which git
-ignores). Then add `--vars '{local_data_root: data/real}'` to every dbt command and set
-`PROMO_LOCAL_DATA_ROOT=data/real` for the scripts.
-
-**Credentials:**
-- Local AI calls sign in through the browser. The everyday `DATABRICKS_TOKEN` PAT is
-  SQL-only and model serving refuses it.
-- The YouTube key comes from `YOUTUBE_API_KEY` in `.env` locally, or secret scope
-  `ust-social` / `youtube-api-key` on Databricks.
+The INPUT workbook is the month's promo list merged with its description file (photos,
+notes, selling points) into one fixed layout, `scripts/promo/promo_input_schema.py`, so
+the pipeline never depends on how UST laid out that month's files. Its extra columns
+are loaded (`photo_path` for the photos) but not used for matching yet.
 
 ### Editing the terms
 
@@ -107,13 +93,15 @@ set `review_status = reviewed` and commit. How terms match:
 - **Changes take effect on the next run.** A new term can create new candidates; already
   judged pairs aren't re-judged unless `JUDGE_PROMPT_VERSION` changes.
 
-To add drafts to the seed for review: `python scripts/draft_promo_terms.py --to-seed`.
+To add drafts to the seed for review: `python scripts/promo/draft_promo_terms.py --to-seed`.
 
 **Chinese.** Since prompt v3, every draft also carries Chinese terms (Simplified, and
-Traditional where it differs) and its third search phrase is in Chinese, so YouTube and
-the TikTok list search in Chinese too, at no extra quota (still 3 searches per item).
-Rows reviewed before that (October 2026) have no Chinese: add the terms and a Chinese
-phrase by hand if an item needs them.
+Traditional where it differs) and its third search phrase is in Chinese. Since
+2026-10-23 that phrase is searched **only on RedNote**: YouTube and TikTok skip it, so a
+YouTube search costs ~2 searches per item, not 3. Chinese terms still count for matching
+everywhere (a Chinese caption on TikTok or YouTube still matches). Rows reviewed before v3
+(October 2026) have no Chinese phrase, so they are left off the RedNote list: add the terms
+and a Chinese phrase by hand if an item needs them.
 
 ### Brand codes and UST's own brands
 
@@ -178,6 +166,6 @@ These were measured on the real Databricks corpus: 53,601 posts, Feb 20 – Sep 
 - **Bento** keeps October's Close from the bachhoaxanh article. The YouTube comment
   October also counted names *grilled-squid* flavor, so it's rejected for all four flavors.
 - **TikTok rows** (Cozy teas, Tean's, Oragon, Tasco, Ginseng Up Cola in October) come only
-  from the manual TikTok step.
+  from the manual TikTok step, and the Chinese block only from the manual RedNote step.
 
 {% enddocs %}

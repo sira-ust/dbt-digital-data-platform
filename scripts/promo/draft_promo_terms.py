@@ -32,8 +32,8 @@ date. Reviewed seed rows and older months are never touched. youtube_search.py
 then searches the re-drafted items again.
 
 Review loop (local):
-    python scripts/draft_promo_terms.py                 # drafts missing + out-of-date items -> item_terms_draft
-    python scripts/draft_promo_terms.py --to-seed       # appends those drafts to the seed CSV
+    python scripts/promo/draft_promo_terms.py                 # drafts missing + out-of-date items -> item_terms_draft
+    python scripts/promo/draft_promo_terms.py --to-seed       # appends those drafts to the seed CSV
     # edit seeds/seed_promo_item_terms.csv, set review_status = reviewed, commit
 
 Reads the dbt models, so run `dbt build --select +int_promo_items_enriched` first.
@@ -51,7 +51,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path.cwd() / "scripts" / "promo"))
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 except NameError:

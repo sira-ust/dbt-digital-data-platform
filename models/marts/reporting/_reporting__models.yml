@@ -2585,7 +2585,7 @@ models:
       own row. Precedence per item: Social Listening Exact posts, else its Close posts,
       else up to 3 verified YouTube videos per search language, else one Unmatched
       row. UST's own brands (is_own_brand) carry their YouTube rows after their social
-      listening rows. scripts/export_promo_social_match.py pivots it WIDE for the
+      listening rows. scripts/promo/export_promo_social_match.py pivots it WIDE for the
       workbook: one row per item, a column block per search language.
     tests:
       - dbt_utils.unique_combination_of_columns:
@@ -2627,10 +2627,10 @@ models:
               arguments:
                 values: ["Social Listening", Scraped]
       - name: search_language
-        description: The language of the search phrase that found a Scraped video — its column block in the workbook. Null for social listening and Unmatched rows.
+        description: The language of the search phrase that found a Scraped video — its column block in the workbook. Never Chinese, which is searched only on RedNote, by hand, after the export. Null for social listening and Unmatched rows.
         tests:
           - accepted_values:
               arguments:
-                values: [English, Thai, Vietnamese, Chinese]
+                values: [English, Thai, Vietnamese]
       - name: engagement_text
         description: Views / likes / total engagement as text WITH units ("31,939 views, 88 likes"), or "Not reported"; null only when Unmatched.

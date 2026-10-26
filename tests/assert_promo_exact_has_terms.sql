@@ -7,7 +7,7 @@
 -- create an Exact on its own say-so; this is the guard on that rule.
 --
 -- Each hit is re-checked as a plain substring of match_text, the normalised text
--- the matcher searched (scripts/promo_common.match_text), so the test does not
+-- the matcher searched (scripts/promo/promo_common.match_text), so the test does not
 -- just trust that a hit column is non-null.
 --
 -- Fails (returns a row) for each Exact row missing evidence. Severity: error.

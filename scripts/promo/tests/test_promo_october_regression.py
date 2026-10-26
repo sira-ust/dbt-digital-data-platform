@@ -3,7 +3,7 @@
 Runs against the LOCAL mart built on the REAL Databricks snapshot:
     python scripts/pull_real_snapshot.py
     ... the local run in models/docs/_promo_social.md, with local_data_root = data/real ...
-    python -m pytest scripts/tests/test_promo_october_regression.py
+    python -m pytest scripts/promo/tests/test_promo_october_regression.py
 Skipped when dev.duckdb has no October mart or holds only mock social data — so it
 never fails a laptop that has not pulled the snapshot.
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DB = ROOT / "dev.duckdb"
 MONTH = "2026-10-01"
 

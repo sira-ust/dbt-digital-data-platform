@@ -16,14 +16,13 @@ attached workbook and give me the updated file back.
 The sheet **TikTok Search List** has one row per promo item to search. For each row:
 
 1. Search **each line of Search Phrases** on TikTok (the **TikTok Search Link** opens the
-   first one). Each line starts with its language in brackets, e.g. `[Chinese] 芬达 葡萄`:
+   first one). Each line starts with its language in brackets, e.g. `[Thai] แฟนต้า องุ่น`:
    search only the text after the brackets, and remember the language: it decides where
    the video goes on the main sheet. Look at the top results for each search, scrolling
    once or twice.
 2. Keep a video only if it is an **exact match**. Its caption or on-screen hashtags must name
    - the **brand**: one of the *Must Mention (brand)* words, any spelling, including Thai,
-     Vietnamese or Chinese script or a hashtag. A Chinese caption often writes the brand in
-     Latin letters ("Cozy 荔枝茶"); that counts; and
+     Vietnamese or Chinese script or a hashtag; and
    - the **product**: what the item is, e.g. tea, juice, energy drink, rice paper; and
    - the **flavor / variant**: one of the *Flavor Words*. Skip this check when the column says
      "(no flavor to require)".
@@ -44,7 +43,7 @@ The sheet **TikTok Search List** has one row per promo item to search. For each 
 5. **Per language**, take the **top 3 by performance** from the videos you kept: most likes
    first; for a tie, the one with more comments. Fewer is fine. Never pad with weaker
    matches. Keep every language's results: a strong English video must never push out a
-   Vietnamese or Chinese one. A video that two phrases both found counts once, under the
+   Thai or Vietnamese one. A video that two phrases both found counts once, under the
    first phrase that found it.
 
 ### UST's own brands
@@ -82,7 +81,9 @@ That sheet has **one row per item**: find it by **Item No.** in column B. Never 
 After the item's columns (A–I) come the **result blocks**, three cells each:
 *Trending Social 1–3*, then one block per search language, e.g. *English 1–3*,
 *Thai 1–3*, *Vietnamese 1–3*, *Chinese 1–3*. Put each video in the block of **the
-language of the phrase that found it**, in the first empty cell of that block. A cell
+language of the phrase that found it**, in the first empty cell of that block. **Never
+write in the Chinese block**: Chinese is searched only on RedNote, in a separate step,
+so this list has no Chinese phrases. A cell
 holding `–` means the item was not searched in that language; you may overwrite it if
 you did search that language.
 
@@ -117,13 +118,14 @@ result into another language's block to make room.
 |---|---|
 | F Match Status | the item's best status across everything on its row: `Exact` if any result is Exact, else `Close`. Bold; Exact is dark green text `006100` on green fill `C6EFCE`, Close is brown text `9C5700` on yellow fill `FFEB9C`. An item that was Unmatched stops being grey: use black text in A–E and I |
 | G On Trending Social (Mentionlytics) | unchanged |
-| H Direct Scraping (TikTok & YouTube) | the best scraped status, YouTube and TikTok together, styled like F |
+| H Direct Scraping (TikTok, YouTube & RedNote) | the best scraped status, YouTube, TikTok and RedNote together, styled like F |
 | I Posts | a formula: leave it alone, it recounts by itself |
 
 ## When you are done
 
-1. Delete the **TikTok Search List** sheet. The finished workbook has exactly two sheets,
-   in this order: *Summary* (first) and *Promo vs Social Listening*.
+1. Delete the **TikTok Search List** sheet. Leave the **RedNote Search List** sheet if it
+   is still there: the RedNote step deletes it. Once both are gone the workbook has exactly
+   two sheets, in this order: *Summary* (first) and *Promo vs Social Listening*.
 2. On the **Summary** sheet, leave every formula alone; they recount automatically. Then
    in **Unmatched promo items (no post found)**, delete the rows of items you just matched,
    so the list keeps only items with no post at all. Keep the grey note under the list.
