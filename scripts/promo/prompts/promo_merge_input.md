@@ -1,11 +1,18 @@
 # Merge the month's promo files into the pipeline's INPUT file
 
-Each month, attach the month's source files to Claude and paste everything below the line:
-the promo list workbook(s) (e.g. `UST 2026 NOV NEW PROMO.xlsx`) and the description file
-with photos (e.g. `UST 2026 NOV NEW - desc.xlsx`). Claude returns one workbook,
-`UST <YYYY> <MON> PROMO INPUT.xlsx`. Check it with
-`python scripts/promo/validate_promo_input.py "<file>"`, then upload it to the landing Volume
-instead of the original files.
+Each month, attach the month's **two** source files to Claude and paste everything below
+the line:
+
+1. the promo list, `UST <YYYY> <MON> PROMO.xlsx` (e.g. `UST 2026 NOV PROMO.xlsx`);
+2. the description file with photos, `UST <YYYY> <MON> NEW - desc.xlsx`
+   (e.g. `UST 2026 NOV NEW - desc.xlsx`).
+
+Claude returns one workbook, `UST <YYYY> <MON> PROMO INPUT.xlsx`, with the photos
+floating over their cells. Then:
+
+1. `python scripts/promo/photos_in_cells.py "<file>"` puts the photos inside their cells.
+2. `python scripts/promo/validate_promo_input.py "<file>"` checks it.
+3. Upload ONLY that file to the landing Volume.
 
 The layout is defined in `scripts/promo/promo_input_schema.py`; this prompt states the same
 rules in words. If the two ever disagree, the schema file wins.
@@ -18,19 +25,24 @@ month. Copy values; never invent, guess, translate or tidy them.
 
 ## The sources
 
-- **Promo list** workbook(s): the items on promotion this month. Each list is a sheet
-  named like `NOV NEW` or `NOV PROMO`, or a file named like that with a generic sheet
-  (`Sheet1`). This is the **master list**: every one of its rows becomes exactly one row
-  in the output, and nothing else does.
-- **Description file** (if attached): extra detail for some items, with a product photo,
-  notes, selling points and a short description. It only **adds detail** to items already
-  on a promo list.
+Two files are attached:
+
+- **The promo list**, `UST <YYYY> <MON> PROMO.xlsx`: the items on promotion this month.
+  This is the **master list**: every one of its rows becomes exactly one row in the
+  output, and nothing else does.
+- **The description file**, `UST <YYYY> <MON> NEW - desc.xlsx`: extra detail for some
+  of those items: a product photo, notes, selling points and a short description. It only
+  **adds detail** to items already on the promo list.
+
+If any other file is attached, or one of these two is missing, stop and tell me.
 
 Column names differ month to month. Match them by meaning, e.g. `Item No.` = `No.`,
-`Size` = `Base UOM Size`, `ETA` = `Expected Receive Date`. If two promo-list files hold
-the SAME items in the same list (one with a Promo Code column, one without), treat them
-as one list and take each column from whichever file has it. Say in your reply which
-files you merged that way.
+`Size` = `Base UOM Size`, `ETA` = `Expected Receive Date`.
+
+**Which list (`promo_list`).** A promo-list sheet named `<MON> NEW` or `<MON> PROMO` says
+which list its rows are on. When the sheet has a generic name (`Sheet1`), take the list
+from the description file's sheet name: a description sheet named `NOV NEW` means the
+promo list's rows are the `NEW` list. If neither file says, stop and ask me.
 
 ## The output workbook
 
@@ -80,6 +92,24 @@ Rules for the rows:
   in the cell (Excel "Place in Cell") or anchor it on that cell. One photo per row; an
   item with no photo has an empty cell. Never take a photo from anywhere else.
 
+**Reading the photos.** The description file's pictures are Excel "Place in Cell"
+pictures. openpyxl does not see them (the cell reads `#VALUE!` and `ws._images` is
+empty), so read them from the .xlsx zip itself:
+
+1. In the sheet's XML (`xl/worksheets/sheetN.xml`), each Image cell with a picture has a
+   `vm="n"` attribute, e.g. `<c r="G2" vm="1" ...>`. The row number is in `r`.
+2. `xl/metadata.xml`: `<valueMetadata>` block `n` (1-based) holds `<rc v="k"/>`;
+   `<futureMetadata>` block `k` (0-based) holds `<xlrd:rvb i="j"/>`.
+3. `xl/richData/rdrichvalue.xml`: rich value `j` (0-based); its first `<v>` is index `m`.
+4. `xl/richData/richValueRel.xml`: relationship `m` (0-based) gives an `r:id`;
+   `xl/richData/_rels/richValueRel.xml.rels` maps that id to the file, e.g.
+   `../media/image1.png` = `xl/media/image1.png`.
+
+Copy those image bytes as they are. In the output, anchor each one on its `photo` cell
+(openpyxl `ws.add_image(Image(BytesIO(data)), "Q<row>")`; set the display size so it fits
+the row, which does not change the file). Count the pictures you found and the pictures you
+wrote; they must agree, less only the photos of items on no promo list.
+
 ### Sheet `meta`
 
 Two columns, `key` and `value`, one fact per row:
@@ -101,7 +131,7 @@ ask whether the item was meant to be on promotion.
 
 Give me the workbook, then a short check:
 1. rows per list (e.g. `NEW 92`), and how many have a description, selling points, a
-   photo;
+   photo; and how many pictures the description file had (photos must not be lost);
 2. promo-list items with no description-file row (item numbers and descriptions);
 3. description-file items on no promo list (the `unmatched_detail` sheet);
 4. any source values you could not place, and any column you matched by meaning

@@ -45,14 +45,14 @@ except NameError:
     pass
 
 from promo_common import (  # noqa: E402
-    INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, STAGING_SCHEMA, ItemTerms,
+    CARD_FIELDS, INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, STAGING_SCHEMA, ItemTerms,
     append_records, dbt_var, ensure_landing, get_llm_client, judge_majority, landing_path,
     match_text, query, read_local_parquet,
 )
 
 ITEM_FIELDS = ["item_no", "promo_description", "item_full_description", "brand", "product",
                "flavor_variant", "pack_format", "brand_terms", "product_terms", "flavor_terms",
-               "negative_terms"]
+               "negative_terms"] + CARD_FIELDS     # the product card, for the judge
 
 
 def _rel(backend, schema_dbx, schema_local, name):

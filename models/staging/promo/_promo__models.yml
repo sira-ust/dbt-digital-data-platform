@@ -29,6 +29,16 @@ models:
       - name: item_no
         tests: [unique, not_null]
 
+  - name: stg_promo__product_cards
+    description: >
+      AI-drafted product card per item_no (latest draft wins), from the item's photo and
+      description-file text: brand / product / flavor as printed on the pack, pack,
+      market, look, lookalikes, and the search phrases and extra match terms read off
+      the pack. Feeds int_promo_items_enriched (card_* columns, search phrases, terms).
+    columns:
+      - name: item_no
+        tests: [unique, not_null]
+
   - name: stg_promo__social_judgments
     description: >
       The AI judge's ruling on each (promo item, Mentionlytics mention) keyword candidate.

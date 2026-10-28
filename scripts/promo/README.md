@@ -21,11 +21,13 @@ the known false positives are in [models/docs/_promo_social.md](../../models/doc
 
 ### 1. Merge the files
 
-UST sends the promo list (e.g. `UST 2026 NOV NEW PROMO.xlsx`) and, since November 2026, a
-description file with photos (e.g. `UST 2026 NOV NEW - desc.xlsx`). Their layouts change
-from month to month, so they are merged into one workbook in a fixed layout.
+Two files come in each month, and their layouts change from month to month, so they are
+merged into one workbook in a fixed layout:
 
-Attach all of the month's files to Claude and paste
+1. the promo list, `UST <YYYY> <MON> PROMO.xlsx` (e.g. `UST 2026 NOV PROMO.xlsx`);
+2. the description file with photos, `UST <YYYY> <MON> NEW - desc.xlsx`.
+
+Attach both to Claude and paste
 [prompts/promo_merge_input.md](prompts/promo_merge_input.md). You get back
 `UST <YYYY> <MON> PROMO INPUT.xlsx`:
 
@@ -41,11 +43,17 @@ The promo list is the master list. The description file only adds detail to item
 it, joined by item number. The full column list is
 [promo_input_schema.py](promo_input_schema.py).
 
-### 2. Validate
+### 2. Put the photos in their cells, then validate
 
 ```
+python scripts/promo/photos_in_cells.py "C:/Users/<you>/Downloads/UST 2026 NOV PROMO INPUT.xlsx"
 python scripts/promo/validate_promo_input.py "C:/Users/<you>/Downloads/UST 2026 NOV PROMO INPUT.xlsx"
 ```
+
+Claude can only float the photos over the sheet. `photos_in_cells.py` moves each one
+into its `photo` cell (Excel "Place in Cell", as in the description file) and makes the
+rows tall enough to see it. It's safe to run twice. The validator warns if photos are
+still floating.
 
 - **ERROR** lines must be fixed (ask Claude to correct the file, or fix the cell): a
   blank required column, an item number that isn't digits, a date not in `YYYY-MM-DD`,
@@ -69,15 +77,34 @@ runs, in order:
 | load | [load_promo_list.py](load_promo_list.py) | validates and loads the items; saves photos to `promo_landing/_photos/<YYYYMM>/` |
 | dbt | | builds the items |
 | draft terms | [draft_promo_terms.py](draft_promo_terms.py) | AI drafts brand, product, flavor and search phrases for items not in the reviewed seed |
+| draft cards | [draft_product_cards.py](draft_product_cards.py) | AI reads each item's photo and description and drafts its **product card** (see below) |
 | dbt | | |
 | match social | [match_promo_social.py](match_promo_social.py) | keyword pass over every Mentionlytics post, then the AI judge |
 | dbt | | |
-| YouTube | [youtube_search.py](youtube_search.py) | searches English, Thai and Vietnamese phrases (never Chinese), judges each video |
+| YouTube | [youtube_search.py](youtube_search.py) | searches English, Thai and Vietnamese phrases (never Chinese), the card's first; judges each video against the card, with the product photo next to the thumbnail |
 | dbt + tests | | the mart and every promo test; a failing test stops the export |
 | export | [export_promo_social_match.py](export_promo_social_match.py) | writes the workbook |
 
 A rerun of the same month is cheap: YouTube results are cached per item and month, and
-judged posts are not judged again.
+judged posts are not judged again. An item is searched again when its terms are
+re-drafted or it gets a new product card.
+
+### Product cards
+
+For each item with a photo or a description, the model drafts a card: the brand, product
+and flavor **as printed on the pack** (e.g. "Vị Sườn Nướng BBQ Brazil / Brazil BBQ Pork
+Rib"), the pack and size, the market, what it looks like, and its **lookalikes** (the same
+brand's other flavors on the promo, other countries' editions). The card:
+
+- puts its pack-text phrases **first** in the searches, and adds the pack's flavor
+  spellings to the match terms;
+- is given to the AI judge, which rejects lookalikes (e.g. the US "Mesquite BBQ" Stax can
+  for the Vietnamese "Vị Thịt Nướng BBQ" one). For YouTube the judge also sees the product
+  photo next to each video's thumbnail;
+- is shown, with the photo, on the TikTok and RedNote lists for the hand searches.
+
+Cards are re-drafted when the photo or text changes. An item with neither has no card and
+is matched as before. To see a month's cards: `stg_promo__product_cards`.
 
 ### 4. Download
 
@@ -126,7 +153,8 @@ python scripts/promo/validate_promo_input.py "UST 2026 NOV PROMO INPUT.xlsx"
 python scripts/promo/load_promo_list.py "UST 2026 NOV PROMO INPUT.xlsx"
 dbt seed --select seed_promo_item_terms && dbt run --select +int_promo_items_enriched
 python scripts/promo/draft_promo_terms.py             # only if terms_source = 'missing' anywhere
-dbt run --select int_promo_items_enriched stg_mentionlytics__mentions
+python scripts/promo/draft_product_cards.py           # --dry-run: list items; --only 37545 37548: a test
+dbt run --select stg_promo__product_cards int_promo_items_enriched stg_mentionlytics__mentions
 python scripts/promo/match_promo_social.py            # --dry-run: keyword pass only, no AI
 dbt run --select stg_promo__social_judgments int_promo_social_matches
 python scripts/promo/youtube_search.py                # --dry-run: list items + queries, no API
@@ -167,8 +195,10 @@ python scripts/promo/export_promo_social_match.py
 |---|---|
 | `scripts/promo/promo_input_schema.py` | the INPUT file's columns and rules (the contract) |
 | `scripts/promo/validate_promo_input.py` | checks an INPUT file; also its reader |
+| `scripts/promo/photos_in_cells.py` | moves an INPUT file's floating photos into their cells |
 | `scripts/promo/load_promo_list.py` | loads the INPUT file (or an old-layout workbook) |
 | `scripts/promo/draft_promo_terms.py` | AI-drafted search terms |
+| `scripts/promo/draft_product_cards.py` | AI-drafted product cards, from the photo and description |
 | `scripts/promo/match_promo_social.py` | Mentionlytics keyword pass + AI judge |
 | `scripts/promo/youtube_search.py` | YouTube search + judge |
 | `scripts/promo/export_promo_social_match.py` | writes the output workbook |
@@ -182,8 +212,6 @@ python scripts/promo/export_promo_social_match.py
 
 ## Not built yet
 
-The description file's photos and text are **loaded but not yet used for matching**.
-Planned next: a product card per item (pack text, size, pack look, lookalikes) that feeds
-the search phrases and the judge, YouTube thumbnails compared with the product photo, the
-photo and description on the TikTok and RedNote lists, and every item scraped, with
-Mentionlytics shown as a separate Trending flag.
+Every item scraped, with Mentionlytics shown as a separate Trending flag instead of
+deciding which items are scraped. Today Mentionlytics still goes first: items it matched
+are scraped only if they are UST's own brands.

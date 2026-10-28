@@ -17,6 +17,11 @@ TikTok. The output is
    column and the promo text is truncated, so this reviewed file is the source of truth.
    Items not in it get an LLM draft (`draft_promo_terms.py`) that is used until someone
    reviews it.
+   **Product cards.** For items with a photo or description (the INPUT file),
+   `draft_product_cards.py` drafts a card: brand, product and flavor as printed on the
+   pack, pack, market, look and lookalikes. Its pack-text phrases go first in
+   `search_queries`, its spellings join the flavor and product terms, and the judge checks
+   every post against it (`stg_promo__product_cards`, `card_*` in `int_promo_items_enriched`).
 2. **Social listening.** `match_promo_social.py` checks every raw Mentionlytics post (title
    and content, not the enrichment tags). A post becomes a candidate when it names the
    brand plus the product or flavor. The AI judge (`promo_judge_model`, majority of
@@ -70,8 +75,8 @@ runbook: **`scripts/promo/README.md`**.
 
 The INPUT workbook is the month's promo list merged with its description file (photos,
 notes, selling points) into one fixed layout, `scripts/promo/promo_input_schema.py`, so
-the pipeline never depends on how UST laid out that month's files. Its extra columns
-are loaded (`photo_path` for the photos) but not used for matching yet.
+the pipeline never depends on how UST laid out that month's files. Its photos and text
+feed the product cards (`photo_path` holds each photo's saved file).
 
 ### Editing the terms
 

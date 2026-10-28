@@ -26,6 +26,13 @@ typed as (
         nullif(trim(cast(vendor_no as {{ dbt.type_string() }})), '')            as vendor_no,
         try_cast(starting_date as date)                                          as promo_starts_on,
         try_cast(ending_date as date)                                            as promo_ends_on,
+        -- from the monthly INPUT file's description columns; null for the original layout
+        nullif(trim(cast(brand as {{ dbt.type_string() }})), '')                as brand_stated,
+        nullif(trim(cast(short_description as {{ dbt.type_string() }})), '')    as short_description,
+        nullif(trim(cast(selling_points as {{ dbt.type_string() }})), '')       as selling_points,
+        nullif(trim(cast(notes as {{ dbt.type_string() }})), '')                as detail_notes,
+        nullif(trim(cast(origin_code as {{ dbt.type_string() }})), '')          as origin_code,
+        nullif(trim(cast(photo_path as {{ dbt.type_string() }})), '')           as photo_path,
         try_cast(loaded_at as timestamp)                                         as loaded_at,
         nullif(trim(cast(source_file as {{ dbt.type_string() }})), '')          as source_file
     from source
@@ -56,6 +63,12 @@ select
     vendor_no,
     promo_starts_on,
     promo_ends_on,
+    brand_stated,
+    short_description,
+    selling_points,
+    detail_notes,
+    origin_code,
+    photo_path,
     loaded_at,
     source_file
 from latest_load

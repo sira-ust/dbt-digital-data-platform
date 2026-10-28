@@ -24,6 +24,13 @@
 -- nothing. terms_source says which; 'missing' means draft_promo_terms.py has not
 -- run for the item yet, and such an item cannot be searched.
 --
+-- PRODUCT CARDS (stg_promo__product_cards, from the item's photo and description
+-- file): the card's pack-text search phrases go FIRST in search_queries, and the
+-- flavor / product spellings read off the pack are ADDED to flavor_terms /
+-- product_terms (only where the item already has terms of that kind, so a card never
+-- turns a flavorless item into one that needs a flavor). The card itself rides along
+-- as card_* columns, for the judge and the TikTok / RedNote lists. No card, no change.
+--
 -- EVERY PROMO ROW IS KEPT. An item that fails to join NAV or the WMS stays, with
 -- nav_match / wms_match = false — the output must list all of them.
 
@@ -65,7 +72,15 @@ draft_terms as (
 
     select * from {{ ref('stg_promo__item_terms_draft') }}
 
-)
+),
+
+cards as (
+
+    select * from {{ ref('stg_promo__product_cards') }}
+
+),
+
+joined as (
 
 select
     p.promo_month,
@@ -80,6 +95,14 @@ select
     p.promo_starts_on,
     p.promo_ends_on,
     p.source_file,
+
+    -- from the monthly INPUT file's description columns (null for the original layout)
+    p.brand_stated,
+    p.short_description,
+    p.selling_points,
+    p.detail_notes,
+    p.origin_code,
+    p.photo_path,
 
     -- what the catalog says (evidence; often null)
     n.item_description                                       as nav_description,
@@ -124,11 +147,27 @@ select
     false
     {%- endif %}                                             as is_own_brand,
     case when s.item_no is not null then s.brand_terms    else d.brand_terms    end as brand_terms,
-    case when s.item_no is not null then s.product_terms  else d.product_terms  end as product_terms,
-    case when s.item_no is not null then s.flavor_terms   else d.flavor_terms   end as flavor_terms,
+    -- the seed's / draft's terms, before the card (final columns below)
+    case when s.item_no is not null then s.product_terms  else d.product_terms  end as base_product_terms,
+    case when s.item_no is not null then s.flavor_terms   else d.flavor_terms   end as base_flavor_terms,
     case when s.item_no is not null then s.negative_terms else d.negative_terms end as negative_terms,
-    case when s.item_no is not null then s.search_queries else d.search_queries end as search_queries,
-    coalesce(s.notes, d.notes)                               as terms_notes
+    case when s.item_no is not null then s.search_queries else d.search_queries end as base_search_queries,
+    coalesce(s.notes, d.notes)                               as terms_notes,
+
+    -- the product card
+    c.item_no is not null                                    as has_card,
+    c.brand_on_pack                                          as card_brand_on_pack,
+    c.product_on_pack                                        as card_product_on_pack,
+    c.flavor_on_pack                                         as card_flavor_on_pack,
+    c.pack                                                   as card_pack,
+    c.market                                                 as card_market,
+    c.look                                                   as card_look,
+    c.pack_text                                              as card_pack_text,
+    c.lookalikes                                             as card_lookalikes,
+    c.search_phrases                                         as card_search_phrases,
+    c.flavor_terms                                           as card_flavor_terms,
+    c.product_terms                                          as card_product_terms,
+    c.drafted_at                                             as card_drafted_at
 from promo as p
 left join nav as n
     on n.item_no = p.item_no
@@ -138,3 +177,18 @@ left join seed_terms as s
     on cast(s.item_no as {{ dbt.type_string() }}) = p.item_no
 left join draft_terms as d
     on d.item_no = p.item_no
+left join cards as c
+    on c.item_no = p.item_no
+
+)
+
+select
+    *,
+    -- the card's spellings join the terms only where the item has terms of that kind
+    case when base_product_terms is not null
+         then nullif(concat_ws('|', base_product_terms, card_product_terms), '') end as product_terms,
+    case when base_flavor_terms is not null
+         then nullif(concat_ws('|', base_flavor_terms, card_flavor_terms), '') end   as flavor_terms,
+    -- the card's pack-text phrases first: the searches take the first few
+    nullif(concat_ws('|', card_search_phrases, base_search_queries), '')          as search_queries
+from joined

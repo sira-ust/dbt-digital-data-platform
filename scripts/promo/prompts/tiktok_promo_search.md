@@ -32,9 +32,14 @@ The sheet **TikTok Search List** has one row per promo item to search. For each 
    - the brand word means something else: a person, K-pop idol, film, restaurant, or an
      ordinary word like "cozy";
    - any phrase in **Exclude If** appears;
-   - the brand appears only as one hashtag among many, with no product talk.
+   - the brand appears only as one hashtag among many, with no product talk;
+   - the pack on screen is a **lookalike**: compare it with the row's **Photo** and
+     **Product Card** (the flavor and text printed on the pack, the pack, the market it is
+     sold in, and the lookalikes listed there). Another country's edition, another product
+     line or another flavor's pack is out, even with the same brand and a similar name.
    A recipe or drink mix still counts when it names this exact item, e.g. "Red Bull mixed
-   with Deedo Cantaloupe".
+   with Deedo Cantaloupe". A different pack size of the same product counts: say so in the
+   cell note.
 4. Prefer videos **posted in the past 2 years** (counted back from the start of the
    promo month, e.g. on or after 2024-11-01 for a NOV 2026 workbook). If the post date
    isn't shown in the results, open the video to check it. If a language has **no** exact

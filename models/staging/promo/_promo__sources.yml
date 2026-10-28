@@ -83,6 +83,16 @@ sources:
         config:
           external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/promo/social_judgments.parquet')"
 
+      - name: product_cards
+        identifier: "{{ 'promo_product_cards' if target.type == 'databricks' else 'temp_promo_product_cards' }}"
+        description: >
+          AI-drafted product card per promo item, from its photo and description-file
+          text, from scripts/promo/draft_product_cards.py. Re-drafted when the photo or
+          text changes (input_fingerprint) or the card prompt or model does
+          (card_version). Append-only; staging keeps the latest per item_no.
+        config:
+          external_location: "read_parquet('{{ var('local_data_root', 'data/mock') }}/promo/product_cards.parquet')"
+
       - name: youtube_videos
         identifier: "{{ 'promo_youtube_videos' if target.type == 'databricks' else 'temp_promo_youtube_videos' }}"
         description: >

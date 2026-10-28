@@ -310,7 +310,7 @@ def extract_json(text):
             return None
 
 
-JUDGE_PROMPT_VERSION = "v4"
+JUDGE_PROMPT_VERSION = "v5"   # v5 (2026-10-28): the PRODUCT CARD and, for YouTube, the photos
 
 JUDGE_INSTRUCTIONS = """You check whether a social media post or video is about one specific grocery product that a distributor is promoting.
 
@@ -325,7 +325,9 @@ Give one verdict:
   * the brand word means something else (an ordinary word, a person's name, a K-pop group or idol, a restaurant, a film or book title), or the post is about a different brand.
 
 Rules:
-- Judge only from the text given. Do not assume what a video shows.
+- Judge only from the text given and the pictures attached, if any. Do not assume what a video shows beyond its thumbnail.
+- PRODUCT CARD (when given): what the item looks like, from its product photo and the distributor's description: the brand, product and flavor as printed on the pack, the pack, the market it is sold in, and LOOKALIKES that are NOT this item. "exact" also requires that nothing in the post contradicts the card. Reject a post about a lookalike: another market's edition (e.g. the US "Mesquite BBQ" can when the item is the Vietnamese "Vị Thịt Nướng BBQ" canister), a different product line in another pack format (a bag of chips when the item is the canister line), or a differently named flavor. A different pack SIZE of the same product is not a reason to reject: say so in the reason.
+- PICTURES (when attached): the first is the item's product photo, the next is the video's thumbnail. A thumbnail that clearly shows this pack (same design, same flavor name) supports "exact"; one that clearly shows a different pack, edition or market supports "reject". A thumbnail that shows no pack decides nothing: judge from the text.
 - Brand names may be misspelled (Cosy/Cozy), written in Thai or Vietnamese script, or appear only as hashtags; those still count when the post is about the product.
 - A post that USES this item in a recipe, drink mix or menu is about it ONLY when it names this item: "coffee mixed with Deedo Sainamphueng orange juice" is exact. A recipe that uses the brand without naming this flavor/variant is reject, not close: it is no evidence for any one flavor. A crumble, topping or flavour inspired by the brand is not the item.
 - "close" is for posts ABOUT the brand's product itself (a review, ad, unboxing, article) that leave the flavor unstated.
@@ -371,6 +373,9 @@ def judge_user_prompt(item: dict, post: dict, evidence: dict) -> str:
     if item.get("_siblings"):
         lines.append("  NOT THIS ITEM (the same brand's other items on this promo):")
         lines += [f"    - {s}" for s in item["_siblings"]]
+    card = product_card_lines(item)
+    if card:
+        lines += ["", "PRODUCT CARD"] + [f"  {c}" for c in card]
     lines += [
         "",
         "KEYWORDS FOUND IN THE TEXT",
@@ -384,6 +389,67 @@ def judge_user_prompt(item: dict, post: dict, evidence: dict) -> str:
     return "\n".join(lines)
 
 
+CARD_FIELDS = ["card_brand_on_pack", "card_product_on_pack", "card_flavor_on_pack", "card_pack",
+               "card_market", "card_look", "card_pack_text", "card_lookalikes"]
+CARD_LABELS = {"card_brand_on_pack": "brand on pack", "card_product_on_pack": "product on pack",
+               "card_flavor_on_pack": "flavor on pack", "card_pack": "pack", "card_market": "sold in",
+               "card_look": "looks like", "card_pack_text": "text printed on the pack",
+               "card_lookalikes": "LOOKALIKES (not this item)"}
+
+
+def product_card_lines(item: dict) -> list[str]:
+    """The item's product card (int_promo_items_enriched card_* columns) as
+    "label: value" lines; [] when it has none."""
+    out = []
+    for f in CARD_FIELDS:
+        v = item.get(f)
+        if v is None or str(v).strip() in ("", "nan", "None"):
+            continue
+        v = "; ".join(split_terms(v)) if f in ("card_pack_text", "card_lookalikes") else str(v).strip()
+        out.append(f"{CARD_LABELS[f]}: {v}")
+    return out
+
+
+IMAGE_MEDIA = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
+               "webp": "image/webp"}
+MAX_IMAGE_BYTES = 4_500_000      # the model takes images up to ~5 MB
+
+
+def image_block(data: bytes, ext: str) -> dict | None:
+    """An image content block for the model, or None when it cannot be sent."""
+    import base64
+    media = IMAGE_MEDIA.get(str(ext).lower().lstrip("."))
+    if not data or not media or len(data) > MAX_IMAGE_BYTES:
+        return None
+    return {"type": "image", "source": {"type": "base64", "media_type": media,
+                                        "data": base64.b64encode(data).decode("ascii")}}
+
+
+def read_photo(path) -> dict | None:
+    """The product photo at photo_path (a local file or a /Volumes path) as an image
+    block, or None when there is none or it cannot be read."""
+    if path is None or str(path).strip() in ("", "nan", "None"):
+        return None
+    try:
+        p = Path(str(path))
+        return image_block(p.read_bytes(), p.suffix)
+    except OSError:
+        return None
+
+
+def fetch_image(url: str, timeout: int = 15) -> dict | None:
+    """An image from the web (a YouTube thumbnail) as an image block, or None."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data, ctype = r.read(), r.headers.get("Content-Type", "")
+    except Exception:
+        return None
+    ext = "png" if "png" in ctype else "webp" if "webp" in ctype else "jpeg"
+    return image_block(data, ext)
+
+
 def judge(client, model: str, item: dict, post: dict, evidence: dict, max_tokens: int = 800) -> dict | None:
     """One judge call. Returns {verdict, matched_content_item, reason} or None
     when the reply could not be parsed twice (the caller leaves that pair
@@ -394,7 +460,7 @@ def judge(client, model: str, item: dict, post: dict, evidence: dict, max_tokens
     for _ in range(2):
         resp = client.messages.create(
             model=model, max_tokens=max_tokens, system=JUDGE_INSTRUCTIONS,
-            messages=[{"role": "user", "content": judge_user_prompt(item, post, evidence)}],
+            messages=[{"role": "user", "content": _judge_content(item, post, evidence)}],
         )
         data = extract_json("".join(getattr(b, "text", "") for b in resp.content))
         if isinstance(data, dict) and str(data.get("verdict", "")).lower() in ("exact", "close", "reject"):
@@ -406,6 +472,16 @@ def judge(client, model: str, item: dict, post: dict, evidence: dict, max_tokens
         "matched_content_item": str(data.get("matched_content_item") or "")[:300] or None,
         "reason": str(data.get("reason") or "")[:500] or None,
     }
+
+
+def _judge_content(item: dict, post: dict, evidence: dict):
+    """The judge's message: the text alone, or, when post["images"] holds image blocks
+    (the product photo, then the thumbnail), the images followed by the text."""
+    text = judge_user_prompt(item, post, evidence)
+    images = [b for b in post.get("images") or [] if b]
+    if not images:
+        return text
+    return images + [{"type": "text", "text": text}]
 
 
 def judge_majority(client, model: str, item: dict, post: dict, evidence: dict, votes: int = 3) -> dict | None:
@@ -504,6 +580,13 @@ LANDING = {
                     "flavor_hit", "match_text", "verdict", "judge_votes", "matched_content_item",
                     "reason", "judge_model", "judge_version", "judged_at"],
     },
+    "product_cards": {
+        "dbx": f"{SOCIAL_SCHEMA}.promo_product_cards",
+        "file": "product_cards.parquet",
+        "columns": ["item_no", "brand_on_pack", "product_on_pack", "flavor_on_pack", "pack", "market",
+                    "look", "pack_text", "lookalikes", "search_phrases", "flavor_terms", "product_terms",
+                    "has_photo", "notes", "input_fingerprint", "drafted_at", "card_version"],
+    },
     "youtube_videos": {
         "dbx": f"{SOCIAL_SCHEMA}.promo_youtube_videos",
         "file": "youtube_videos.parquet",
@@ -517,6 +600,13 @@ LANDING = {
 }
 
 
+# The INPUT file's detail columns (promo_input_schema.py) on the promo_items landing
+# table. An older load (the original workbook layout) has none of them, so
+# ensure_landing adds them, empty, and stg_promo__items can always name them.
+PROMO_ITEM_DETAIL_COLUMNS = ["brand", "short_description", "selling_points", "notes", "origin_code",
+                             "eta", "buyer_code", "photo_path"]
+
+
 def landing_path(name: str, root=None) -> Path:
     return local_data_root(root) / "promo" / LANDING[name]["file"]
 
@@ -528,6 +618,7 @@ def ensure_landing(backend: str, root=None) -> None:
     written its first row (DuckDB binds read_parquet at view-creation time and
     fails on a missing file or column). Safe to call every run."""
     import pandas as pd
+    _ensure_promo_item_columns(backend, root)
     for name, spec in LANDING.items():
         if backend == "databricks":
             spark = get_spark()
@@ -553,6 +644,30 @@ def ensure_landing(backend: str, root=None) -> None:
                 df[c] = pd.Series([None] * len(df), dtype="string")
             df.to_parquet(path, index=False)
             print(f"  added {missing} to {path}")
+
+
+def _ensure_promo_item_columns(backend: str, root=None) -> None:
+    import glob
+    import pandas as pd
+    if backend == "databricks":
+        spark = get_spark()
+        table = f"{SOCIAL_SCHEMA}.promo_items"
+        if not spark.catalog.tableExists(table):
+            return                          # load_promo_list.py creates it with every column
+        have = {f.name for f in spark.table(table).schema.fields}
+        missing = [c for c in PROMO_ITEM_DETAIL_COLUMNS if c not in have]
+        if missing:
+            spark.sql(f"alter table {table} add columns (" + ", ".join(f"`{c}` string" for c in missing) + ")")
+            print(f"  added {missing} to {table}")
+        return
+    for f in glob.glob(str(local_data_root(root) / "promo" / "promo_items_*.parquet")):
+        df = pd.read_parquet(f)
+        missing = [c for c in PROMO_ITEM_DETAIL_COLUMNS if c not in df.columns]
+        if missing:
+            for c in missing:
+                df[c] = pd.Series([None] * len(df), dtype="string")
+            df.to_parquet(f, index=False)
+            print(f"  added {missing} to {f}")
 
 
 def none_if_nan(v):

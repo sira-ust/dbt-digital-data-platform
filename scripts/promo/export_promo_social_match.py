@@ -57,7 +57,7 @@ except NameError:
 
 from promo_common import (  # noqa: E402
     INTERMEDIATE_SCHEMA, LANGUAGES, REPORTING_SCHEMA, STAGING_SCHEMA, dbt_var, flag, local_data_root,
-    phrase_language, platform_phrases, query, search_phrases, split_terms,
+    phrase_language, platform_phrases, product_card_lines, query, search_phrases, split_terms,
 )
 
 DBX_OUT_DIR = "/Volumes/ust_databricks/social/promo_output"
@@ -90,8 +90,9 @@ SEARCH_LISTS = [(SHEET_TIKTOK, "tiktok", "TikTok", "https://www.tiktok.com/searc
                 (SHEET_REDNOTE, "rednote", "RedNote", "https://www.xiaohongshu.com/search_result?keyword=")]
 SEARCH_HEADERS = ["Item No.", "{MON} Promo Item", "Size", "Brand", "Product", "Flavor / Variant",
                   "Current Status", "Search Phrases", "Must Mention (brand)", "Flavor Words",
-                  "Exclude If", "{PLATFORM} Search Link"]
-SEARCH_WIDTHS = [10, 34, 16, 14, 22, 22, 14, 40, 36, 36, 30, 45]
+                  "Exclude If", "{PLATFORM} Search Link", "Product Card", "Photo"]
+SEARCH_WIDTHS = [10, 34, 16, 14, 22, 22, 14, 40, 36, 36, 30, 45, 60, 18]
+PHOTO_HEIGHT = 110           # px: a list row with a photo is this tall
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -252,6 +253,32 @@ def result_note(m: dict) -> str:
     return "\n\n".join(str(p) for p in (
         _none(m.get("matched_content_item")), _none(m.get("profile")), caption or None,
         _none(m.get("match_note"))) if p)
+
+
+def card_text(it: dict) -> str | None:
+    """The item's product card and description, for the hand searches."""
+    lines = product_card_lines(it)
+    if _none(it.get("short_description")):
+        lines.append(f"description: {it['short_description']}")
+    if _none(it.get("selling_points")):
+        lines.append(f"selling points: {it['selling_points']}")
+    return "\n".join(lines) or None
+
+
+def _photo_image(path):
+    """The product photo as an openpyxl image sized for a list row, or None (no
+    photo, unreadable, or Pillow missing: the list then has the card text only)."""
+    if not _none(path):
+        return None
+    try:
+        import io
+        from openpyxl.drawing.image import Image as XLImage
+        img = XLImage(io.BytesIO(Path(str(path)).read_bytes()))
+    except Exception:
+        return None
+    scale = PHOTO_HEIGHT / max(img.height, 1)
+    img.width, img.height = int(img.width * scale), PHOTO_HEIGHT
+    return img
 
 
 def build_workbook(data: dict):
@@ -477,14 +504,19 @@ def build_workbook(data: dict):
                 ", ".join(split_terms(it.get("flavor_terms"))) or "(no flavor to require)",
                 ", ".join(split_terms(it.get("negative_terms"))) or "-",
                 f"{search_url}{urllib.parse.quote(phrases[0])}" if phrases else None,
+                card_text(it), None,
             ]
             for c, v in enumerate(values, start=1):
                 cell = body_cell(sl, r, c, v)
                 if c == 12 and v:
                     cell.hyperlink, cell.font = v, link_font
+            photo = _photo_image(it.get("photo_path"))
+            if photo:
+                sl.add_image(photo, f"N{r}")
+                sl.row_dimensions[r].height = PHOTO_HEIGHT * 0.75 + 4     # px -> points
             r += 1
         sl.freeze_panes = "C2"
-        sl.auto_filter.ref = f"A1:L{max(r - 1, 1)}"
+        sl.auto_filter.ref = f"A1:N{max(r - 1, 1)}"
     return wb
 
 

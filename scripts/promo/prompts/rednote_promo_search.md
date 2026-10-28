@@ -41,9 +41,14 @@ is Chinese. For each row:
      word;
    - any phrase in **Exclude If** appears;
    - the brand appears only as one hashtag among many, with no product talk;
-   - it is a shop listing or an ad with no post around it (a product card from RedNote's
-     own store, or a sponsored placement that is only a price).
-   A recipe or drink mix still counts when it names this exact item.
+   - it is a shop listing or an ad with no post around it (a product listing from
+     RedNote's own store, or a sponsored placement that is only a price);
+   - the pack in the note's pictures is a **lookalike**: compare it with the row's **Photo**
+     and **Product Card** (the flavor and text printed on the pack, the pack, the market it
+     is sold in, and the lookalikes listed there). Another country's edition, another
+     product line or another flavor's pack is out, even with the same brand.
+   A recipe or drink mix still counts when it names this exact item. A different pack size
+   of the same product counts: say so in the cell note.
 4. Prefer notes **posted in the past 2 years** (counted back from the start of the promo
    month, e.g. on or after 2024-11-01 for a NOV 2026 workbook). RedNote often shows a
    relative date ("3天前", "昨天") or only month and day ("10-12" means this year): turn

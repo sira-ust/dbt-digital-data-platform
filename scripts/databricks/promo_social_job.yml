@@ -56,7 +56,7 @@ resources:
             project_directory: ""
             commands:
               - dbt deps
-              - dbt build --select seed_promo_item_terms stg_promo__items stg_promo__item_terms_draft int_promo_items_enriched --indirect-selection cautious
+              - dbt build --select seed_promo_item_terms stg_promo__items stg_promo__item_terms_draft stg_promo__product_cards int_promo_items_enriched --indirect-selection cautious
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
@@ -76,13 +76,25 @@ resources:
             source: GIT
           environment_key: promo-python
 
-        - task_key: dbt-items-with-drafts
+        # 3b. a PRODUCT CARD for each item with a photo or description (the INPUT file):
+        #    the pack text, pack, market and lookalikes, read off the photo by the model.
+        #    The card's phrases go first in the searches and the judge checks against it.
+        #    Re-drafted when the photo or text changes; YouTube then re-searches the item.
+        - task_key: draft-cards
           depends_on: [{task_key: draft-terms}]
+          spark_python_task:
+            python_file: scripts/promo/draft_product_cards.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: promo-python
+
+        - task_key: dbt-items-with-drafts
+          depends_on: [{task_key: draft-cards}]
           dbt_task:
             project_directory: ""
             commands:
               - dbt deps
-              - dbt build --select stg_promo__item_terms_draft int_promo_items_enriched --indirect-selection cautious
+              - dbt build --select stg_promo__item_terms_draft stg_promo__product_cards int_promo_items_enriched --indirect-selection cautious
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
@@ -162,6 +174,7 @@ resources:
               - openpyxl>=3.1
               - pandas>=2.0
               - PyYAML>=6.0
+              - Pillow>=10.0          # the product photos on the TikTok / RedNote lists
             environment_version: "5"
 
       performance_target: STANDARD

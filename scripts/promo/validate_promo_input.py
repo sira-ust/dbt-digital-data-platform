@@ -107,7 +107,8 @@ def read_input(path: str) -> dict:
     from openpyxl.utils import get_column_letter
 
     wb = openpyxl.load_workbook(path, data_only=True)       # not read-only: anchored images
-    out = {"sheets": wb.sheetnames, "rows": [], "header": [], "meta": {}, "unmatched": 0, "photos": {}}
+    out = {"sheets": wb.sheetnames, "rows": [], "header": [], "meta": {}, "unmatched": 0, "photos": {},
+           "floating_photos": 0}
     if SHEET_META in wb.sheetnames:
         for r in wb[SHEET_META].iter_rows(min_row=2, values_only=True):
             if r and _text(r[0]):
@@ -130,12 +131,15 @@ def read_input(path: str) -> dict:
         col = header.index("photo")
         letter = get_column_letter(col + 1)
         photos = _in_cell_pictures(path, ws.title, letter)
+        floating = 0
         for img in getattr(ws, "_images", []):              # pictures floating on the cell
             frm = img.anchor._from
             if frm.col == col and frm.row + 1 not in photos:
                 data = img._data()
                 photos[frm.row + 1] = (data, (img.format or "png").lower())
+                floating += 1
         out["photos"] = photos
+        out["floating_photos"] = floating
     return out
 
 
@@ -244,6 +248,10 @@ def validate(path: str, data: dict | None = None) -> tuple[list[str], list[str]]
         lists[(r.get("promo_list") or "?").upper()] = lists.get((r.get("promo_list") or "?").upper(), 0) + 1
     warnings.append(f"coverage: {len(rows)} rows ({', '.join(f'{k} {v}' for k, v in lists.items())}); "
                     f"{detail} with a description or selling points, {len(photos)} with a photo")
+    if data.get("floating_photos"):
+        warnings.append(f"{data['floating_photos']} photo(s) float over their cells instead of sitting in them: "
+                        f"they load, but are easy to miss and do not move with their rows. Run "
+                        f"python scripts/promo/photos_in_cells.py \"{path}\"")
     if data["unmatched"]:
         warnings.append(f"{SHEET_UNMATCHED}: {data['unmatched']} description-file row(s) are on no promo "
                         f"list and will NOT be loaded")

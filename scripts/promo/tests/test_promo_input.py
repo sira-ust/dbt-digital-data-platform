@@ -169,6 +169,27 @@ def test_an_original_promo_workbook_is_still_read_the_old_way(tmp_path):
     assert recs[0]["promo_sheet"] == "NOV NEW" and recs[0]["item_no"] == "35060"
 
 
+def test_floating_photos_are_placed_in_their_cells(tmp_path):
+    """photos_in_cells.py: floating photos become in-cell pictures on the same rows, with
+    the same bytes; the validator warns about floating ones; a second run changes nothing."""
+    import photos_in_cells
+    path = make(tmp_path, GOOD, photo_rows=[2, 3])
+    before = v.read_input(path)
+    _, warnings = v.validate(path, before)
+    assert before["floating_photos"] == 2 and any("float over their cells" in w for w in warnings)
+
+    assert photos_in_cells.place_photos_in_cells(path) == 2
+    after = v.read_input(path)
+    assert after["floating_photos"] == 0
+    assert sorted(after["photos"]) == [2, 3]
+    assert {r: d for r, (d, _) in after["photos"].items()} == {r: d for r, (d, _) in before["photos"].items()}
+    assert v._in_cell_pictures(path, "items", "Q").keys() == {2, 3}      # read as in-cell pictures
+    errors, warnings = v.validate(path, after)
+    assert errors == [] and not any("float over" in w for w in warnings)
+    assert [r["item_no"] for r in after["rows"]] == ["35060", "35061"]    # the data is untouched
+    assert photos_in_cells.place_photos_in_cells(path) == 0                # nothing left to move
+
+
 def test_in_cell_pictures_are_read():
     """Real 'Place in Cell' pictures (Excel rich data, invisible to openpyxl), from the
     NOV description file, when it is on this machine: 29 photos in its Image column (G)."""
