@@ -8,8 +8,8 @@
 # events resources", Azure 403 — the workspace identity lacks the Event Grid / queue
 # roles on the volume's storage account). Re-add one only after an Azure admin grants
 # those roles; nothing else in the job depends on how it is started.
-# TikTok and RedNote are NOT tasks: each is a manual pass in Claude in Chrome over that
-# workbook (scripts/promo/prompts/tiktok_promo_search.md, rednote_promo_search.md), because
+# TikTok and RedNote are NOT tasks: one manual pass in Claude in Chrome over that
+# workbook (scripts/promo/prompts/tiktok_rednote_search_prompt.md), because
 # neither offers a for-profit company a search API. Chinese phrases are searched only on
 # RedNote; YouTube (task 5) and TikTok search the other languages.
 #

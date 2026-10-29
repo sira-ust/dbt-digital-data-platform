@@ -37,7 +37,7 @@ TikTok. The output is
    brand, product and flavor terms in its own text (`assert_promo_exact_has_terms`).
 3. **YouTube.** `youtube_search.py` runs for branded items with *no* social listening
    row, and for every own-brand item. It runs each item's `search_queries` (up to 3),
-   **except the Chinese ones** (those go to RedNote, step 6),
+   **except the Chinese ones** (those go to RedNote, step 5),
    applies the same keyword rule and judge to title, description and tags, and keeps the
    top 1–3 Exact videos **per search language** (the script of the phrase that found the
    video: English, Thai, Vietnamese; a Khmer or Japanese phrase is skipped, Japanese read from its kana before checking for Chinese, since kanji are Chinese characters) by views, then engagement (likes +
@@ -48,24 +48,24 @@ TikTok. The output is
 4. **The mart.** `mart_promo_social_match` holds every match, one row per post. An item with
    an Exact post shows only Exact posts; otherwise its Close posts, then YouTube, then one
    `Unmatched` row. UST's own brands show their social listening posts *and* their YouTube
-   videos. **The workbook pivots it wide: one row per item.** Match Status is the item's
+   videos. **The workbook pivots it wide: one row per item**, with the item's product photo
+   (from the INPUT file) beside its name. Match Status is the item's
    status (the better of the two sources); beside it, **On Trending Social (Mentionlytics)**
    and **Direct Scraping (TikTok, YouTube & RedNote)** show what each source found, and **Posts**
    counts the results. Then the results: *Trending Social 1–3*, and a block of 3 cells per
    search language. A result cell is clickable, coloured by status, and carries the caption
    as a cell note; `–` means the item was not searched in that language. The *Chinese*
    block is left blank for the RedNote step to fill.
-5. **TikTok, by hand.** The workbook's *TikTok Search List* sheet lists every branded item
-   social listening didn't match, each phrase tagged with its language (no Chinese). Open the workbook in
-   Claude in Chrome with `scripts/promo/prompts/tiktok_promo_search.md`; Claude writes each TikTok
-   video into its language block on the item's row and deletes that sheet. TikTok has no search API open to a for-profit company: the Research
-   API is academic-only and the Commercial Content API covers EU ads only.
-6. **RedNote, by hand.** The *RedNote Search List* sheet lists the same items, with their
-   Chinese phrases only; an item with no Chinese phrase is left off. Open the workbook in
-   Claude in Chrome, signed in to RedNote, with `scripts/promo/prompts/rednote_promo_search.md`.
-   Claude writes up to 3 Exact notes into the item's *Chinese* block, by likes, and deletes
-   that sheet. RedNote has no public search API either, and search works only when signed in.
-   The TikTok and RedNote steps can run in either order: each writes only its own blocks.
+5. **TikTok and RedNote, by hand, in one pass.** The workbook's *TikTok Search List*
+   lists every branded item social listening didn't match, each phrase tagged with its
+   language (no Chinese); the *RedNote Search List* lists the same items with their
+   Chinese phrases only (an item with no Chinese phrase is left off). Open the workbook in
+   Claude in Chrome, signed in to both, with `scripts/promo/prompts/tiktok_rednote_search_prompt.md`. Claude writes each TikTok video into
+   its language block and each RedNote post into the *Chinese* block, deletes each list row
+   as it finishes the item (so a stopped run resumes where it left off), and deletes both
+   sheets at the end. Neither has a search API open to a for-profit company: TikTok's
+   Research API is academic-only and its Commercial Content API covers EU ads only, and
+   RedNote search works only when signed in.
 
 ### Running it
 

@@ -16,8 +16,7 @@ the known false positives are in [models/docs/_promo_social.md](../../models/doc
 | 2 | Validate it | your machine |
 | 3 | Upload it and run the job | Databricks (unattended) |
 | 4 | Download the output workbook | Databricks |
-| 5 | TikTok search (English, Thai, Vietnamese) | Claude in Chrome, by hand |
-| 6 | RedNote search (Chinese) | Claude in Chrome, by hand |
+| 5 | TikTok (English, Thai, Vietnamese) + RedNote (Chinese) search, one prompt | Claude in Chrome, by hand |
 
 ### 1. Merge the files
 
@@ -110,29 +109,47 @@ is matched as before. To see a month's cards: `stg_promo__product_cards`.
 
 The workbook appears in `/Volumes/ust_databricks/social/promo_output/`. It has four sheets:
 *Summary*, *Promo vs Social Listening*, *TikTok Search List* and *RedNote Search List*. The
-two search lists are deleted by steps 5 and 6.
+two search lists are deleted by step 5.
 
-### 5. TikTok (English, Thai, Vietnamese)
+### 5. TikTok + RedNote, one prompt
 
-In Chrome, signed in to TikTok: attach the workbook to Claude in Chrome and paste
-[prompts/tiktok_promo_search.md](prompts/tiktok_promo_search.md). Claude searches every
-item on the *TikTok Search List*, writes the exact videos into the item's language
-blocks, and deletes that sheet. It never writes in the Chinese block.
+In Chrome, signed in to **TikTok** and to **RedNote on rednote.com** (xiaohongshu.com does
+not open for us; RedNote search shows nothing when signed out): attach the workbook to
+Claude in Chrome and paste
+[prompts/tiktok_rednote_search_prompt.md](prompts/tiktok_rednote_search_prompt.md).
 
-### 6. RedNote (Chinese)
+- The *TikTok Search List* (English, Thai, Vietnamese) goes first: exact videos go into
+  the item's language blocks, never the Chinese block.
+- Then the *RedNote Search List* (Chinese only): exact notes go into the Chinese block.
+- **RedNote links need one click from you.** A RedNote link only opens with the
+  `xsec_token` key in it, which the browser hides from Claude. When the RedNote list is
+  done, Claude shows a box in the rednote tab: click **Copy links** and paste them into the
+  chat (or **Download CSV** and attach it), and Claude puts the full links in the workbook.
+  The links stay saved in that browser, so if you were away, attach the returned file with
+  the same prompt and it shows the box again.
+- Both lists show each item's product card and photo, and lookalike packs are thrown out.
+- Claude deletes each list row when that item is done. If it stops before the end,
+  attach the file it gave back with the same prompt: it continues from the first row left.
 
-In Chrome, signed in to RedNote (Xiaohongshu); search shows nothing when signed out.
-Attach the workbook that came back from step 5 and paste
-[prompts/rednote_promo_search.md](prompts/rednote_promo_search.md). Claude searches the
-Chinese phrases on the *RedNote Search List*, fills the Chinese block, and deletes that
-sheet.
+The finished workbook has two sheets: *Summary* and *Promo vs Social Listening*.
 
-Steps 5 and 6 can run in either order. The finished workbook has two sheets: *Summary* and
-*Promo vs Social Listening*.
+### Photos on an older output
+
+Since 2026-10-28 the export puts each item's photo in a **Photo** column beside its name.
+For a workbook exported before that (November's first run), add them from the INPUT file,
+matched by item number:
+
+```
+python scripts/promo/add_photos_to_output.py "UST_NOV_Promo_Social_Listening_Match.xlsx" "UST 2026 NOV PROMO INPUT.xlsx"
+```
+
+With no Photo column, it adds one after the last column, so no formula or link moves. Safe
+to run twice; run it before or after step 5.
 
 ## What the output means
 
-- **One row per promo item.** Match Status is the item's best result. Beside it,
+- **One row per promo item**, with the item's product **photo** beside its name (when the
+  INPUT file has one). Match Status is the item's best result. Beside it,
   *On Trending Social (Mentionlytics)* and *Direct Scraping (TikTok, YouTube & RedNote)*
   show what each source found.
 - **Result blocks:** *Trending Social 1–3*, then 3 cells per language: English, Thai,
@@ -196,6 +213,7 @@ python scripts/promo/export_promo_social_match.py
 | `scripts/promo/promo_input_schema.py` | the INPUT file's columns and rules (the contract) |
 | `scripts/promo/validate_promo_input.py` | checks an INPUT file; also its reader |
 | `scripts/promo/photos_in_cells.py` | moves an INPUT file's floating photos into their cells |
+| `scripts/promo/add_photos_to_output.py` | adds the photos to an output workbook exported before the Photo column |
 | `scripts/promo/load_promo_list.py` | loads the INPUT file (or an old-layout workbook) |
 | `scripts/promo/draft_promo_terms.py` | AI-drafted search terms |
 | `scripts/promo/draft_product_cards.py` | AI-drafted product cards, from the photo and description |
@@ -204,7 +222,7 @@ python scripts/promo/export_promo_social_match.py
 | `scripts/promo/export_promo_social_match.py` | writes the output workbook |
 | `scripts/promo/promo_common.py` | shared matcher, judge, languages and I/O |
 | `scripts/promo/bootstrap_promo_results.py` | one-off: upload a month matched locally to Databricks, so the job finds it done (used for October 2026) |
-| `scripts/promo/prompts/` | the three Claude prompts: merge, TikTok, RedNote |
+| `scripts/promo/prompts/` | the two Claude prompts: the monthly merge, and the TikTok + RedNote search |
 | `scripts/promo/tests/` | pytest suite |
 | `scripts/databricks/promo_social_job.yml` | the Databricks job |
 | `seeds/seed_promo_item_terms.csv` | reviewed search terms per item |

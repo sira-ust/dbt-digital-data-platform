@@ -358,8 +358,7 @@ How the matching works: `models/docs/_promo_social.md`.
     merge the month's files with Claude (scripts/promo/prompts/promo_merge_input.md)
       -> validate_promo_input.py -> upload -> Databricks job ust-promo-social-match:
          load -> draft terms -> match Mentionlytics -> YouTube -> dbt tests -> export
-      -> TikTok by hand (prompts/tiktok_promo_search.md)
-      -> RedNote by hand, Chinese only (prompts/rednote_promo_search.md)
+      -> TikTok + RedNote by hand, one prompt (prompts/tiktok_rednote_search_prompt.md)
 
 All promo code lives in `scripts/promo/`. The daily job excludes `tag:promo`.
 

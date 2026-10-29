@@ -7,7 +7,10 @@ Four sheets:
                                   counted without re-running anything; then the items
                                   nothing was found for, as of the export.
   2. "Promo vs Social Listening"  ONE ROW PER ITEM (since 2026-10-20; before, one row per
-                                  post). Match Status is the item's status; beside it,
+                                  post), with the item's product PHOTO beside its name
+                                  (from the INPUT file; floating over its cell, so it
+                                  survives the hand-search step's edits). Match Status is
+                                  the item's status; beside it,
                                   "On Trending Social" (Mentionlytics) and "Direct
                                   Scraping" (TikTok, YouTube & RedNote) show what each source
                                   found, and Posts counts the item's results (a live
@@ -22,17 +25,16 @@ Four sheets:
                                   a cell note. "–" = not searched in that language; blank
                                   = searched, nothing found.
   3. "TikTok Search List"         the items to search on TikTok by hand with Claude in
-                                  Chrome (prompt: scripts/promo/prompts/tiktok_promo_search.md):
+                                  Chrome (prompt: scripts/promo/prompts/tiktok_rednote_search_prompt.md):
                                   every branded item social listening did not match,
                                   plus every UST own-brand item and every frozen item
                                   with no brand, with search phrases (each tagged with
                                   its language block; no Chinese), required words,
                                   exclusions and a TikTok search link.
   4. "RedNote Search List"        the same items, with their CHINESE phrases only, for
-                                  RedNote (Xiaohongshu) by hand
-                                  (prompt: scripts/promo/prompts/rednote_promo_search.md).
+                                  RedNote (Xiaohongshu) by hand, in the same pass.
                                   An item with no Chinese phrase is left off.
-  Each prompt has Claude delete its sheet when done, leaving the 2-sheet deliverable.
+  The prompt has Claude delete both sheets when done, leaving the 2-sheet deliverable.
 
     python scripts/promo/export_promo_social_match.py                       # latest month, local
     python scripts/promo/export_promo_social_match.py --promo-month 2026-10-01 --out-dir C:/somewhere
@@ -65,11 +67,16 @@ SHEET_MAIN, SHEET_SUMMARY = "Promo vs Social Listening", "Summary"
 SHEET_TIKTOK, SHEET_REDNOTE = "TikTok Search List", "RedNote Search List"
 
 # Item columns, then Posts, then the result blocks. The Summary's formulas address
-# columns by letter (A = Promo Sheet, F = Match Status, I = Posts, J onward = results).
+# columns by letter (A = Promo Sheet, G = Match Status, J = Posts, K onward = results),
+# computed from these headers.
 SOCIAL_COL, SCRAPED_COL = "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok, YouTube & RedNote)"
-ITEM_HEADERS = ["Promo Sheet", "Item No.", "{MON} Promo Item", "Size", "Promo Code", "Match Status",
+ITEM_HEADERS = ["Promo Sheet", "Item No.", "{MON} Promo Item", "Photo", "Size", "Promo Code", "Match Status",
                 SOCIAL_COL, SCRAPED_COL, "Posts"]
-ITEM_WIDTHS = [13, 10, 32, 15, 10, 12, 16, 16, 8]
+ITEM_WIDTHS = [13, 10, 32, 14, 15, 10, 12, 16, 16, 8]
+COL_SHEET, COL_PHOTO, COL_STATUS, COL_POSTS = (ITEM_HEADERS.index(h) + 1 for h in
+                                               ("Promo Sheet", "Photo", "Match Status", "Posts"))
+STATUS_COLS = {ITEM_HEADERS.index(h) + 1 for h in ("Match Status", SOCIAL_COL, SCRAPED_COL)}
+PHOTO_ROW_HEIGHT, MAIN_PHOTO_PX = 60, 76     # points / pixels: a main-sheet row with a photo
 SLOTS = 3                    # result cells per block: var promo_scraped_max_per_item
 SOCIAL_BLOCK = "Trending Social"
 RESULT_WIDTH = 27
@@ -214,6 +221,7 @@ def item_results(data: dict) -> list[dict]:
             it = by_key.get(key, {})
             searched = on_search_list(it, _none(row.get("social_match_status")))
             index[key] = {"row": row, "all": [], "social": [], "scraped": {},
+                          "photo_path": _none(it.get("photo_path")),
                           "searched_langs": {phrase_language(p) for p in search_phrases(it.get("search_queries"))}
                                             if searched else set()}
             out.append(index[key])
@@ -265,9 +273,11 @@ def card_text(it: dict) -> str | None:
     return "\n".join(lines) or None
 
 
-def _photo_image(path):
-    """The product photo as an openpyxl image sized for a list row, or None (no
-    photo, unreadable, or Pillow missing: the list then has the card text only)."""
+def _photo_image(path, height=None):
+    """The product photo as an openpyxl image `height` px tall, or None (no photo,
+    unreadable, or Pillow missing: the sheet then has no photo, nothing else changes).
+    A FLOATING picture, not an in-cell one: the hand-search step edits the workbook
+    with openpyxl, which keeps floating pictures and drops in-cell ones."""
     if not _none(path):
         return None
     try:
@@ -276,8 +286,9 @@ def _photo_image(path):
         img = XLImage(io.BytesIO(Path(str(path)).read_bytes()))
     except Exception:
         return None
-    scale = PHOTO_HEIGHT / max(img.height, 1)
-    img.width, img.height = int(img.width * scale), PHOTO_HEIGHT
+    height = height or PHOTO_HEIGHT
+    scale = height / max(img.height, 1)
+    img.width, img.height = int(img.width * scale), height
     return img
 
 
@@ -338,7 +349,8 @@ def build_workbook(data: dict):
         unmatched = row["item_match_status"] == "Unmatched"
         values = [row["promo_sheet"],
                   int(row["item_no_int"]) if _none(row.get("item_no_int")) is not None else row["item_no"],
-                  (row["promo_description"] or "").strip(), _none(row["promo_size"]), _none(row["promo_code"]),
+                  (row["promo_description"] or "").strip(), None,       # the photo goes over this cell
+                  _none(row["promo_size"]), _none(row["promo_code"]),
                   row["item_match_status"], _none(row.get("social_match_status")),
                   _none(row.get("scraped_match_status")),
                   # live, so results the TikTok and RedNote steps add are counted
@@ -349,7 +361,7 @@ def build_workbook(data: dict):
                 cell.fill = band_fill
             if unmatched:
                 cell.font = muted_font
-            if c in (6, 7, 8) and v:         # the three status columns
+            if c in STATUS_COLS and v:       # the three status columns
                 fill, colour = STATUS_STYLE.get(v, ("FFFFFFFF", "FF000000"))
                 cell.fill = PatternFill("solid", fgColor=fill)
                 cell.font = Font(name="Arial", size=10, bold=True, color=colour)
@@ -377,16 +389,21 @@ def build_workbook(data: dict):
                 elif n == 0 and not searched:
                     cell.value, cell.font, cell.alignment = NOT_SEARCHED, muted_font, centred
         ws.row_dimensions[r].height = ROW_HEIGHT
+        photo = _photo_image(it.get("photo_path"), MAIN_PHOTO_PX)
+        if photo:
+            ws.add_image(photo, f"{get_column_letter(COL_PHOTO)}{r}")
+            ws.row_dimensions[r].height = PHOTO_ROW_HEIGHT
     last = len(items) + 1
-    ws.freeze_panes = "D2"
+    ws.freeze_panes = f"{get_column_letter(COL_PHOTO + 1)}2"    # the item and its photo stay in view
     ws.auto_filter.ref = f"A1:{last_col}{last}"
 
     # ── Summary ──────────────────────────────────────────────────────────────
     # Every count is a LIVE formula over the main sheet, so results the TikTok and
     # RedNote steps add are counted without re-running anything. One row per item, so an item
-    # count is a plain COUNTIF on Match Status (F), and a post count sums Posts (I).
+    # count is a plain COUNTIF on Match Status, and a post count sums Posts.
     q = f"'{SHEET_MAIN}'"
-    rng_a, rng_f, rng_i = (f"{q}!${c}$2:${c}${FORMULA_ROWS}" for c in "AFI")
+    rng_a, rng_f, rng_i = (f"{q}!${c}$2:${c}${FORMULA_ROWS}"
+                           for c in map(get_column_letter, (COL_SHEET, COL_STATUS, COL_POSTS)))
     rng_res = f"{q}!${get_column_letter(first_res)}$2:${last_col}${FORMULA_ROWS}"
     plain = Alignment(vertical="bottom")
     statuses = ["Exact", "Close", "Unmatched"]

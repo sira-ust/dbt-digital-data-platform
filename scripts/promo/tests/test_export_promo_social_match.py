@@ -112,7 +112,7 @@ def test_sheets_and_header(saved):
     # the item, then a block of 3 per source: Trending Social, then each language searched
     # (English and Thai here, from the Fanta items' phrases), in a fixed order
     assert [c.value for c in ws[1]] == [
-        "Promo Sheet", "Item No.", "OCT Promo Item", "Size", "Promo Code", "Match Status",
+        "Promo Sheet", "Item No.", "OCT Promo Item", "Photo", "Size", "Promo Code", "Match Status",
         "On Trending Social (Mentionlytics)", "Direct Scraping (TikTok, YouTube & RedNote)", "Posts",
         "Trending Social 1", "Trending Social 2", "Trending Social 3",
         "English 1", "English 2", "English 3", "Thai 1", "Thai 2", "Thai 3"]
@@ -121,15 +121,15 @@ def test_sheets_and_header(saved):
     assert h.fill.fgColor.rgb == "FF1F4E78" and h.alignment.vertical == "center" and h.alignment.wrap_text
     assert ws.row_dimensions[1].height == 27.75
     # blocks' headers alternate, so they read apart
-    assert [ws[f"{c}1"].fill.fgColor.rgb for c in "JMP"] == ["FF1F4E78", "FF2E75B6", "FF1F4E78"]
+    assert [ws[f"{c}1"].fill.fgColor.rgb for c in "KNQ"] == ["FF1F4E78", "FF2E75B6", "FF1F4E78"]
 
 
 def test_layout(saved):
     ws = load_workbook(saved)[MAIN]
-    widths = [ws.column_dimensions[c].width for c in "ABCDEFGHIJKLMNOPQR"]
-    assert widths == [13, 10, 32, 15, 10, 12, 16, 16, 8] + [27] * 9
-    assert ws.freeze_panes == "D2"
-    assert ws.auto_filter.ref == "A1:R6"
+    widths = [ws.column_dimensions[c].width for c in "ABCDEFGHIJKLMNOPQRS"]
+    assert widths == [13, 10, 32, 14, 15, 10, 12, 16, 16, 8] + [27] * 9
+    assert ws.freeze_panes == "E2"                                          # item + photo stay in view
+    assert ws.auto_filter.ref == "A1:S6"
     assert all(ws.row_dimensions[r].height == 39.75 for r in range(2, ws.max_row + 1))
 
 
@@ -139,7 +139,7 @@ def test_one_row_per_item(saved):
     assert [r[1] for r in rows] == [86251, 37353, 34585, 34662, 34658]      # Fanta Grape once
     assert [r[0] for r in rows] == ["OCT NEW"] * 2 + ["OCT PROMO"] * 3
     assert rows[0][2] == "BAMBOO SUSHI MAT"                                 # trimmed
-    assert rows[0][4] is None                                               # blank promo code
+    assert rows[0][5] is None                                               # blank promo code
     body = ws["C3"]
     assert body.font.name == "Arial" and body.font.size == 10
     assert body.alignment.vertical == "top" and body.alignment.wrap_text
@@ -150,20 +150,20 @@ def test_one_row_per_item(saved):
 def test_each_language_has_its_own_block(saved):
     ws = load_workbook(saved)[MAIN]
     # Fanta Grape (row 5): the English video and the Thai one, each in its own block
-    assert ws["M5"].value == "YouTube · 505 views · 2025-06-03"
-    assert ws["M5"].hyperlink.target == "https://youtu.be/x"
-    assert ws["P5"].value == "YouTube · 176,000 views · 900 likes · 2022-03-14 · older"
-    assert ws["P5"].hyperlink.target.startswith("https://www.youtube.com/watch")
-    assert ws["J5"].value is None                                           # no social post
+    assert ws["N5"].value == "YouTube · 505 views · 2025-06-03"
+    assert ws["N5"].hyperlink.target == "https://youtu.be/x"
+    assert ws["Q5"].value == "YouTube · 176,000 views · 900 likes · 2022-03-14 · older"
+    assert ws["Q5"].hyperlink.target.startswith("https://www.youtube.com/watch")
+    assert ws["K5"].value is None                                           # no social post
 
 
 def test_result_cells_style_and_note(saved):
     ws = load_workbook(saved)[MAIN]
-    cell = ws["P5"]                                                          # Exact: green
+    cell = ws["Q5"]                                                          # Exact: green
     assert cell.fill.fgColor.rgb == "FFC6EFCE"
     assert cell.font.underline == "single" and cell.font.color.rgb == "FF0563C1"
     assert "ระเบิดความซ่ากับองุ่นป๊อบ!" in cell.comment.text and "Older than 2 years" in cell.comment.text
-    bento = ws["J3"]                                                         # Close: yellow
+    bento = ws["K3"]                                                         # Close: yellow
     assert bento.value == "Web · Not reported · 2026-07-13"
     assert bento.fill.fgColor.rgb == "FFFFEB9C"
     assert bento.hyperlink.target.startswith("https://www.trueid.net/")
@@ -174,29 +174,29 @@ def test_not_searched_vs_nothing_found(saved):
     # sushi mat: unbranded, never searched; Bento / Deedo: social listening matched,
     # so not searched: "–" opens each language block
     for r in (2, 3, 4):
-        assert (ws[f"M{r}"].value, ws[f"P{r}"].value) == ("–", "–")
-        assert ws[f"N{r}"].value is None
+        assert (ws[f"N{r}"].value, ws[f"Q{r}"].value) == ("–", "–")
+        assert ws[f"O{r}"].value is None
     # Fanta Orange: searched in English and Thai, nothing found: blank
-    assert (ws["M6"].value, ws["P6"].value) == (None, None)
+    assert (ws["N6"].value, ws["Q6"].value) == (None, None)
     # the social block is never "not searched": every item is matched against it
-    assert ws["J2"].value is None
+    assert ws["K2"].value is None
 
 
 def test_status_columns_and_banding(saved):
     ws = load_workbook(saved)[MAIN]
-    styles = {ws[f"F{r}"].value: (ws[f"F{r}"].fill.fgColor.rgb, ws[f"F{r}"].font.color.rgb)
+    styles = {ws[f"G{r}"].value: (ws[f"G{r}"].fill.fgColor.rgb, ws[f"G{r}"].font.color.rgb)
               for r in range(2, ws.max_row + 1)}
     assert styles == {"Unmatched": ("FFEDEDED", "FF595959"), "Close": ("FFFFEB9C", "FF9C5700"),
                       "Exact": ("FFC6EFCE", "FF006100")}
-    assert (ws["G4"].value, ws["H4"].value) == ("Exact", None)              # Deedo: social only
-    assert (ws["G5"].value, ws["H5"].value) == (None, "Exact")              # Fanta Grape: scraped only
+    assert (ws["H4"].value, ws["I4"].value) == ("Exact", None)              # Deedo: social only
+    assert (ws["H5"].value, ws["I5"].value) == (None, "Exact")              # Fanta Grape: scraped only
     shaded = [ws[f"C{r}"].fill.fgColor.rgb == "FFEEF3F8" for r in range(2, ws.max_row + 1)]
     assert shaded == [False, True, False, True, False]                      # every other item
 
 
 def test_posts_is_a_live_count(saved):
     ws = load_workbook(saved)[MAIN]
-    assert ws["I5"].value == '=COUNTA(J5:R5)-COUNTIF(J5:R5,"–")'
+    assert ws["J5"].value == '=COUNTA(K5:S5)-COUNTIF(K5:S5,"–")'
 
 
 def test_more_than_three_results_in_a_language_are_capped_but_another_language_keeps_its_own(data, tmp_path):
@@ -216,22 +216,22 @@ def test_more_than_three_results_in_a_language_are_capped_but_another_language_k
     ex.build_workbook(data).save(path)
     ws = load_workbook(path)[MAIN]
     header = [c.value for c in ws[1]]
-    assert header[9:] == ["Trending Social 1", "Trending Social 2", "Trending Social 3",
+    assert header[10:] == ["Trending Social 1", "Trending Social 2", "Trending Social 3",
                           "English 1", "English 2", "English 3", "Thai 1", "Thai 2", "Thai 3"]
-    assert [ws.cell(3, c).value for c in (13, 14, 15)] == [
+    assert [ws.cell(3, c).value for c in (14, 15, 16)] == [
         "YouTube · 1,000 views · 2022-03-14 · older", "YouTube · 2,000 views · 2022-03-14 · older",
         "YouTube · 3,000 views · 2022-03-14 · older"]
-    assert ws.cell(3, 16).value == "YouTube · 12 views · 2022-03-14 · older"
+    assert ws.cell(3, 17).value == "YouTube · 12 views · 2022-03-14 · older"
     # five social posts: three cells, the third says how many more there are
-    assert ws.cell(2, 12).value.endswith("(+2 more)")
+    assert ws.cell(2, 13).value.endswith("(+2 more)")
 
 
 def test_summary_formulas_and_footnote(saved):
     sm = load_workbook(saved)["Summary"]
     assert [c.value for c in sm[1]][:3] == ["Match Status", "Promo Items", "Matched Posts"]
     assert [sm[f"A{r}"].value for r in range(2, 6)] == ["Exact", "Close", "Unmatched", "Total"]
-    assert sm["B2"].value == f"=COUNTIF('{MAIN}'!$F$2:$F$5000,A2)"
-    assert sm["C2"].value == f"=SUMIF('{MAIN}'!$F$2:$F$5000,A2,'{MAIN}'!$I$2:$I$5000)"
+    assert sm["B2"].value == f"=COUNTIF('{MAIN}'!$G$2:$G$5000,A2)"
+    assert sm["C2"].value == f"=SUMIF('{MAIN}'!$G$2:$G$5000,A2,'{MAIN}'!$J$2:$J$5000)"
     assert sm["B5"].value == "=SUM(B2:B4)" and sm["C5"].value == "=SUM(C2:C4)"
     note = sm["A7"].value
     assert "UST 2026 OCT NEW PROMO.xlsx (5 items)" in note and "53,601 posts" in note
@@ -243,12 +243,12 @@ def test_summary_sections(saved):
     col_a = [sm.cell(r, 1).value for r in range(1, sm.max_row + 1)]
     assert sm["A9"].value == "Promo items by sheet"
     assert [c.value for c in sm[10]][:4] == ["Match Status", "OCT NEW", "OCT PROMO", "Total"]
-    assert sm["B11"].value == f"=COUNTIFS('{MAIN}'!$A$2:$A$5000,\"OCT NEW\",'{MAIN}'!$F$2:$F$5000,$A11)"
+    assert sm["B11"].value == f"=COUNTIFS('{MAIN}'!$A$2:$A$5000,\"OCT NEW\",'{MAIN}'!$G$2:$G$5000,$A11)"
     assert sm["D11"].value == "=SUM(B11:C11)" and sm["A14"].value == "Total"
     assert sm["A16"].value == "Matched posts by channel"
     # channels in the results, plus TikTok and RedNote (their hand steps add them), alphabetical
     assert col_a[17:22] == ["RedNote", "TikTok", "Web", "YouTube", "Total"]
-    assert sm["B18"].value == f"=COUNTIF('{MAIN}'!$J$2:$R$5000,$A18&\" ·*\")"
+    assert sm["B18"].value == f"=COUNTIF('{MAIN}'!$K$2:$S$5000,$A18&\" ·*\")"
     i = col_a.index("Matched posts by search language") + 1
     assert [sm.cell(i + n, 1).value for n in range(2, 6)] == ["Trending Social", "English", "Thai", "Total"]
     i = col_a.index("Unmatched promo items (no post found)") + 1
@@ -275,10 +275,10 @@ def test_summary_formulas_recalculate(saved):
 def test_a_result_added_by_hand_is_counted(saved):
     """What the TikTok step does: write a result into an empty cell. The counts follow."""
     wb = load_workbook(saved)
-    wb[MAIN]["M6"] = "TikTok · 3,706 likes · 2025-02-14"                  # Fanta Orange, English 1
+    wb[MAIN]["N6"] = "TikTok · 3,706 likes · 2025-02-14"                  # Fanta Orange, English 1
     wb.save(saved)
     val = _calc(saved)
-    assert val(MAIN, "I6") == 1
+    assert val(MAIN, "J6") == 1
     assert val("Summary", "B19") == 1                                        # TikTok
     assert val("Summary", "B27") == 2                                        # English
 
@@ -320,6 +320,24 @@ def test_chinese_is_searched_only_on_rednote(data, tmp_path):
     assert ex.platform_phrases("fanta grape|芬达 葡萄|ハタ ソーダ", "rednote") == ["芬达 葡萄"]
 
 
+def test_the_item_photo_is_beside_its_name(data, tmp_path):
+    """The INPUT file's photo floats on the item's Photo cell (column D), on a taller
+    row; an item without one keeps the normal row height."""
+    from io import BytesIO
+    from PIL import Image
+    buf = BytesIO()
+    Image.new("RGB", (40, 80), "orange").save(buf, format="PNG")
+    photo = tmp_path / "34662.png"
+    photo.write_bytes(buf.getvalue())
+    data["items"][3]["photo_path"] = str(photo)                              # Fanta Grape, row 5
+    path = tmp_path / "photo.xlsx"
+    ex.build_workbook(data).save(path)
+    ws = load_workbook(path)[MAIN]
+    assert ws["D1"].value == "Photo" and ws["D5"].value is None
+    assert [(i.anchor._from.col, i.anchor._from.row) for i in ws._images] == [(3, 4)]   # D5
+    assert ws.row_dimensions[5].height == 60 and ws.row_dimensions[4].height == 39.75
+
+
 def test_own_brand_shows_both_sources(data, tmp_path):
     """An own-brand item keeps its social listening post AND gets scraped: one item
     status (the better one), each source's result in its own block and column, and it
@@ -342,7 +360,7 @@ def test_own_brand_shows_both_sources(data, tmp_path):
     wb = load_workbook(path)
     ws = wb[MAIN]
     assert ws.max_row == 2                                                   # one row for the item
-    assert (ws["F2"].value, ws["G2"].value, ws["H2"].value) == ("Exact", "Close", "Exact")
+    assert (ws["G2"].value, ws["H2"].value, ws["I2"].value) == ("Exact", "Close", "Exact")
     header = [c.value for c in ws[1]]
     assert ws.cell(2, header.index("Trending Social 1") + 1).value == "TikTok · 12 likes · 2026-09-01"
     assert ws.cell(2, header.index("Vietnamese 1") + 1).value == "YouTube · 505 views · 2026-06-03"
@@ -372,7 +390,7 @@ def test_frozen_item_with_no_brand_is_on_the_tiktok_list(data, tmp_path):
     rn = list(wb["RedNote Search List"].iter_rows(min_row=2, values_only=True))
     assert [(r[0], r[7]) for r in rn] == [(73094, "[Chinese] 冷冻甘蔗汁")]
     header = [c.value for c in wb[MAIN][1]]
-    assert header[12:] == ["English 1", "English 2", "English 3", "Vietnamese 1", "Vietnamese 2",
+    assert header[13:] == ["English 1", "English 2", "English 3", "Vietnamese 1", "Vietnamese 2",
                            "Vietnamese 3", "Chinese 1", "Chinese 2", "Chinese 3"]
 
 
@@ -404,7 +422,7 @@ def test_japanese_phrases_are_not_searched(data, tmp_path):
     wb = load_workbook(path)
     assert wb["TikTok Search List"]["H2"].value == "[English] hata white peach soda"
     assert wb["RedNote Search List"]["H2"].value == "[Chinese] Hata 白桃汽水"
-    assert [c.value for c in wb[MAIN][1]][12::3] == ["English 1", "Chinese 1"]
+    assert [c.value for c in wb[MAIN][1]][13::3] == ["English 1", "Chinese 1"]
     assert ex.search_phrases("ハタ鉱泉 ソーダ 白桃|Hata 白桃汽水") == ["Hata 白桃汽水"]
 
 

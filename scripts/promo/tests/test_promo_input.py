@@ -190,6 +190,43 @@ def test_floating_photos_are_placed_in_their_cells(tmp_path):
     assert photos_in_cells.place_photos_in_cells(path) == 0                # nothing left to move
 
 
+def _result(tmp_path, header, items):
+    """A finished output workbook's main sheet, as far as add_photos_to_output needs it."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Promo vs Social Listening"
+    ws.append(header)
+    for no in items:
+        ws.append([no if h == "Item No." else ("=1+1" if h == "Posts" else None) for h in header])
+    path = tmp_path / "result.xlsx"
+    wb.save(path)
+    return str(path)
+
+
+def test_photos_are_added_to_an_older_output_by_item_number(tmp_path):
+    """An output exported before the Photo column: the column is added at the end,
+    each photo lands on its own item's row (35061 and 35060 share a description),
+    formulas stay, and a second run adds nothing."""
+    import add_photos_to_output as ap
+    src = make(tmp_path, GOOD, photo_rows=[2, 3])          # 35060 on row 2, 35061 on row 3
+    expected = {r["item_no"]: v.read_input(src)["photos"][r["_row"]][0] for r in v.read_input(src)["rows"]}
+    result = _result(tmp_path, ["Promo Sheet", "Item No.", "Promo Item", "Posts", "Trending Social 1"],
+                     [35061, 99999, 35060])
+    assert ap.add_photos(result, src) == (2, "F")
+    ws = load_workbook(result)["Promo vs Social Listening"]
+    assert ws["F1"].value == "Photo" and ws["D2"].value == "=1+1"
+    by_row = {i.anchor._from.row + 1: i._data() for i in ws._images}
+    assert by_row == {2: expected["35061"], 4: expected["35060"]}   # 99999 has no photo
+    assert ap.add_photos(result, src) == (0, "F")
+
+
+def test_photos_go_in_an_existing_photo_column(tmp_path):
+    import add_photos_to_output as ap
+    src = make(tmp_path, GOOD, photo_rows=[2])
+    result = _result(tmp_path, ["Promo Sheet", "Item No.", "Promo Item", "Photo", "Size"], [35060])
+    assert ap.add_photos(result, src) == (1, "D")
+
+
 def test_in_cell_pictures_are_read():
     """Real 'Place in Cell' pictures (Excel rich data, invisible to openpyxl), from the
     NOV description file, when it is on this machine: 29 photos in its Image column (G)."""
