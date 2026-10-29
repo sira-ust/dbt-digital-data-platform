@@ -653,6 +653,14 @@ seeds:
         app_id: string
         ust_category_id: string
 
+    # Without this the codes inferred as INTEGER and lost their leading zero
+    # (02010200 loaded as 2010200), and the all-empty notes column inferred as
+    # INTEGER too. Changing the type needs one `dbt seed --full-refresh`.
+    seed_warn_event_codes:
+      +column_types:
+        description_code: string
+        notes: string
+
     # Generic-commodity stoplist for the social 'item' ranking class — see
     # int_social_concept_trends. TAGGED social on purpose: the weekly job runs
     # `dbt build --select tag:social`, and an untagged seed would never be built

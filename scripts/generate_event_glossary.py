@@ -50,7 +50,8 @@ def event_code_glossary() -> list[str]:
     lines = [
         "{% docs event_code_glossary %}",
         "Complete event dictionary from API documentation Section 5",
-        "(SystemEventLog_API_Documentation_0327, v1.0 March 2026).",
+        "(SystemEventLog_API_Documentation v1.6, Oct 2026). Platforms: PDA = PDA 1.92",
+        "(source PDA-A), PDA2.0 = PDA 2.0 (source PDA).",
         "",
         "Grain: one row per 8-digit `description_code`",
         "(digits 1-2 = L1 Category, 3-4 = L2 Sub-category, 5-6 = L3 Action,",
@@ -86,7 +87,8 @@ def app_sources_glossary() -> list[str]:
     rows = read_seed("seed_app_sources")
     lines = [
         "{% docs app_sources_glossary %}",
-        "All 9 app source codes from API documentation Section 2.3.",
+        "All 10 app source codes from API documentation Section 2.3 (v1.6),",
+        "plus the 2 bare legacy aliases CatalogFC / Vegas.",
         "Naming convention: App Name - Platform (I=iOS, A=Android);",
         "single-platform apps omit the suffix.",
         "",

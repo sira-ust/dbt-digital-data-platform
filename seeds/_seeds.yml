@@ -14,9 +14,22 @@ seeds:
       4=Sales). Intentionally NOT seeded per the dev team: 00000000
       (test mark / invalid data) and obsolete codes 03110400, 10051500,
       10691200, 11124000 — these stay visible in dq_unmapped_event_codes.
+      Re-synced 2026-10-29 to API doc v1.6 (spreadsheet
+      info-Event_Type_Definition-261023, 587 codes): +167 codes (150 new,
+      incl. L1 21 Schedule, L1 22 Store Workbench & Visit and the CatalogFS
+      Market Highlights family 1902, plus 17 category-header codes), PDA2.0
+      added to platforms, and 01040200 / 03030200 / 17020102 / 17020302
+      moved INFO→WARN. Existing codes keep their curated function_name and
+      payload_format. Market Highlights (1902) is filed under
+      l1_category_name 'Market Highlights' so name-based marts do not count
+      it as catalog views. New codes' payloads are PDA 2.0 ordered
+      field:value pairs (doc §8.3), seeded as kv. Held out pending dev
+      confirmation that they do not duplicate the iPad's own cart edit
+      while BLE-paired: 10042100 / 10051500 / 10151800 (*_BLE_catalog_app,
+      now documented for PDA and PDA 2.0).
       Grain — one row per 8-digit description_code (digits 1-2 L1 Category,
       3-4 L2 Sub-category, 5-6 L3 Action, 7-8 L4 Result: 01=Success,
-      02=Fail, 00=N/A). Covers all L1 categories 01-20.
+      02=Fail, 00=N/A). Covers all L1 categories 01-22.
       payload_format encodes the documented Event Payload column:
       none | kv (key:value CSV) | positional_order (order metadata CSV) |
       positional (other multi-field CSV, e.g. sku,qty) | duration (Time:s) |
@@ -51,12 +64,15 @@ seeds:
       - name: log_level
         description: INFO (normal) / WARN (degraded or failed) / EVENT (user interaction); empty where doc is silent
       - name: platforms
-        description: Comma-separated platform applicability from the doc
+        description: >
+          Comma-separated platform applicability from the doc. PDA = PDA 1.92
+          (source PDA-A); PDA2.0 = PDA 2.0 (source PDA).
 
   - name: seed_app_sources
     description: >
-      App source registry from API documentation Section 2.3 — the 9
-      documented source codes plus 2 bare legacy codes (CatalogFC, Vegas)
+      App source registry from API documentation Section 2.3 — the 10
+      documented source codes (v1.6 added PDA = PDA 2.0, no platform suffix;
+      PDA-A stays PDA 1.92) plus 2 bare legacy codes (CatalogFC, Vegas)
       confirmed by the dev team (2026-07-08) to be aliases of the iOS
       variants CatalogFC-I / Vegas-I, sent by older app builds without the
       platform suffix. Convention App Name - Platform (I=iOS, A=Android);
@@ -228,7 +244,9 @@ seeds:
       (network-layer errors), supplied by the dev team 2026-07-22. These
       surface as error strings in the category field (e.g. "The network
       connection was lost.", "An SSL error has occurred ..."); filter events
-      whose description_code is in this list to drop that noise. 33 codes.
+      whose description_code is in this list to drop that noise. 33 codes;
+      59 since the 2026-10-29 sync to API doc v1.6 (4 INFO→WARN changes +
+      22 new WARN codes, all = log_level WARN in seed_event_codes).
       See the matching error_payload rows in seed_category_name_aliases.
 
       {{ doc("warn_event_codes_glossary") }}

@@ -28,7 +28,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: [PDA-A, CatalogFC-A, CatalogFC-I, CatalogFS-I, CatalogFS-A, Vegas-I, Vegas-A, CatalogSE, Web, CatalogFC, Vegas]
+                values: [PDA-A, PDA, CatalogFC-A, CatalogFC-I, CatalogFS-I, CatalogFS-A, Vegas-I, Vegas-A, CatalogSE, Web, CatalogFC, Vegas]
       - name: app_version
         description: App version string.
       - name: description_code
@@ -104,13 +104,13 @@ models:
       - name: feature_name
         description: >
           Canonical product feature (action type). search=L1 12, filter=11,
-          catalog_view=19, item_detail=14, image_enlarge=15, icon_click=L1 18
-          icon taps, oos_check=name-based (families 10+18). Null for
-          non-feature events.
+          catalog_view=19 (except 1902), market_highlights=1902,
+          item_detail=14, image_enlarge=15, icon_click=L1 18 icon taps,
+          oos_check=name-based (families 10+18). Null for non-feature events.
         tests:
           - accepted_values:
               arguments:
-                values: [search, filter, icon_click, catalog_view, item_detail, image_enlarge, oos_check]
+                values: [search, filter, icon_click, catalog_view, market_highlights, item_detail, image_enlarge, oos_check]
       - name: customer_key
         description: >
           The customer the event acted on. REPAIRED here: a BLE-paired iPad hands

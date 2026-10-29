@@ -1,6 +1,6 @@
 -- assert_sales_agents_have_sales_code
 --
--- Sales app events (PDA-A, CatalogFS-I, CatalogFS-A) should always carry a
+-- Sales app events (PDA-A, PDA, CatalogFS-I, CatalogFS-A) should always carry a
 -- sales_code — it identifies the territory/team the agent belongs to.
 -- A null sales_code on a sales app suggests a misconfigured device or a
 -- test account that slipped into production data.
@@ -17,5 +17,5 @@ select
     sales_code,
     created_at_utc
 from {{ ref('int_events_decoded') }}
-where source_code in ('PDA-A', 'CatalogFS-I', 'CatalogFS-A')
+where source_code in ('PDA-A', 'PDA', 'CatalogFS-I', 'CatalogFS-A')
   and (sales_code is null or trim(sales_code) = '')
