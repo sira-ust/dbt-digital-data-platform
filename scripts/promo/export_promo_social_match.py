@@ -8,8 +8,11 @@ Four sheets:
                                   nothing was found for, as of the export.
   2. "Promo vs Social Listening"  ONE ROW PER ITEM (since 2026-10-20; before, one row per
                                   post), with the item's product PHOTO beside its name
-                                  (from the INPUT file; floating over its cell, so it
-                                  survives the hand-search step's edits). Match Status is
+                                  (from the INPUT file; floating inside its cell, "move and
+                                  size with cells", so it survives the hand-search step's
+                                  edits AND moves with its row when the sheet is sorted;
+                                  every row is then 60 points, so a sorted photo never
+                                  shrinks). Match Status is
                                   the item's status; beside it,
                                   "On Trending Social" (Mentionlytics) and "Direct
                                   Scraping" (TikTok, YouTube & RedNote) show what each source
@@ -59,7 +62,8 @@ except NameError:
 
 from promo_common import (  # noqa: E402
     INTERMEDIATE_SCHEMA, LANGUAGES, REPORTING_SCHEMA, STAGING_SCHEMA, dbt_var, flag, local_data_root,
-    phrase_language, platform_phrases, product_card_lines, query, search_phrases, split_terms,
+    phrase_language, place_image_in_cell, platform_phrases, product_card_lines, query, search_phrases,
+    split_terms,
 )
 
 DBX_OUT_DIR = "/Volumes/ust_databricks/social/promo_output"
@@ -76,7 +80,8 @@ ITEM_WIDTHS = [13, 10, 32, 14, 15, 10, 12, 16, 16, 8]
 COL_SHEET, COL_PHOTO, COL_STATUS, COL_POSTS = (ITEM_HEADERS.index(h) + 1 for h in
                                                ("Promo Sheet", "Photo", "Match Status", "Posts"))
 STATUS_COLS = {ITEM_HEADERS.index(h) + 1 for h in ("Match Status", SOCIAL_COL, SCRAPED_COL)}
-PHOTO_ROW_HEIGHT, MAIN_PHOTO_PX = 60, 76     # points / pixels: a main-sheet row with a photo
+PHOTO_ROW_HEIGHT = 60        # points: every main-sheet row, when the month has photos
+PHOTO_BOX_PX = (100, 80)     # pixels: the Photo cell (14 characters wide, 60 points tall)
 SLOTS = 3                    # result cells per block: var promo_scraped_max_per_item
 SOCIAL_BLOCK = "Trending Social"
 RESULT_WIDTH = 27
@@ -273,6 +278,16 @@ def card_text(it: dict) -> str | None:
     return "\n".join(lines) or None
 
 
+def _photo_bytes(path) -> bytes | None:
+    """The product photo's bytes from photo_path, or None (no photo, or unreadable)."""
+    if not _none(path):
+        return None
+    try:
+        return Path(str(path)).read_bytes()
+    except OSError:
+        return None
+
+
 def _photo_image(path, height=None):
     """The product photo as an openpyxl image `height` px tall, or None (no photo,
     unreadable, or Pillow missing: the sheet then has no photo, nothing else changes).
@@ -343,6 +358,7 @@ def build_workbook(data: dict):
     centred = Alignment(horizontal="center", vertical="top")
     muted_font = Font(name="Arial", size=10, color=MUTED)
 
+    photo_rows = 0
     for r, it in enumerate(items, start=2):
         band = r % 2 == 1                    # every other item
         row = it["row"]
@@ -389,9 +405,14 @@ def build_workbook(data: dict):
                 elif n == 0 and not searched:
                     cell.value, cell.font, cell.alignment = NOT_SEARCHED, muted_font, centred
         ws.row_dimensions[r].height = ROW_HEIGHT
-        photo = _photo_image(it.get("photo_path"), MAIN_PHOTO_PX)
-        if photo:
-            ws.add_image(photo, f"{get_column_letter(COL_PHOTO)}{r}")
+        blob = _photo_bytes(it.get("photo_path"))
+        # inside its cell and "move and size with cells", so a sort carries it along
+        if blob and place_image_in_cell(ws, blob, COL_PHOTO, r, PHOTO_BOX_PX[0], PHOTO_BOX_PX[1]):
+            photo_rows += 1
+    if photo_rows:
+        # every item row the photo rows' height: a sort moves photos between rows, and
+        # one sorted onto a shorter row would shrink
+        for r in range(2, len(items) + 2):
             ws.row_dimensions[r].height = PHOTO_ROW_HEIGHT
     last = len(items) + 1
     ws.freeze_panes = f"{get_column_letter(COL_PHOTO + 1)}2"    # the item and its photo stay in view

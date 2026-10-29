@@ -84,21 +84,27 @@ def _metadata(n: int) -> str:
             f'<valueMetadata count="{n}">{value}</valueMetadata></metadata>')
 
 
-def place_photos_in_cells(src: str, out: str | None = None) -> int:
-    """Rewrite src (or write out) with the items sheet's floating photos placed in
-    their photo cells. -> the number of photos placed. A file with no floating photos
-    on the photo column is left as it is (0)."""
+def place_photos_in_cells(src: str, out: str | None = None, sheet: str = SHEET_ITEMS,
+                          column: str = "photo") -> int:
+    """Rewrite src (or write out) with `sheet`'s floating photos placed in their cells
+    of the `column` column (header matched case-insensitively). -> the number of
+    photos placed. A file with no floating photos on that column is left as it is (0).
+    Works on the INPUT file (items / photo) and on a finished output workbook
+    ("Promo vs Social Listening" / Photo), where an in-cell photo stays with its item
+    when the sheet is filtered or sorted and a floating one does not."""
     import openpyxl
     from openpyxl.styles import Alignment
     from openpyxl.utils import get_column_letter
 
     out = out or src
     wb = openpyxl.load_workbook(src)
-    ws = wb[SHEET_ITEMS]
+    if sheet not in wb.sheetnames:
+        raise SystemExit(f"{os.path.basename(src)}: no sheet '{sheet}'")
+    ws = wb[sheet]
     header = [str(c.value or "").strip().lower() for c in ws[1]]
-    if "photo" not in header:
-        raise SystemExit(f"{os.path.basename(src)}: the items sheet has no 'photo' column")
-    col = header.index("photo")
+    if column.lower() not in header:
+        raise SystemExit(f"{os.path.basename(src)}: sheet '{sheet}' has no '{column}' column")
+    col = header.index(column.lower())
     letter = get_column_letter(col + 1)
     photos, keep = {}, []
     for img in ws._images:
@@ -110,17 +116,24 @@ def place_photos_in_cells(src: str, out: str | None = None) -> int:
     if not photos:
         return 0
     ws._images = keep
+    # one height for every row, the photo rows' own if they have one: a sort moves the
+    # photos between rows, and a photo sorted onto a shorter row would shrink
+    set_heights = [ws.row_dimensions[r].height for r in photos if ws.row_dimensions[r].height]
+    height = max(set_heights) if set_heights else ROW_HEIGHT
+    for r in range(2, ws.max_row + 1):
+        ws.row_dimensions[r].height = max(ws.row_dimensions[r].height or 0, height)
     for row in photos:                       # a styled cell is always written, so it can be found
         cell = ws[f"{letter}{row}"]
         cell.value = None
         cell.alignment = Alignment(horizontal="center", vertical="center")
-        ws.row_dimensions[row].height = ROW_HEIGHT
     ws.column_dimensions[letter].width = max(ws.column_dimensions[letter].width or 0, COL_WIDTH)
+    from add_photos_to_output import widen_filter
+    widen_filter(ws, col + 1)                # a sort from the filter must move the photos too
 
     with tempfile.TemporaryDirectory() as tmp:
         plain = Path(tmp) / "plain.xlsx"
         wb.save(plain)
-        sheet_path = _items_sheet_path(plain)
+        sheet_path = _sheet_path(plain, sheet)
         rows = sorted(photos)
         with zipfile.ZipFile(plain) as zin, zipfile.ZipFile(Path(tmp) / "out.xlsx", "w", zipfile.ZIP_DEFLATED) as zout:
             for item in zin.infolist():
@@ -160,10 +173,10 @@ def place_photos_in_cells(src: str, out: str | None = None) -> int:
     return len(photos)
 
 
-def _items_sheet_path(path: Path) -> str:
+def _sheet_path(path: Path, sheet: str) -> str:
     with zipfile.ZipFile(path) as z:
         wb = z.read("xl/workbook.xml").decode("utf-8")
-        rid = re.search(r'<sheet [^>]*name="%s"[^>]*r:id="(rId\d+)"' % SHEET_ITEMS, wb).group(1)
+        rid = re.search(r'<sheet [^>]*name="%s"[^>]*r:id="(rId\d+)"' % re.escape(sheet), wb).group(1)
         rels = z.read("xl/_rels/workbook.xml.rels").decode("utf-8")
         rel = next(r for r in re.findall(r"<Relationship [^>]*/>", rels) if f'Id="{rid}"' in r)
         target = re.search(r'Target="([^"]+)"', rel).group(1).lstrip("/")
@@ -210,8 +223,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("path")
     ap.add_argument("--out", help="write here instead of rewriting the file in place")
+    ap.add_argument("--sheet", default=SHEET_ITEMS, help=f"the sheet (default {SHEET_ITEMS!r}; an output "
+                                                          f"workbook: 'Promo vs Social Listening')")
+    ap.add_argument("--column", default="photo", help="the photo column's header (default 'photo')")
     args = ap.parse_args(argv)
-    n = place_photos_in_cells(args.path, args.out)
+    n = place_photos_in_cells(args.path, args.out, args.sheet, args.column)
     print(f"{os.path.basename(args.out or args.path)}: "
           + (f"{n} photo(s) placed in their cells" if n else "no floating photos on the photo column; unchanged"))
 

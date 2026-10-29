@@ -220,6 +220,40 @@ def test_photos_are_added_to_an_older_output_by_item_number(tmp_path):
     assert ap.add_photos(result, src) == (0, "F")
 
 
+def test_the_filter_takes_in_the_photo_column_and_rows_match(tmp_path):
+    """A Photo column outside the header filter is left behind by a sort from the
+    filter arrows (NOV 2026: the photos stayed put while the items moved). Both tools
+    widen the filter to it, and give every item row one height so a sorted photo never
+    lands on a short row. The in-cell step keeps both."""
+    import add_photos_to_output as ap
+    import photos_in_cells
+    src = make(tmp_path, GOOD, photo_rows=[2, 3])
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Promo vs Social Listening"
+    ws.append(["Promo Sheet", "Item No.", "Promo Item", "Posts", "Trending Social 1"])
+    for no in (35061, 99999, 35060):
+        ws.append(["NOV NEW", no, "x", "=1+1", None])
+    ws.auto_filter.ref = "A1:E4"
+    result = str(tmp_path / "result.xlsx")
+    wb.save(result)
+
+    ap.add_photos(result, src)
+    ws = load_workbook(result)["Promo vs Social Listening"]
+    assert ws.auto_filter.ref == "A1:F4"
+    assert {ws.row_dimensions[r].height for r in (2, 3, 4)} == {ap.PHOTO_ROW_HEIGHT}   # 99999 too
+
+    assert photos_in_cells.place_photos_in_cells(result, sheet="Promo vs Social Listening", column="Photo") == 2
+    assert v._in_cell_pictures(result, "Promo vs Social Listening", "F").keys() == {2, 4}
+    import zipfile
+    with zipfile.ZipFile(result) as z:
+        sheet = z.read("xl/worksheets/sheet1.xml").decode()
+        book = z.read("xl/workbook.xml").decode()
+    assert '<autoFilter ref="A1:F4"' in sheet and "$A$1:$F$4" in book        # the hidden filter name too
+    ws = load_workbook(result)["Promo vs Social Listening"]
+    assert {ws.row_dimensions[r].height for r in (2, 3, 4)} == {ap.PHOTO_ROW_HEIGHT}
+
+
 def test_photos_go_in_an_existing_photo_column(tmp_path):
     import add_photos_to_output as ap
     src = make(tmp_path, GOOD, photo_rows=[2])

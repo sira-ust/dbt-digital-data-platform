@@ -321,8 +321,11 @@ def test_chinese_is_searched_only_on_rednote(data, tmp_path):
 
 
 def test_the_item_photo_is_beside_its_name(data, tmp_path):
-    """The INPUT file's photo floats on the item's Photo cell (column D), on a taller
-    row; an item without one keeps the normal row height."""
+    """The INPUT file's photo floats INSIDE the item's Photo cell (column D), set to
+    "move and size with cells" (a twoCellAnchor, both markers in D5) so that Excel carries
+    it along when the sheet is sorted: a "move but don't size" photo stayed put while the
+    items moved (NOV 2026). Every item row is then the same height, so a photo sorted onto
+    another row keeps its size."""
     from io import BytesIO
     from PIL import Image
     buf = BytesIO()
@@ -334,8 +337,11 @@ def test_the_item_photo_is_beside_its_name(data, tmp_path):
     ex.build_workbook(data).save(path)
     ws = load_workbook(path)[MAIN]
     assert ws["D1"].value == "Photo" and ws["D5"].value is None
-    assert [(i.anchor._from.col, i.anchor._from.row) for i in ws._images] == [(3, 4)]   # D5
-    assert ws.row_dimensions[5].height == 60 and ws.row_dimensions[4].height == 39.75
+    [img] = ws._images
+    a = img.anchor
+    assert type(a).__name__ == "TwoCellAnchor" and a.editAs == "twoCell"
+    assert (a._from.col, a._from.row, a.to.col, a.to.row) == (3, 4, 3, 4)            # all inside D5
+    assert {ws.row_dimensions[r].height for r in range(2, ws.max_row + 1)} == {60}
 
 
 def test_own_brand_shows_both_sources(data, tmp_path):

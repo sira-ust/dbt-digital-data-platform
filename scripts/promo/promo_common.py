@@ -437,6 +437,32 @@ def read_photo(path) -> dict | None:
         return None
 
 
+def place_image_in_cell(ws, blob: bytes, col: int, row: int, box_w: int, box_h: int, pad: int = 3):
+    """Float a picture INSIDE one cell (1-based col / row) of an openpyxl sheet, scaled
+    to fit box_w x box_h pixels and set to Excel's "Move and size with cells": a
+    twoCellAnchor whose from and to markers are both in that cell. Excel carries such a
+    picture along when the sheet is sorted; a "move but don't size" picture (openpyxl's
+    default) stays put while the rows move, and lands on the wrong item (NOV 2026).
+    Floating, not in-cell, so openpyxl (the hand-search step) keeps it on a re-save.
+    -> the openpyxl image, or None when the bytes can't be read (or Pillow is missing)."""
+    import io
+    try:
+        from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
+        from openpyxl.utils.units import pixels_to_EMU
+        img = XLImage(io.BytesIO(blob))
+    except Exception:
+        return None
+    scale = min((box_w - 2 * pad) / max(img.width, 1), (box_h - 2 * pad) / max(img.height, 1))
+    w, h = max(1, int(img.width * scale)), max(1, int(img.height * scale))
+    anchor = TwoCellAnchor(editAs="twoCell")
+    anchor._from = AnchorMarker(col=col - 1, colOff=pixels_to_EMU(pad), row=row - 1, rowOff=pixels_to_EMU(pad))
+    anchor.to = AnchorMarker(col=col - 1, colOff=pixels_to_EMU(pad + w), row=row - 1, rowOff=pixels_to_EMU(pad + h))
+    img.width, img.height, img.anchor = w, h, anchor
+    ws.add_image(img)
+    return img
+
+
 def fetch_image(url: str, timeout: int = 15) -> dict | None:
     """An image from the web (a YouTube thumbnail) as an image block, or None."""
     import urllib.request

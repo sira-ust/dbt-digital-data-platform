@@ -133,6 +133,18 @@ Claude in Chrome and paste
 
 The finished workbook has two sheets: *Summary* and *Promo vs Social Listening*.
 
+### 6. Put the photos in their cells (after step 5)
+
+The export's photos float inside their cells, so that the hand search (which edits the file
+with openpyxl) keeps them. They are set to "move and size with cells", the header filter
+covers the Photo column, and every row has the same height, so a sort or filter keeps each
+photo on its item. Once step 5 is done, place them inside their cells for good, where they
+behave like the cell's value (copying rows, other spreadsheet apps):
+
+```
+python scripts/promo/photos_in_cells.py "UST_NOV_Promo_Social_Listening_Match.xlsx" --sheet "Promo vs Social Listening" --column Photo
+```
+
 ### Photos on an older output
 
 Since 2026-10-28 the export puts each item's photo in a **Photo** column beside its name.
@@ -144,7 +156,7 @@ python scripts/promo/add_photos_to_output.py "UST_NOV_Promo_Social_Listening_Mat
 ```
 
 With no Photo column, it adds one after the last column, so no formula or link moves. Safe
-to run twice; run it before or after step 5.
+to run twice; run it before or after step 5, then do step 6.
 
 ## What the output means
 
