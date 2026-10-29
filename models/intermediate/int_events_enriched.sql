@@ -118,12 +118,13 @@ ble_marks as (
             when description_code in
                  ('17010700', '17040502', '17020200', '17030000')        then event_at_utc
         end                                                              as unpair_at,
-        -- the customer the PDA currently has open, for fallback inheritance
+        -- the customer the PDA currently has open, for fallback inheritance.
+        -- PDA-A is PDA 1.92, PDA is PDA 2.0; both pair over BLE.
         case
-            when source_code = 'PDA-A' and customer_key is not null       then event_at_utc
+            when source_code in ('PDA-A', 'PDA') and customer_key is not null then event_at_utc
         end                                                              as pda_customer_at,
         case
-            when source_code = 'PDA-A' and customer_key is not null       then customer_key
+            when source_code in ('PDA-A', 'PDA') and customer_key is not null then customer_key
         end                                                              as pda_customer
     from sales_timeline
 
@@ -365,12 +366,16 @@ select
 
     -- ── feature: the action type. OOS check is name-based (lives in two
     --    families); the rest map from the L1 family. icon_click is only the
-    --    18-family codes that are actual icon taps. ──────────────────────
+    --    18-family codes that are actual icon taps. Market Highlights (1902,
+    --    API doc v1.6) shares L1 19 but is page time and video plays, not a
+    --    category browse, so it is kept out of catalog_view. ───────────────
     case
         when c.description_code is null then null
         when lower(c.function_name) like '%oos%'     then 'oos_check'
         when e.l1_code = '12'                        then 'search'
         when e.l1_code = '11'                        then 'filter'
+        when substr(e.description_code, 1, 4) = '1902'
+                                                     then 'market_highlights'
         when e.l1_code = '19'                        then 'catalog_view'
         when e.l1_code = '14'                        then 'item_detail'
         when e.l1_code = '15'                        then 'image_enlarge'

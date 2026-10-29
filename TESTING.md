@@ -88,7 +88,7 @@ Severity is **error** unless marked `(warn)`.
 ### 4.1 Singular tests (`tests/`)
 
 - **assert_sales_agents_have_sales_code** *(warn)* — sales-app events
-  (`PDA-A`, `CatalogFS-I`, `CatalogFS-A`) must carry a non-null/non-empty
+  (`PDA-A`, `PDA`, `CatalogFS-I`, `CatalogFS-A`) must carry a non-null/non-empty
   `sales_code`.
 
 ### 4.2 DQ models (`models/dq/`)
@@ -148,11 +148,11 @@ Monitoring tables (each also tests `unique`+`not_null` on its key):
 ### 4.5 Intermediate tests
 
 - **int_events_decoded** — `entity_id` not_null+unique; `source_code` not_null +
-  accepted_values (11 app codes); `description_code` not_null +
+  accepted_values (12 app codes); `description_code` not_null +
   relationships→`seed_event_codes` *(warn)*; `actor_type` [sales, customer]
 - **int_events_enriched** — `entity_id` not_null+unique; `outcome` [success, fail];
-  `feature_name` [search, filter, icon_click, catalog_view, item_detail,
-  image_enlarge, oos_check]; `page_context` [promo, backorder, history, suggest]
+  `feature_name` [search, filter, icon_click, catalog_view, market_highlights,
+  item_detail, image_enlarge, oos_check]; `page_context` [promo, backorder, history, suggest]
 - **int_item_demand_daily** — combo [sku, activity_date, source_system];
   `activity_date`, `sku` not_null
 - **int_jdawms_inventory_daily** — combo [prtnum, prt_client_id, wh_id,

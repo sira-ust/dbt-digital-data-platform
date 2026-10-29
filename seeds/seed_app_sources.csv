@@ -1,5 +1,6 @@
 source_code,app_name,app_full_name,user_type,platform
-PDA-A,PDA,PDA — Handheld Sales Device,Sales,Android
+PDA-A,PDA,PDA 1.92 — Handheld Sales Device,Sales,Android
+PDA,PDA,PDA 2.0 — Handheld Sales Device (Honeywell CT70),Sales,Android
 CatalogFC-A,CatalogFC,Catalog For Customer (Android),Customer,Android
 CatalogFC-I,CatalogFC,Catalog For Customer (iOS),Customer,iOS
 CatalogFS-I,CatalogFS,Catalog For Sales (iOS),Sales,iOS

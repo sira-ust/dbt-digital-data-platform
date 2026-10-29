@@ -1,6 +1,7 @@
 {% docs event_code_glossary %}
 Complete event dictionary from API documentation Section 5
-(SystemEventLog_API_Documentation_0327, v1.0 March 2026).
+(SystemEventLog_API_Documentation v1.6, Oct 2026). Platforms: PDA = PDA 1.92
+(source PDA-A), PDA2.0 = PDA 2.0 (source PDA).
 
 Grain: one row per 8-digit `description_code`
 (digits 1-2 = L1 Category, 3-4 = L2 Sub-category, 5-6 = L3 Action,
@@ -15,49 +16,64 @@ Grain: one row per 8-digit `description_code`
 > re-run the script when the seed changes.
 
 
-### L1 = 01 — System Environment (8 events)
+### L1 = 01 — System Environment (18 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `01010100` | Network: Enable | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE |
-| `01010200` | Network: Disable | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE |
-| `01020100` | Battery | bare_value | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE |
-| `01020200` | Low Battery | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE |
-| `01030100` | Bluetooth: Enable | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC |
-| `01030200` | Bluetooth: Disable | none | false | true | System Event | INFO | PDA,CatalogFS |
-| `01040100` | Location-Success | none | true | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
-| `01040200` | Location-Fail | fail_marker | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
+| `01000000` | System (app open / network status change) | — | false | false | — | — | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web |
+| `01010100` | Network: Enable | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,PDA2.0 |
+| `01010200` | Network: Disable | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,PDA2.0 |
+| `01020100` | Battery | bare_value | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,PDA2.0 |
+| `01020200` | Low Battery | bare_value | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,PDA2.0 |
+| `01030100` | Bluetooth: Enable | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,PDA2.0 |
+| `01030200` | Bluetooth: Disable | none | false | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `01040100` | Location-Success | none | true | true | System Event | INFO | PDA,CatalogFS,CatalogSE,PDA2.0 |
+| `01040200` | Location-Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,CatalogSE,PDA2.0 |
+| `01040300` | motion_state_change | kv | true | true | System Event | INFO | PDA2.0 |
+| `01040400` | motion_sensing_fallback | kv | false | true | System Event | INFO | PDA2.0 |
+| `01040500` | click_enable_location | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `01040600` | click_retry_location | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `01040700` | location_accuracy_rejected | kv | false | true | System Event | WARN | PDA2.0 |
+| `01040800` | Location Permission: Granted | kv | false | true | System Event | INFO | PDA2.0 |
+| `01040900` | Location Permission: Denied | none | false | true | System Event | WARN | PDA2.0 |
+| `01041000` | Location Service: Enable | none | false | true | System Event | INFO | PDA2.0 |
+| `01041100` | Location Service: Disable | none | false | true | System Event | INFO | PDA2.0 |
 
 
-### L1 = 02 — Login & Logout (11 events)
-
-| Code | Function | Payload | Geo | System | Type | Level | Platforms |
-|---|---|---|---|---|---|---|---|
-| `02010100` | Sales Equipment Permission - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
-| `02010200` | Sales Equipment Permission - Fail | none | false | true | System Event | WARN | PDA,CatalogFS,CatalogSE |
-| `02020100` | Sending Local Log - Successful | none | false | true | System Event | INFO | PDA |
-| `02020200` | Sending Local Log - Failed | none | false | true | System Event | WARN | PDA |
-| `02030101` | Login: Username - Success | none | true | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web |
-| `02030102` | Login: Username - Fail | none | true | true | System Event | WARN | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web |
-| `02030201` | Login: SSO - Success | none | true | true | System Event | INFO | PDA,CatalogFS |
-| `02030202` | Login: SSO - Fail | none | true | true | System Event | WARN | PDA,CatalogFS |
-| `02040000` | Logout | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web |
-| `02040100` | Timeout | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE |
-| `02040200` | Voluntarily Exit | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE |
-
-
-### L1 = 03 — Data Download & Sync (22 events)
+### L1 = 02 — Login & Logout (15 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `03010100` | Auto Download - Success | duration | false | true | System Event | INFO | PDA |
-| `03010200` | Auto Download - Fail | fail_marker | false | true | System Event | WARN | PDA |
-| `03020100` | Settings > FD - Success | duration | false | true | System Event | INFO | PDA,CatalogFS,CatalogFC,CatalogSE |
-| `03020200` | Settings > FD - Fail | fail_marker | false | true | System Event | WARN | PDA,CatalogFS,CatalogFC,CatalogSE |
-| `03030100` | Full Download Popup - Success | duration | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
-| `03030200` | Full Download Popup - Fail | fail_marker | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
+| `02000000` | Login and logout | none | false | false | — | — | — |
+| `02010100` | Sales Equipment Permission - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE,PDA2.0 |
+| `02010200` | Sales Equipment Permission - Fail | none | false | true | System Event | WARN | PDA,CatalogFS,CatalogSE,PDA2.0 |
+| `02020100` | Sending Local Log - Successful | none | false | true | System Event | INFO | PDA,PDA2.0 |
+| `02020200` | Sending Local Log - Failed | none | false | true | System Event | WARN | PDA,PDA2.0 |
+| `02030000` | Login (generic) | — | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web,PDA2.0 |
+| `02030101` | Login: Username - Success | none | true | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web,PDA2.0 |
+| `02030102` | Login: Username - Fail | kv | true | true | System Event | WARN | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web,PDA2.0 |
+| `02030201` | Login: SSO - Success | none | true | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `02030202` | Login: SSO - Fail | bare_value | true | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+| `02040000` | Logout | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,Web,PDA2.0 |
+| `02040100` | Timeout | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,PDA2.0 |
+| `02040200` | Voluntarily Exit | none | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,CatalogSE,PDA2.0 |
+| `02050100` | Login Unlock Verify - Success | kv | false | true | System Event | INFO | PDA2.0 |
+| `02050200` | Login Unlock Verify - Fail | kv | false | true | System Event | WARN | PDA2.0 |
+
+
+### L1 = 03 — Data Download & Sync (32 events)
+
+| Code | Function | Payload | Geo | System | Type | Level | Platforms |
+|---|---|---|---|---|---|---|---|
+| `03000000` | Download | none | false | false | — | — | — |
+| `03010100` | Auto Download - Success | duration | false | true | System Event | INFO | PDA,PDA2.0 |
+| `03010200` | Auto Download - Fail | fail_marker | false | true | System Event | WARN | PDA,PDA2.0 |
+| `03020100` | Settings > FD - Success | duration | false | true | System Event | INFO | PDA,CatalogFS,CatalogFC,CatalogSE,PDA2.0 |
+| `03020200` | Settings > FD - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,CatalogFC,CatalogSE,PDA2.0 |
+| `03030100` | Full Download Popup - Success | duration | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE,PDA2.0 |
+| `03030200` | Full Download Popup - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,CatalogSE,PDA2.0 |
 | `03040100` | Sync Popup - Success | duration | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
-| `03040200` | Sync Popup - Fail | fail_marker | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
+| `03040200` | Sync Popup - Fail | bare_value | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
 | `03040300` | Sync Popup - Skip | none | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
 | `03050100` | Full Download (Auto) - Success | duration | false | true | System Event | INFO | Vegas,CatalogFC |
 | `03050200` | Full Download (Auto) - Fail | fail_marker | false | true | System Event | WARN | Vegas,CatalogFC |
@@ -68,276 +84,657 @@ Grain: one row per 8-digit `description_code`
 | `03080100` | Customer List Sync - Success | duration | false | true | System Event | INFO | CatalogFS,CatalogSE |
 | `03080200` | Customer List Sync - Fail | fail_marker | false | true | System Event | WARN | CatalogFS,CatalogSE |
 | `03090100` | Show FD Skip - Login | kv | false | true | System Event | INFO | CatalogFS,CatalogSE |
-| `03090200` | Show FD Skip - Home | kv | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE |
+| `03090200` | Show FD Skip - Home | kv | false | true | System Event | INFO | PDA,CatalogFS,CatalogSE,PDA2.0 |
 | `03090300` | Show FD Skip - Customer List | kv | false | true | System Event | INFO | CatalogFS |
-| `03100100` | Home Download - Success | duration | false | true | System Event | INFO | PDA |
-| `03100200` | Home Download - Fail | fail_marker | false | true | System Event | WARN | PDA |
+| `03100100` | Home Download - Success | duration | false | true | System Event | INFO | PDA,PDA2.0 |
+| `03100200` | Home Download - Fail | fail_marker | false | true | System Event | WARN | PDA,PDA2.0 |
+| `03110100` | Full Download image - Success | duration | false | true | System Event | INFO | CatalogFS,PDA2.0 |
+| `03110200` | Full Download image - Cancel | duration | false | true | System Event | INFO | CatalogFS,PDA2.0 |
+| `03110300` | Full Download image - Fail | fail_marker | false | true | System Event | WARN | CatalogFS,PDA2.0 |
+| `03120100` | Home Auto Sync - Success | kv | false | true | System Event | INFO | PDA2.0 |
+| `03120200` | Home Auto Sync - Fail | kv | false | true | System Event | WARN | PDA2.0 |
+| `03130100` | Full Download Image Package - Success | kv | false | true | System Event | INFO | PDA2.0 |
+| `03130200` | Full Download Image Package - Fail | kv | false | true | System Event | WARN | PDA2.0 |
+| `03140100` | Full Download - Cancel Downloading | kv | false | false | EVENT | INFO | PDA2.0 |
+| `03140200` | Full Download - Interrupted | kv | false | true | System Event | WARN | PDA2.0 |
 
 
-### L1 = 04 — Send Order (10 events)
+### L1 = 04 — Send Order (12 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `04010100` | Order List: Customer - Success | positional_order | true | true | System Event | INFO | PDA,CatalogFS |
-| `04010200` | Order List: Customer - Fail | positional_order | true | true | System Event | WARN | PDA,CatalogFS |
-| `04020100` | Order List: Sales - Success | positional_order | true | true | System Event | INFO | PDA,CatalogFS |
-| `04020200` | Order List: Sales - Fail | none | true | true | System Event | WARN | PDA,CatalogFS |
-| `04030100` | Order Detail: Customer - Success | positional_order | true | true | System Event | INFO | PDA,CatalogFS |
-| `04030200` | Order Detail: Customer - Fail | none | true | true | System Event | WARN | PDA,CatalogFS |
-| `04040100` | Order Detail: Sales - Success | positional_order | true | true | System Event | INFO | PDA,CatalogFS |
-| `04040200` | Order Detail: Sales - Fail | none | true | true | System Event | WARN | PDA,CatalogFS |
+| `04000000` | Send order | none | false | false | — | — | — |
+| `04010100` | Order List: Customer - Success | positional_order | true | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `04010200` | Order List: Customer - Fail | positional_order | true | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+| `04020100` | Order List: Sales - Success | positional_order | true | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `04020200` | Order List: Sales - Fail | none | true | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+| `04030100` | Order Detail: Customer - Success | positional_order | true | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `04030200` | Order Detail: Customer - Fail | none | true | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+| `04040100` | Order Detail: Sales - Success | positional_order | true | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `04040200` | Order Detail: Sales - Fail | none | true | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
 | `04050100` | submit_quote_cart_page - Success | bare_value | true | true | System Event | INFO | Vegas,CatalogFC,CatalogSE |
 | `04050200` | submit_quote_cart_page - Fail | bare_value | true | true | System Event | WARN | Vegas,CatalogFC,CatalogSE |
+| `04060000` | submit_sales_unreviewed_order | bare_value | false | false | — | INFO | PDA,PDA2.0 |
 
 
-### L1 = 05 — Request Review (4 events)
-
-| Code | Function | Payload | Geo | System | Type | Level | Platforms |
-|---|---|---|---|---|---|---|---|
-| `05010100` | Request Review: Order List - Success | positional_order | false | true | System Event | INFO | PDA,CatalogFS |
-| `05010200` | Request Review: Order List - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS |
-| `05020100` | Request Review: Order Detail - Success | positional_order | false | true | System Event | INFO | PDA,CatalogFS |
-| `05020200` | Request Review: Order Detail - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS |
-
-
-### L1 = 06 — Send Sales Review (6 events)
+### L1 = 05 — Request Review (5 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `06010100` | Sales Review: Order Detail - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS |
-| `06010200` | Sales Review: Order Detail - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS |
-| `06020100` | Sales Review: Order List - Success | positional_order | false | true | System Event | INFO | PDA,CatalogFS |
+| `05000000` | Request Review | none | false | false | — | — | — |
+| `05010100` | Request Review: Order List - Success | positional_order | false | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `05010200` | Request Review: Order List - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+| `05020100` | Request Review: Order Detail - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `05020200` | Request Review: Order Detail - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+
+
+### L1 = 06 — Send Sales Review (9 events)
+
+| Code | Function | Payload | Geo | System | Type | Level | Platforms |
+|---|---|---|---|---|---|---|---|
+| `06000000` | Send Sales Review | none | false | false | — | — | — |
+| `06010100` | Sales Review: Order Detail - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `06010200` | Sales Review: Order Detail - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+| `06020100` | Sales Review: Order List - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS |
 | `06020200` | Sales Review: Order List - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS |
-| `06030100` | Sales Review: Auto Upload - Success | positional_order | false | true | System Event | INFO | PDA,CatalogFS |
-| `06030200` | Sales Review: Auto Upload - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS |
+| `06030100` | Sales Review: Auto Upload - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `06030200` | Sales Review: Auto Upload - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+| `06040100` | Order List -Review Success | positional_order | false | true | — | — | — |
+| `06040200` | Order List -Review Fail | none | false | false | — | — | — |
 
 
-### L1 = 07 — Restore Order (4 events)
-
-| Code | Function | Payload | Geo | System | Type | Level | Platforms |
-|---|---|---|---|---|---|---|---|
-| `07010100` | Restore: Order Detail - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS |
-| `07010200` | Restore: Order Detail - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS |
-| `07020100` | Restore: Recycle Bin - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS |
-| `07020200` | Restore: Recycle Bin - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS |
-
-
-### L1 = 08 — Delete Order (3 events)
+### L1 = 07 — Restore Order (5 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `08010000` | Delete: Order Detail | bare_value | false | false | — | INFO | PDA,CatalogFS |
-| `08020000` | Delete: Sales Order List | bare_value | false | false | — | INFO | PDA,CatalogFS |
-| `08030000` | Auto Delete Order | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `07000000` | Restore | none | false | false | — | — | — |
+| `07010100` | Restore: Order Detail - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `07010200` | Restore: Order Detail - Fail | none | false | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
+| `07020100` | Restore: Recycle Bin - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,PDA2.0 |
+| `07020200` | Restore: Recycle Bin - Fail | none | false | true | System Event | WARN | PDA,CatalogFS,PDA2.0 |
 
 
-### L1 = 09 — Create Order (8 events)
+### L1 = 08 — Delete Order (4 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `09010000` | Create Order | bare_value | true | false | — | INFO | PDA,CatalogFS |
-| `09020000` | Copy to New Order: Sales List | none | true | false | — | INFO | PDA |
-| `09030000` | Copy to New Order: Office List | none | true | false | — | INFO | PDA |
+| `08000000` | Delete Order | none | false | false | — | — | — |
+| `08010000` | Delete: Order Detail | bare_value | false | false | — | INFO | PDA,CatalogFS,PDA2.0 |
+| `08020000` | Delete: Sales Order List | bare_value | false | false | — | INFO | PDA,CatalogFS,PDA2.0 |
+| `08030000` | Auto Delete Order | bare_value | false | false | — | INFO | PDA,CatalogFS,PDA2.0 |
+
+
+### L1 = 09 — Create Order (12 events)
+
+| Code | Function | Payload | Geo | System | Type | Level | Platforms |
+|---|---|---|---|---|---|---|---|
+| `09000000` | Create Order | none | false | false | — | — | — |
+| `09010000` | Create Order | bare_value | true | false | — | INFO | PDA,CatalogFS,PDA2.0 |
+| `09020000` | Copy to New Order: Sales List | bare_value | true | false | — | INFO | PDA,PDA2.0 |
+| `09030000` | Copy to New Order: Office List | bare_value | true | false | — | INFO | PDA,PDA2.0 |
 | `09040000` | Copy to New Order: Recycle Bin | none | true | false | — | INFO | PDA |
-| `09050000` | (BLE Only) Create New Order | none | true | false | — | INFO | PDA |
-| `09060000` | (BLE Only) Use Existing Order on Catalog | none | true | false | — | INFO | PDA |
-| `09070000` | (BLE Only) Merge Orders | none | true | false | — | INFO | PDA |
+| `09050000` | (BLE Only) Create New Order | bare_value | true | false | — | INFO | PDA,PDA2.0 |
+| `09060000` | (BLE Only) Use Existing Order on Catalog | bare_value | true | false | — | INFO | PDA,PDA2.0 |
+| `09070000` | (BLE Only) Merge Orders | none | true | false | — | INFO | PDA,PDA2.0 |
 | `09080000` | Item Long Press +: Create New Order | none | true | false | — | INFO | CatalogFS |
+| `09090000` | Create Order: Store Workbench | kv | true | true | System Event | INFO | PDA2.0 |
+| `09100000` | Create Order Reminder Shown | kv | false | true | System Event | INFO | PDA2.0 |
+| `09110000` | (BLE Only) Continue Existing PDA Order | kv | false | false | EVENT | INFO | PDA2.0 |
 
 
-### L1 = 10 — Order Operations (27 events)
+### L1 = 10 — Order Operations (118 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `10010100` | Change Shipping Address | positional | false | false | — | INFO | PDA |
+| `10000000` | Order operation (generic) | — | false | false | — | — | — |
+| `10010000` | Change Address | none | false | false | — | — | PDA2.0 |
+| `10010100` | Change Shipping Address | positional | false | false | — | INFO | PDA,PDA2.0 |
+| `10010200` | Choose Shipping Address Dialog | bare_value | false | false | — | INFO | PDA,PDA2.0 |
 | `10010300` | Change Address: Order Detail | none | false | false | — | INFO | CatalogFS |
 | `10010400` | Change Address: Place Your Order | none | false | false | — | INFO | Vegas |
-| `10020100` | Change Freight | none | false | false | — | INFO | PDA |
+| `10010500` | Change Shipping Address - Blocked | kv | false | true | System Event | WARN | PDA2.0 |
+| `10020000` | Change Freight | none | false | false | — | — | PDA2.0 |
+| `10020100` | Change Freight | none | false | false | — | INFO | PDA,PDA2.0 |
+| `10020200` | Enter Freight Dialog | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `10020300` | Order Detail | bare_value | false | false | — | INFO | CatalogFS |
+| `10020400` | Shipping Setup: Continue to Add Items | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10020500` | Shipping Setup: FOB Destination Cost Blocked | kv | false | true | System Event | WARN | PDA2.0 |
+| `10030000` | Copy to new order | none | false | false | — | INFO | — |
+| `10030100` | Order List: Sales | none | false | false | — | INFO | PDA,PDA2.0 |
+| `10030200` | Order List: Office | none | false | false | — | INFO | PDA,PDA2.0 |
+| `10030300` | Recycle Bin for Orders | none | false | false | — | INFO | PDA,PDA2.0 |
+| `10030400` | Order List | none | false | false | — | INFO | Vegas |
+| `10030500` | Order Detail | none | false | false | — | INFO | Vegas |
+| `10040000` | Delete Order Item | none | false | false | — | INFO | PDA2.0 |
 | `10040100` | Delete Item: Order Detail | sku | false | false | EVENT | EVENT | CatalogFS |
+| `10040200` | Catalog List | bare_value | false | false | — | EVENT | CatalogFS |
+| `10040300` | Line Item | bare_value | false | false | — | EVENT | PDA,PDA2.0 |
+| `10040400` | Review | bare_value | false | false | — | EVENT | PDA |
+| `10040500` | Order Detail Enter | bare_value | false | false | — | EVENT | PDA,PDA2.0 |
+| `10040600` | Order Detail Search List | bare_value | false | false | — | EVENT | PDA,PDA2.0 |
 | `10040700` | remove_item_suggest_page | sku | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `10040800` | remove_item_promo_page | sku | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `10040900` | remove_item_new_page | sku | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
-| `10041000` | remove_item_backorder_page | sku | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10041000` | remove_item_backorder_page | sku | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
 | `10041100` | remove_item_category_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10041200` | remove_item_list_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `10041300` | remove_item_history_page | sku | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
 | `10041400` | remove_item_cart_page | sku | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10041500` | remove_item_detail_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10041600` | remove_product_quick_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas |
+| `10041700` | remove_new_and_promo_page | bare_value | false | false | EVENT | EVENT | PDA,CatalogFS,Web |
+| `10041800` | remove_item_wish_list_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10041900` | remove_item_brand_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10042000` | remove_item_recommend_services_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10050000` | Item Add | none | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
 | `10050100` | add_item_list_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `10050200` | add_item_suggest_page | positional | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
 | `10050300` | add_item_promo_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
-| `10050400` | add_item_backorder_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10050400` | add_item_backorder_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
 | `10050500` | add_item_new_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `10050600` | add_item_history_page | positional | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
 | `10050700` | add_item_detail_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `10050800` | add_item_quick_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,Web |
+| `10050900` | add_line_item_page | bare_value | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `10051000` | add_new_and_promo_page | bare_value | false | false | EVENT | EVENT | PDA,Web |
+| `10051100` | add_item_wish_list_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10051200` | add_item_brand_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10051300` | add_item_recommend_services_page | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `10051400` | add_item_category_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10051600` | add_item_family_popup | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `10051700` | add_item_search_stepper | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `10051800` | add_item_detail_popup | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `10051900` | add_item_pattern_page | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `10060000` | Calculator | none | false | false | — | INFO | — |
+| `10060100` | Order Detail | none | false | false | — | INFO | PDA,PDA2.0 |
+| `10070000` | Keyboard Mode | none | false | false | — | INFO | — |
+| `10070100` | Order Detail-On | none | false | false | — | INFO | PDA |
+| `10070200` | Order Detail-Off | none | false | false | — | INFO | PDA |
+| `10080000` | Show OH | none | false | false | — | INFO | — |
+| `10080100` | Line Item | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `10090000` | Salesperson Notes | bare_value | false | false | — | INFO | PDA2.0 |
+| `10090100` | Summary | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `10090200` | Order Detail | none | false | false | — | INFO | CatalogFS |
+| `10100000` | PO NUMBER | bare_value | false | false | — | INFO | PDA2.0 |
+| `10100100` | Summary | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `10100200` | Order Detail | bare_value | false | false | — | INFO | CatalogFS |
+| `10110000` | Customer Notes | none | false | false | — | INFO | — |
+| `10110100` | Place Your Order | bare_value | false | false | — | INFO | Vegas |
+| `10120000` | Show Customer Notes | none | false | false | — | INFO | PDA2.0 |
+| `10120100` | Order Detail | none | false | false | — | INFO | PDA,PDA2.0 |
+| `10120200` | Office Order Detail | none | false | false | — | INFO | PDA |
+| `10130000` | Check OOS | none | false | false | — | INFO | — |
+| `10130100` | Review | none | false | false | — | INFO | PDA |
+| `10130200` | Order Detail | none | false | false | — | INFO | CatalogFS |
+| `10140100` | Enter order detail | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `10150000` | Change item qty | none | false | false | — | EVENT | Vegas,CatalogFC,Web,PDA2.0 |
 | `10150100` | change_qty_item_list_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `10150200` | change_qty_item_suggest_page | positional | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
 | `10150300` | change_qty_item_promo_page | positional | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
+| `10150400` | change_qty_item_backorder_page | bare_value | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
 | `10150500` | change_qty_item_new_page | positional | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
+| `10150600` | change_qty_item_history_page | bare_value | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
 | `10150700` | change_qty_item_detail_page | positional | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
-| `10160100` | change_price_for_sales | positional | false | false | EVENT | EVENT | PDA,CatalogFS |
+| `10150800` | change_qty_item_quick_page | bare_value | false | false | EVENT | EVENT | Vegas,CatalogFC |
+| `10150900` | change_qty_line_item_page | bare_value | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `10151000` | change_qty_review_page | bare_value | false | false | — | EVENT | PDA |
+| `10151100` | change_qty_new_and_promo_page | positional | false | false | — | EVENT | PDA |
+| `10151200` | change_item_qty_wish_list_page | bare_value | false | false | — | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10151300` | change_item_qty_brand_page | bare_value | false | false | — | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10151400` | change_item_qty_recommend_services_page | bare_value | false | false | — | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10151500` | change_item_qty_category_page | bare_value | false | false | — | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10151600` | change_item_qty_cart_page | bare_value | false | false | — | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `10151700` | change_item_order_detail_page | bare_value | false | false | — | EVENT | CatalogFS |
+| `10160100` | change_price_for_sales | positional | false | false | EVENT | EVENT | PDA,CatalogFS,PDA2.0 |
+| `10170000` | Order Comments | none | false | false | — | — | PDA2.0 |
+| `10170100` | Order Comments: Open | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10170201` | Order Comments: First Comment - Success | kv | false | true | System Event | INFO | PDA2.0 |
+| `10170202` | Order Comments: First Comment - Fail | kv | false | true | System Event | WARN | PDA2.0 |
+| `10170301` | Order Comments: Send - Success | kv | false | true | System Event | INFO | PDA2.0 |
+| `10170302` | Order Comments: Send - Fail | kv | false | true | System Event | WARN | PDA2.0 |
+| `10170400` | Order Comments: SKU Tag Jump | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10180000` | Multi-Add | none | false | false | — | — | PDA2.0 |
+| `10180100` | Multi-Add: Confirm Changes | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10180200` | Multi-Add: Cancel | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10190000` | Add Pattern Items | none | false | false | — | — | PDA2.0 |
+| `10190100` | Pattern Items: Skip | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10190200` | Pattern Items: Add Group to Order | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10200000` | Order Entry Alerts | none | false | false | — | — | PDA2.0 |
+| `10200100` | Price Validation Alert | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10200200` | Allocation Over Warning | kv | false | true | System Event | INFO | PDA2.0 |
+| `10200300` | Item No Candidate Confirm | kv | false | false | EVENT | INFO | PDA2.0 |
+| `10200400` | Exit Warning | kv | false | false | EVENT | INFO | PDA2.0 |
 
 
-### L1 = 11 — Filtering & Sorting (14 events)
+### L1 = 11 — Filtering & Sorting (80 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
+| `11000000` | Filtering and Sorting | none | false | false | — | — | — |
+| `11010000` | Filter By Category | none | false | false | — | INFO | PDA2.0 |
 | `11010100` | Filter By Category: New & Promo | bare_value | false | false | — | INFO | PDA |
 | `11010200` | Filter By Category: Recommend | bare_value | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC |
+| `11010300` | Purchase History | bare_value | false | false | — | INFO | PDA |
+| `11010400` | All Items | bare_value | false | false | — | INFO | PDA,PDA2.0 |
 | `11010500` | Filter By Category: Catalog | bare_value | false | false | — | INFO | CatalogFS,CatalogFC |
+| `11010600` | Item List | bare_value | false | false | — | INFO | Vegas |
+| `11020000` | Filter By Country | none | false | false | — | INFO | — |
 | `11020100` | Filter By Country: New & Promo | bare_value | false | false | — | INFO | PDA |
 | `11020200` | Filter By Country: Recommend | bare_value | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC |
+| `11020300` | Purchase History | bare_value | false | false | — | INFO | PDA |
+| `11020400` | Catalog | bare_value | false | false | — | INFO | CatalogFS |
+| `11020500` | Item List | bare_value | false | false | — | INFO | CatalogFS |
+| `11030000` | Filter By Recommendation Reason | none | false | false | — | INFO | — |
+| `11030100` | Recommend | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11030200` | Catalog | bare_value | false | false | — | INFO | CatalogFS |
+| `11040000` | Filter By Brands | none | false | false | — | INFO | — |
+| `11040100` | All Items | bare_value | false | false | — | INFO | PDA |
+| `11050000` | Filter By Status | none | false | false | — | INFO | PDA2.0 |
 | `11050100` | Filter By Status: Order List Customer | bare_value | false | false | — | INFO | PDA,CatalogFS |
 | `11050200` | Filter By Status: Order List Sales | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11050300` | Order List: Office | bare_value | false | false | — | INFO | PDA,CatalogFS,PDA2.0 |
 | `11050400` | Filter By Status: Order List (Vegas/FC) | bare_value | false | false | — | INFO | Vegas,CatalogFC |
+| `11050500` | Filter By Status Chip: Order List Customer | kv | false | false | EVENT | INFO | PDA2.0 |
+| `11060000` | Filter By Customer | none | false | false | — | INFO | — |
 | `11060100` | Filter By Customer: Order List Customer | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11060200` | Order List: Sales | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11060300` | Order List: Office | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11060400` | Recycle Bin for Orders | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11070000` | Filter By Date | none | false | false | — | INFO | PDA2.0 |
 | `11070100` | Filter By Date: Order List Customer | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11070200` | Order List: Sales | kv | false | false | — | INFO | PDA,CatalogFS |
+| `11070300` | Order List: Office | kv | false | false | — | INFO | PDA,CatalogFS |
+| `11070400` | Filter By Date: NAV More | kv | false | false | EVENT | INFO | PDA2.0 |
+| `11080000` | Reset All Order Filter | none | false | false | — | INFO | — |
+| `11080100` | Order List: Customer | none | false | false | — | INFO | PDA,CatalogFS |
+| `11080200` | Order List: Sales | none | false | false | — | INFO | PDA,CatalogFS |
+| `11080300` | Order List: Office | none | false | false | — | INFO | PDA,CatalogFS,PDA2.0 |
+| `11080400` | Recycle Bin for Orders | none | false | false | — | INFO | PDA |
+| `11090000` | Reset All: Item Filter & Item Sort | none | false | false | — | INFO | PDA2.0 |
+| `11090100` | Line Item | none | false | false | — | INFO | PDA |
+| `11090200` | New & Promo | none | false | false | — | INFO | PDA |
 | `11090300` | Reset Filter: Recommend | none | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC |
+| `11090400` | Purchase History | none | false | false | — | INFO | PDA,PDA2.0 |
+| `11090500` | Review | none | false | false | — | INFO | PDA |
+| `11090600` | Catalog | none | false | false | — | INFO | CatalogFS,CatalogFC |
+| `11090700` | Item List | none | false | false | — | INFO | CatalogFS,CatalogFC |
+| `11100000` | Reset Item Sort | none | false | false | — | INFO | — |
+| `11100100` | Line Item | none | false | false | — | INFO | PDA,PDA2.0 |
+| `11100200` | New & Promo | none | false | false | — | INFO | PDA |
+| `11100300` | Recommend | none | false | false | — | INFO | PDA |
+| `11100400` | Purchase History | none | false | false | — | INFO | PDA |
+| `11100500` | Review | none | false | false | — | INFO | PDA |
+| `11110000` | Reset: Item Filter | none | false | false | — | INFO | PDA2.0 |
+| `11110100` | Line Item | none | false | false | — | INFO | PDA |
+| `11110200` | New & Promo | none | false | false | — | INFO | PDA |
+| `11110300` | Recommend | none | false | false | — | INFO | PDA |
+| `11110400` | Purchase History | none | false | false | — | INFO | PDA |
+| `11110500` | Review | none | false | false | — | INFO | PDA |
+| `11110600` | All Items | none | false | false | — | INFO | PDA,PDA2.0 |
+| `11120000` | Sort | none | false | false | — | INFO | PDA2.0 |
 | `11120100` | Sort: Order List Customer | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11120200` | Order List: Sales | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11120300` | Order List: Office | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `11120400` | All Items | bare_value | false | false | — | INFO | PDA |
+| `11120500` | Allocations | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `11120600` | Office Order Detail: Line Item | bare_value | false | false | — | INFO | PDA |
+| `11120700` | New & Promo | bare_value | false | false | — | INFO | PDA |
+| `11120800` | Recommend | bare_value | false | false | — | INFO | PDA |
+| `11120900` | Purchase History | bare_value | false | false | — | INFO | PDA |
+| `11121000` | Review | bare_value | false | false | — | INFO | PDA |
+| `11121100` | Nearby | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `11121200` | Order Detail | bare_value | false | false | — | INFO | CatalogFS |
 | `11121300` | Sort: Recommended | bare_value | false | false | — | INFO | CatalogFS,Vegas,CatalogFC |
+| `11121400` | Recommend by Service | bare_value | false | false | — | INFO | CatalogFS,Vegas,CatalogFC |
 | `11121500` | Sort: Cart | bare_value | false | false | — | INFO | Vegas |
+| `11121600` | Sort: Line Item | kv | false | false | EVENT | INFO | PDA2.0 |
+| `11130000` | Filter & Sort Apply | none | false | false | — | — | PDA2.0 |
+| `11130100` | Filter & Sort Apply: Backorders | kv | false | false | EVENT | INFO | PDA2.0 |
 
 
-### L1 = 12 — Search (8 events)
+### L1 = 12 — Search (28 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `12010100` | Search: Order List Customer | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `12000000` | Search | none | false | false | — | — | — |
+| `12010100` | Search: Order List Customer | bare_value | false | false | — | INFO | PDA,CatalogFS,PDA2.0 |
 | `12010200` | Search: Order List Sales | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `12010300` | Order List: Office | bare_value | false | false | — | INFO | PDA,CatalogFS |
+| `12010400` | Create Order | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `12010500` | All Items | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `12010600` | Allocations | none | false | false | — | INFO | PDA,PDA2.0 |
+| `12010700` | New & Promo | bare_value | false | false | — | INFO | PDA,PDA2.0 |
 | `12010800` | Search: Recommend | bare_value | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC |
+| `12010900` | Purchase History | bare_value | false | false | — | INFO | PDA |
+| `12011000` | Review | bare_value | false | false | — | INFO | PDA |
 | `12011100` | Search: Order Detail | bare_value | false | false | — | INFO | CatalogFS,CatalogFC |
 | `12011200` | Search: Home Bar | bare_value | false | false | — | INFO | CatalogFS,Vegas,CatalogFC,Web |
 | `12011300` | Search: Search Page | bare_value | false | false | — | INFO | Vegas |
+| `12011400` | Product List | bare_value | false | false | — | INFO | Vegas |
+| `12011500` | My Lists | bare_value | false | false | — | INFO | Vegas |
 | `12011600` | Search: Back Order | bare_value | false | false | — | INFO | Vegas |
 | `12011700` | Search: Cart | bare_value | false | false | — | INFO | Vegas |
+| `12011800` | Search: New Schedule | kv | false | false | EVENT | INFO | PDA2.0 |
+| `12020000` | Show Search | none | false | false | — | INFO | — |
+| `12020100` | Order List | none | false | false | — | INFO | PDA |
+| `12020101` | Order List - Show | none | false | false | — | INFO | PDA |
+| `12020102` | Order List - Hide | none | false | false | — | INFO | PDA |
+| `12020200` | Recycle Bin for Orders | none | false | false | — | INFO | PDA |
+| `12020201` | Recycle Bin for Orders - Show | none | false | false | — | INFO | PDA |
+| `12020202` | Recycle Bin for Orders - Hide | none | false | false | — | INFO | PDA |
+| `12030000` | Search Result Click | none | false | false | — | — | PDA2.0 |
+| `12030100` | Search Result Click: Order List | kv | false | false | EVENT | INFO | PDA2.0 |
 
 
-### L1 = 13 — Send Email / Fax (4 events)
+### L1 = 13 — Send Email / Fax (5 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `13010100` | Invoice - Success | bare_value | false | true | System Event | INFO | PDA,Vegas |
-| `13010200` | Invoice - Fail | bare_value | false | true | System Event | WARN | PDA,Vegas |
-| `13020100` | Statement/Balance - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC |
-| `13020200` | Statement/Balance - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,Vegas,CatalogFC |
+| `13000000` | Send Email/Fax | none | false | false | — | — | — |
+| `13010100` | Invoice - Success | bare_value | false | true | System Event | INFO | PDA,Vegas,PDA2.0 |
+| `13010200` | Invoice - Fail | bare_value | false | true | System Event | WARN | PDA,Vegas,PDA2.0 |
+| `13020100` | Statement/Balance - Success | bare_value | false | true | System Event | INFO | PDA,CatalogFS,Vegas,CatalogFC,PDA2.0 |
+| `13020200` | Statement/Balance - Fail | bare_value | false | true | System Event | WARN | PDA,CatalogFS,Vegas,CatalogFC,PDA2.0 |
 
 
-### L1 = 14 — Item Detail Navigation (11 events)
+### L1 = 14 — Item Detail Navigation (21 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
+| `14000000` | Item enters the details page | none | false | false | — | — | — |
 | `14010000` | Item Detail: New & Promo | sku | false | false | EVENT | EVENT | PDA,Web |
 | `14020000` | Item Detail: Recommend | sku | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
 | `14030000` | Item Detail: Purchase History | sku | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
 | `14040000` | Item Detail: Review | sku | false | false | EVENT | EVENT | PDA |
-| `14050000` | Item Detail: Line Item | sku | false | false | EVENT | EVENT | PDA |
+| `14050000` | Item Detail: Line Item | sku | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `14060000` | All Items | bare_value | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `14070000` | Office Line Item | bare_value | false | false | EVENT | EVENT | PDA,PDA2.0 |
 | `14080000` | Item Detail: Order Detail | sku | false | false | EVENT | EVENT | CatalogFS,CatalogFC |
 | `14090000` | Item Detail: My Lists | sku | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `14100000` | Item Detail: Back Order | sku | false | false | EVENT | EVENT | Vegas,Web |
 | `14110000` | Item Detail: Cart | sku | false | false | EVENT | EVENT | Vegas,Web |
+| `14120000` | Other | bare_value | false | false | EVENT | EVENT | — |
+| `14130000` | Product List | bare_value | false | false | EVENT | EVENT | Vegas,Web |
 | `14140000` | Item Detail: Catalog | sku | false | false | EVENT | EVENT | CatalogFS,CatalogFC |
 | `14150000` | Item Detail: Recommend by Service | sku | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `14160000` | click_new_item | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `14170000` | click_promo_item | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
+| `14180000` | Item Family: Open | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `14190000` | Item Family: Switch SKU | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `14200000` | Item enter - Market Highlights | kv | true | false | EVENT | EVENT | CatalogFS |
 
 
-### L1 = 15 — Item Image Enlarge (2 events)
+### L1 = 15 — Item Image Enlarge (4 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `15010000` | Item Enlarge: Product Detail | sku | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC,Web |
+| `15000000` | Item Enlarge | none | false | false | — | — | — |
+| `15010000` | Item Enlarge: Product Detail | sku | false | false | — | INFO | PDA,CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
 | `15020000` | Item Enlarge: Catalog | sku | false | false | — | INFO | CatalogFS,CatalogFC |
+| `15030000` | Item Enlarge: All Items List | kv | false | false | EVENT | INFO | PDA2.0 |
 
 
-### L1 = 16 — Settings & Account (13 events)
+### L1 = 16 — Settings & Account (33 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
+| `16000000` | Settings/Account | none | false | false | — | — | — |
 | `16010000` | Settings: Location | none | false | false | — | INFO | PDA |
-| `16030000` | Settings: Address Confirmation ON | none | false | false | — | INFO | PDA |
-| `16040000` | Settings: Address Confirmation OFF | none | false | false | — | INFO | PDA |
+| `16020000` | See Data | none | false | false | — | INFO | PDA,PDA2.0 |
+| `16030000` | Settings: Address Confirmation ON | none | false | false | — | INFO | PDA,PDA2.0 |
+| `16040000` | Settings: Address Confirmation OFF | none | false | false | — | INFO | PDA,PDA2.0 |
 | `16050000` | Settings: On-Screen Keyboard ON | none | false | false | — | INFO | PDA |
 | `16060000` | Settings: On-Screen Keyboard OFF | none | false | false | — | INFO | PDA |
-| `16100000` | Check APP Version | none | false | false | — | INFO | PDA,CatalogFS,CatalogFC |
-| `16110000` | Settings: BLE Settings | none | false | false | — | INFO | PDA |
+| `16070000` | Customer Order - Modification Reminder-ON | none | false | false | — | INFO | PDA,PDA2.0 |
+| `16080000` | Customer Order - Modification Reminder-OFF | none | false | false | — | INFO | PDA,PDA2.0 |
+| `16090000` | Legend | none | false | false | — | INFO | PDA,CatalogFS,CatalogFC,PDA2.0 |
+| `16100000` | Check APP Version | none | false | false | — | INFO | PDA,CatalogFS,CatalogFC,PDA2.0 |
+| `16110000` | Settings: BLE Settings | none | false | false | — | INFO | PDA,PDA2.0 |
 | `16120100` | Setting: Face ID ON | none | false | false | — | — | CatalogFS |
 | `16120200` | Setting: Face ID OFF | none | false | false | — | — | CatalogFS |
 | `16130000` | Setting: Manage Categories | none | false | false | — | — | CatalogFS |
 | `16140100` | Setting: Show Price ON | none | false | false | — | — | CatalogFS |
 | `16140200` | Setting: Show Price OFF | none | false | false | — | — | CatalogFS |
 | `16150100` | Setting: Only Show In Stock ON | none | false | false | — | — | CatalogFS |
+| `16150200` | Setting: Only show in Stock  OFF | none | false | false | — | — | — |
+| `16160000` | Settings: Full Download | kv | false | false | EVENT | INFO | PDA2.0 |
+| `16170000` | Settings: Text Size | kv | false | false | EVENT | INFO | PDA2.0 |
+| `16180100` | App Update: Popup Shown | kv | false | true | System Event | INFO | PDA2.0 |
+| `16180200` | App Update: Update Now | kv | false | false | EVENT | INFO | PDA2.0 |
+| `16180300` | App Update: Skip This Version | kv | false | false | EVENT | INFO | PDA2.0 |
+| `16180400` | App Update: Download Fail | kv | false | true | System Event | WARN | PDA2.0 |
+| `16190000` | Internal Setting: Enter | none | false | false | EVENT | INFO | PDA2.0 |
+| `16200100` | Internal Setting: Auto Check Store Arrival ON | kv | false | false | EVENT | INFO | PDA2.0 |
+| `16200200` | Internal Setting: Auto Check Store Arrival OFF | kv | false | false | EVENT | INFO | PDA2.0 |
+| `16200300` | Auto Check Store Arrival Status | kv | false | true | System Event | INFO | PDA2.0 |
+| `16210100` | Internal Setting: Internal Logging ON | none | false | false | EVENT | INFO | PDA2.0 |
+| `16210200` | Internal Setting: Internal Logging OFF | none | false | false | EVENT | INFO | PDA2.0 |
+| `16220000` | Internal Setting: Switch Endpoint | kv | false | false | EVENT | WARN | PDA2.0 |
+| `16230000` | Internal Setting: Erase All Local Data | kv | false | false | EVENT | WARN | PDA2.0 |
 
 
-### L1 = 17 — BLE (39 events)
+### L1 = 17 — BLE (81 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `17010100` | BLE: Home ON | none | false | false | — | INFO | PDA |
-| `17010200` | BLE: Home OFF | none | false | false | — | INFO | PDA |
+| `17000000` | BLE | none | false | false | — | — | PDA |
+| `17010000` | Enable BLE | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17010100` | BLE: Home ON | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17010200` | BLE: Home OFF | none | false | false | — | INFO | PDA,PDA2.0 |
 | `17010300` | BLE: Menu ON | none | false | false | — | INFO | PDA |
 | `17010400` | BLE: Menu OFF | none | false | false | — | INFO | PDA |
-| `17010500` | BLE: Setting ON | none | false | false | — | INFO | PDA |
-| `17010600` | BLE: Setting OFF | none | false | false | — | INFO | PDA |
-| `17010700` | BLE MODE Timeout | none | false | false | — | INFO | PDA |
-| `17020101` | BLE: Pair - Success | none | false | false | — | INFO | PDA |
-| `17020102` | BLE: Pair - Fail | none | false | false | — | INFO | PDA |
-| `17020200` | BLE: Unpair | none | false | false | — | INFO | PDA |
-| `17020301` | BLE: Auto Connection - Success | none | false | false | — | INFO | PDA |
-| `17020302` | BLE: Auto Connection - Fail | none | false | false | — | INFO | PDA |
-| `17030000` | BLE: Forget Device | none | false | false | — | INFO | PDA |
-| `17040101` | BLE Scan: Home - Found | none | false | false | — | INFO | PDA |
-| `17040102` | BLE Scan: Home - Not Found | none | false | false | — | WARN | PDA |
-| `17040201` | BLE Scan: Setting - Found | none | false | false | — | INFO | PDA |
-| `17040202` | BLE Scan: Setting - Not Found | none | false | false | — | WARN | PDA |
-| `17040301` | BLE Scan: BLE Link ON - Found | none | false | false | — | INFO | PDA |
-| `17040302` | BLE Scan: BLE Link ON - Not Found | none | false | false | — | WARN | PDA |
+| `17010500` | BLE: Setting ON | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17010600` | BLE: Setting OFF | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17010700` | BLE MODE Timeout | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17010800` | BLE: Home Long Press | kv | false | false | EVENT | INFO | PDA2.0 |
+| `17010900` | BLE: Permission Denied | kv | false | true | System Event | WARN | PDA2.0 |
+| `17020000` | Pair/Unpair | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17020101` | BLE: Pair - Success | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17020102` | BLE: Pair - Fail | none | false | false | — | WARN | PDA,PDA2.0 |
+| `17020200` | BLE: Unpair | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17020301` | BLE: Auto Connection - Success | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17020302` | BLE: Auto Connection - Fail | none | false | false | — | WARN | PDA,PDA2.0 |
+| `17020400` | BLE: Connected Prompt Action | kv | false | false | EVENT | INFO | PDA2.0 |
+| `17020500` | BLE: Session Disconnected | kv | false | true | System Event | WARN | PDA2.0 |
+| `17020601` | BLE: Reconnect Resync - Success | kv | false | true | System Event | INFO | PDA2.0 |
+| `17020602` | BLE: Reconnect Resync - Fail | kv | false | true | System Event | WARN | PDA2.0 |
+| `17030000` | BLE: Forget Device | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17040000` | Scan | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17040101` | BLE Scan: Home - Found | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17040102` | BLE Scan: Home - Not Found | none | false | false | — | WARN | PDA,PDA2.0 |
+| `17040103` | BLE Scan: Home - Cancelled | kv | false | false | EVENT | INFO | PDA2.0 |
+| `17040201` | BLE Scan: Setting - Found | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17040202` | BLE Scan: Setting - Not Found | none | false | false | — | WARN | PDA,PDA2.0 |
+| `17040301` | BLE Scan: BLE Link ON - Found | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17040302` | BLE Scan: BLE Link ON - Not Found | none | false | false | — | WARN | PDA,PDA2.0 |
 | `17040401` | BLE Scan: Menu - Found | none | false | false | — | INFO | PDA |
 | `17040402` | BLE Scan: Menu - Not Found | none | false | false | — | WARN | PDA |
-| `17040501` | BLE Auto Scan - Found | none | false | false | — | INFO | PDA |
-| `17040502` | BLE Auto Scan - Not Found | none | false | false | — | WARN | PDA |
-| `17050101` | BLE Op: Lock/Unlock Catalog | bare_value | false | false | — | INFO | PDA |
-| `17050201` | BLE Op: Jump to Back | none | false | false | — | INFO | PDA |
-| `17050301` | BLE Op: Jump to Categories | positional | false | false | — | INFO | PDA |
-| `17050401` | BLE Op: Jump to Backorder | none | false | false | — | INFO | PDA |
-| `17050501` | BLE Op: Jump to Purchase History | none | false | false | — | INFO | PDA |
+| `17040501` | BLE Auto Scan - Found | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17040502` | BLE Auto Scan - Not Found | none | false | false | — | WARN | PDA,PDA2.0 |
+| `17050000` | BLE event operation | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050100` | (BLE Only) Lock Catalog Screen | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050101` | BLE Op: Lock/Unlock Catalog | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `17050200` | (BLE Only) Jump to Back | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050201` | BLE Op: Jump to Back | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050300` | (BLE Only) Jump to Categories | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050301` | BLE Op: Jump to Categories | positional | false | false | — | INFO | PDA,PDA2.0 |
+| `17050400` | (BLE Only) Jump to Backorder | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050401` | BLE Op: Jump to Backorder | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050500` | (BLE Only) Jump to Purchase History | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050501` | BLE Op: Jump to Purchase History | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050600` | (BLE Only) Jump to Recommend | none | false | false | — | INFO | PDA |
 | `17050601` | BLE Op: Jump to Recommend | none | false | false | — | INFO | PDA |
-| `17050701` | BLE Op: Jump to Cart | none | false | false | — | INFO | PDA |
-| `17050801` | BLE Op: Jump to Item Family | sku | false | false | — | INFO | PDA |
-| `17050901` | BLE Op: Catalog Left Slide | none | false | false | — | INFO | PDA |
-| `17051001` | BLE Op: Catalog Right Slide | none | false | false | — | INFO | PDA |
-| `17051101` | BLE Op: Jump to Search Results | bare_value | false | false | — | INFO | PDA |
-| `17051301` | BLE Op: Item Highlight - Line Item | sku | false | false | — | INFO | PDA |
+| `17050700` | (BLE Only) Jump to Cart | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050701` | BLE Op: Jump to Cart | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050800` | (BLE Only) Jump to Item Family | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050801` | BLE Op: Jump to Item Family | sku | false | false | — | INFO | PDA,PDA2.0 |
+| `17050900` | (BLE Only) Catalog Left slide | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17050901` | BLE Op: Catalog Left Slide | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17051000` | (BLE Only) Catalog Right slide | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17051001` | BLE Op: Catalog Right Slide | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17051100` | (BLE Only) Jump Search Results | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `17051101` | BLE Op: Jump to Search Results | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `17051300` | (BLE Only) Item Highlight | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17051301` | BLE Op: Item Highlight - Line Item | sku | false | false | — | INFO | PDA,PDA2.0 |
 | `17051302` | BLE Op: Item Highlight - New & Promo | sku | false | false | — | INFO | PDA |
 | `17051303` | BLE Op: Item Highlight - Recommend | sku | false | false | — | INFO | PDA |
-| `17051401` | BLE Op: Jump to Detail - Product Detail | sku | false | false | — | INFO | PDA |
-| `17051402` | BLE Op: Jump to Detail - Hard Keys | sku | false | false | — | INFO | PDA |
+| `17051304` | Purchase History | sku | false | false | — | INFO | PDA |
+| `17051305` | Review | sku | false | false | — | INFO | PDA |
+| `17051306` | Product Detail | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `17051307` | All Items | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `17051308` | Order Detail:Product Name | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `17051400` | (BLE Only) Jump to Detail | none | false | false | — | INFO | PDA,PDA2.0 |
+| `17051401` | BLE Op: Jump to Detail - Product Detail | sku | false | false | — | INFO | PDA,PDA2.0 |
+| `17051402` | BLE Op: Jump to Detail - Hard Keys | sku | false | false | — | INFO | PDA,PDA2.0 |
+| `17051403` | New & Promo | sku | false | false | — | INFO | PDA |
+| `17051404` | Recommend | sku | false | false | — | INFO | PDA |
+| `17051405` | Purchase History | bare_value | false | false | — | INFO | PDA |
+| `17051406` | Order Detail: Keyboard | sku | false | false | — | INFO | PDA,PDA2.0 |
+| `17051407` | Order Detail:Product Name | bare_value | false | false | — | INFO | PDA,PDA2.0 |
+| `17051501` | BLE Op: Jump to Market Highlights | kv | false | false | EVENT | INFO | PDA2.0 |
+| `17060000` | (BLE Only) Catalog Order Import / Merge | none | false | false | — | — | PDA2.0 |
+| `17060101` | BLE Order: Import Catalog Order - Success | kv | false | true | System Event | INFO | PDA2.0 |
+| `17060102` | BLE Order: Import Catalog Order - Fail | kv | false | true | System Event | WARN | PDA2.0 |
+| `17060201` | BLE Order: Merge Orders - Success | kv | false | true | System Event | INFO | PDA2.0 |
+| `17060202` | BLE Order: Merge Orders - Fail | kv | false | true | System Event | WARN | PDA2.0 |
+| `17060300` | BLE Order: Confirm Shipping | kv | false | false | EVENT | INFO | PDA2.0 |
 
 
-### L1 = 18 — Activity (Customer Interactions) (12 events)
+### L1 = 18 — Activity (Customer Interactions) (38 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
-| `18010000` | Scan Barcode | kv | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC |
-| `18020000` | click_backorder_icon | title | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
-| `18030000` | click_history_icon | title | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
-| `18040000` | click_suggest_icon | title | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
-| `18050000` | click_new_icon | title | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
-| `18060000` | click_promo_icon | title | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
-| `18070000` | click_new&promo_icon | title | false | false | EVENT | EVENT | PDA,Vegas,CatalogFC,Web |
-| `18080000` | click_all_product_icon | title | false | false | EVENT | EVENT | PDA,Vegas,CatalogFC,Web |
+| `18010000` | Scan Barcode | kv | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,PDA2.0 |
+| `18020000` | click_backorder_icon | bare_value | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
+| `18030000` | click_history_icon | bare_value | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
+| `18040000` | click_suggest_icon | bare_value | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web |
+| `18050000` | click_new_icon | bare_value | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
+| `18060000` | click_promo_icon | bare_value | false | false | EVENT | EVENT | PDA,CatalogFS,Vegas,CatalogFC,Web,PDA2.0 |
+| `18070000` | click_new&promo_icon | bare_value | false | false | EVENT | EVENT | PDA,Vegas,CatalogFC,Web |
+| `18080000` | click_all_product_icon | bare_value | false | false | EVENT | EVENT | PDA,Vegas,CatalogFC,Web,PDA2.0 |
 | `18090000` | click_categories_icon | bare_value | false | false | EVENT | EVENT | CatalogFS,Vegas,CatalogFC,Web |
 | `18100000` | promo_to_buttom | none | false | false | EVENT | EVENT | Vegas,Web |
 | `18110000` | new_to_buttom | none | false | false | EVENT | EVENT | Vegas,Web |
 | `18120000` | rec_to_buttom | none | false | false | EVENT | EVENT | Vegas |
+| `18130000` | Accessing the nearby page | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18140000` | Accessing the summary page | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18150000` | Accessing the review page | positional | false | false | EVENT | EVENT | PDA |
+| `18160000` | Expanding lineitem - AC/QPC details | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18170000` | Expanding lineitem - AC input | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18180000` | Expanding lineitem - QPC input | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18190000` | Expanding lineitem - OH details | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18200000` | Expanding lineitem - Expected arrival details | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18210000` | Accessing Check OOS | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18220000` | Accessing Edit Shipping | positional | false | false | EVENT | EVENT | PDA,PDA2.0 |
+| `18230000` | click_tab_home | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18240000` | click_tab_customers | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18250000` | click_tab_orders | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18260000` | click_tab_menu | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18270000` | click_menu_schedule | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18280000` | click_menu_allocation | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18290000` | click_menu_setting | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18300000` | click_past_promo_icon | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18310000` | access_sale_purchase_history | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18320000` | expand_item_inventory_po | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18330000` | share_item | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18340000` | click_customer_list_customer | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `18350000` | home_view | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `18360000` | click_home_schedule_card | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `18370000` | click_home_my_profile | none | false | false | EVENT | EVENT | PDA2.0 |
+| `18380000` | access_build_your_truck | kv | false | false | EVENT | EVENT | PDA2.0 |
 
 
-### L1 = 19 — Catalog View Analytics (1 events)
+### L1 = 19 — Catalog View Analytics (5 events)
 
 | Code | Function | Payload | Geo | System | Type | Level | Platforms |
 |---|---|---|---|---|---|---|---|
 | `19010000` | Catalog View | kv | true | false | EVENT | EVENT | CatalogFS,CatalogFC |
+| `19020000` | Market Highlights | none | false | false | — | — | CatalogFS |
+| `19020100` | mh_view | kv | true | false | EVENT | EVENT | CatalogFS |
+| `19020200` | mh_video_play | kv | true | false | EVENT | EVENT | CatalogFS |
+| `19020300` | mh_video_play_fail | kv | true | false | — | WARN | CatalogFS |
+
+
+### L1 = 20 — Vender (14 events)
+
+| Code | Function | Payload | Geo | System | Type | Level | Platforms |
+|---|---|---|---|---|---|---|---|
+| `20000000` | Vender | bare_value | false | false | — | EVENT | Web |
+| `20010100` | Vender - Login - Success | none | false | false | — | EVENT | Web |
+| `20010200` | Vender - Login- Fail | bare_value | false | false | — | WARN | Web |
+| `20010300` | Vender - Login - Success(Internal Allow login) | none | false | false | — | EVENT | Web |
+| `20010400` | Vender - Log Out | none | false | false | — | EVENT | Web |
+| `20020100` | ISF - Add | none | false | false | — | EVENT | Web |
+| `20020200` | ISF - Edit Draft | none | false | false | — | EVENT | Web |
+| `20020301` | ISF - Save Draft - Success | none | false | false | — | EVENT | Web |
+| `20020302` | ISF - Save Draft - Fail | none | false | false | — | EVENT | Web |
+| `20020401` | ISF - Submit- Success | none | false | false | — | EVENT | Web |
+| `20020402` | ISF - Submit- Fail | bare_value | false | false | — | WARN | Web |
+| `20020500` | ISF - Delete Draft | none | false | false | — | EVENT | Web |
+| `20030100` | Vender Request password reset | none | false | false | — | EVENT | Web |
+| `20040100` | Download ISF PDF | bare_value | false | false | — | EVENT | Web |
+
+
+### L1 = 21 — Schedule (22 events)
+
+| Code | Function | Payload | Geo | System | Type | Level | Platforms |
+|---|---|---|---|---|---|---|---|
+| `21000000` | Schedule | none | false | false | — | — | — |
+| `21010000` | Schedule Today | none | false | false | — | — | PDA2.0 |
+| `21010100` | schedule_today_view | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `21010200` | click_visiting_schedule | none | false | false | EVENT | EVENT | PDA2.0 |
+| `21020000` | Calendar | none | false | false | — | — | PDA2.0 |
+| `21020100` | schedule_calendar_view | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `21020200` | click_calendar_empty_date | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `21020300` | click_calendar_scheduled_date | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `21020400` | click_quick_start_today | none | false | false | EVENT | EVENT | PDA2.0 |
+| `21030000` | New Schedule | none | false | false | — | — | PDA2.0 |
+| `21030100` | new_schedule_view | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `21030200` | new_schedule_add_customer | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `21030300` | new_schedule_save | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `21030400` | new_schedule_cancel | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `21040000` | Modify Schedule | none | false | false | — | — | PDA2.0 |
+| `21040100` | modify_schedule_view | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `21040200` | modify_schedule_add_customer | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `21040300` | modify_schedule_save | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `21040400` | modify_schedule_cancel | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `21050000` | Stop Status Auto Update | none | false | false | — | — | PDA2.0 |
+| `21050100` | schedule_stop_skipped_auto | kv | false | true | System Event | INFO | PDA2.0 |
+| `21050200` | schedule_duplicate_resolved | kv | false | true | System Event | WARN | PDA2.0 |
+
+
+### L1 = 22 — Store Workbench & Visit (23 events)
+
+| Code | Function | Payload | Geo | System | Type | Level | Platforms |
+|---|---|---|---|---|---|---|---|
+| `22000000` | Store Workbench & Visit | none | false | false | — | — | — |
+| `22010000` | Workbench Enter | none | false | false | — | — | PDA2.0 |
+| `22010100` | workbench_enter_manual | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `22010200` | workbench_enter_gps_auto | kv | true | true | System Event | INFO | PDA2.0 |
+| `22020000` | Workbench Exit | none | false | false | — | — | PDA2.0 |
+| `22020100` | workbench_exit_manual | kv | true | false | EVENT | EVENT | PDA2.0 |
+| `22020200` | workbench_exit_gps_auto | kv | true | true | System Event | INFO | PDA2.0 |
+| `22020300` | workbench_exit_app_killed | kv | false | true | System Event | INFO | PDA2.0 |
+| `22030000` | Workbench Entry Click | none | false | false | — | — | PDA2.0 |
+| `22030100` | workbench_click_invoice | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `22030200` | workbench_click_statement | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `22030300` | workbench_click_order_list | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `22030400` | workbench_click_create_order | kv | false | false | EVENT | EVENT | PDA2.0 |
+| `22040000` | GPS Auto Check Skipped | none | false | false | — | — | PDA2.0 |
+| `22040100` | workbench_auto_skip_multi_candidate | kv | true | true | System Event | INFO | PDA2.0 |
+| `22040200` | workbench_auto_skip_occupied | kv | true | true | System Event | INFO | PDA2.0 |
+| `22050000` | Confirmed Visit | none | false | false | — | — | PDA2.0 |
+| `22050100` | visit_confirmed | kv | true | true | System Event | INFO | PDA2.0 |
+| `22050200` | visit_confirm_out_of_range | kv | true | true | System Event | INFO | PDA2.0 |
+| `22050300` | visit_confirm_location_unavailable | kv | false | true | System Event | WARN | PDA2.0 |
+| `22050400` | customer_no_coordinates | kv | false | true | System Event | WARN | PDA2.0 |
+| `22060000` | Departure Detected | none | false | false | — | — | PDA2.0 |
+| `22060100` | visit_departure_detected | kv | true | true | System Event | INFO | PDA2.0 |
 
 {% enddocs %}
 {% docs app_sources_glossary %}
-All 9 app source codes from API documentation Section 2.3.
+All 10 app source codes from API documentation Section 2.3 (v1.6),
+plus the 2 bare legacy aliases CatalogFC / Vegas.
 Naming convention: App Name - Platform (I=iOS, A=Android);
 single-platform apps omit the suffix.
 
@@ -348,12 +745,15 @@ single-platform apps omit the suffix.
 
 | Source code | App | Full name | User type | Platform |
 |---|---|---|---|---|
+| `CatalogFC` | CatalogFC | Catalog For Customer (iOS) | Customer | iOS |
 | `CatalogFC-A` | CatalogFC | Catalog For Customer (Android) | Customer | Android |
 | `CatalogFC-I` | CatalogFC | Catalog For Customer (iOS) | Customer | iOS |
 | `CatalogFS-A` | CatalogFS | Catalog For Sales (Android) | Sales | Android |
 | `CatalogFS-I` | CatalogFS | Catalog For Sales (iOS) | Sales | iOS |
 | `CatalogSE` | CatalogSE | K.M.Trading Special Edition | Customer | iOS |
-| `PDA-A` | PDA | PDA — Handheld Sales Device | Sales | Android |
+| `PDA` | PDA | PDA 2.0 — Handheld Sales Device (Honeywell CT70) | Sales | Android |
+| `PDA-A` | PDA | PDA 1.92 — Handheld Sales Device | Sales | Android |
+| `Vegas` | Vegas | Vegas — Customer App (iOS) | Customer | iOS |
 | `Vegas-A` | Vegas | Vegas — Customer App (Android) | Customer | Android |
 | `Vegas-I` | Vegas | Vegas — Customer App (iOS) | Customer | iOS |
 | `Web` | Web | Website (Latest Version) | Customer | Web |
@@ -382,17 +782,80 @@ app sections, not real product categories.
 | `27` | Fresh & Frozen |
 | `28` | Household |
 | `43` | Sauces & Seasonings |
+| `44` | Rice |
+| `45` | Noodles |
+| `46` | Rice Paper |
+| `47` | Instant Noodles & Porridge |
+| `48` | Lotus Rootlet |
+| `49` | Bamboo Shoots & Mixes |
+| `50` | Quail & Duck Eggs |
+| `51` | Mushrooms |
+| `52` | Vegetarian |
+| `53` | Corn & Waterchestnuts |
+| `54` | Preserved & Pickled |
+| `55` | Canned Seafood |
+| `56` | Dried Seafood |
+| `57` | Canned & Packaged Meats |
+| `58` | Fish Sauce |
+| `59` | Seasoning Sauces |
+| `60` | Soup Base & Powders |
+| `61` | Marinades & Dips |
+| `62` | Seasoning Mix & Curries |
+| `63` | Oil & Vinegar |
+| `64` | Condiments |
+| `65` | Nuts & Beans |
+| `66` | Tapioca & Dessert Mixes |
+| `67` | Dried Vegetables & Spices |
+| `68` | Flour & Batter Mixes |
+| `69` | Syrups & Agar |
+| `70` | Canned Fruits |
+| `71` | Ready Desserts |
+| `72` | Sugar & Condensed Milk |
+| `73` | Coconut Milk |
+| `74` | Candies |
+| `75` | Cookies & Crackers |
+| `76` | Salty Snacks |
+| `77` | Dehydrated Fruits |
+| `78` | Packaged Teas |
+| `79` | Instant Coffee & Drinks |
+| `80` | Juices & Teas |
+| `81` | Carbonated & Energy Drinks |
+| `82` | Cookware |
+| `83` | Utensils |
+| `84` | Joss Items |
+| `85` | Plastic Bags & Rolls |
+| `86` | Household & Cleaning |
+| `87` | Personal Care |
+| `88` | Medicinal |
+| `89` | Mats & Rattan |
+| `90` | Food Coloring & Essence |
+| `91` | Shrimp & Prawn |
+| `92` | Shellfish |
+| `93` | Squid & Cuttlefish |
+| `94` | Drinks |
+| `95` | Fruits & Vegetables |
+| `96` | Noodles & Wrappers |
+| `97` | Fish Whole |
+| `98` | Fish Specialty |
+| `99` | Desserts & Sweet |
+| `100` | Seafood Specialty & Other |
 | `134` | Special Items |
+| `143` | Jelly & Pudding |
+| `149` | Meats |
+| `150` | Meat Specialty & Other |
+| `152` | Appetizers & Meals |
+| `153` | Fresh |
+| `163` | Bakery |
 | `168` | Scraping music |
+| `170` | Tableware |
+| `171` | Cleaning Products |
 
 ### Virtual sections
 
 | Id | Name |
 |---|---|
-| `1111` | New |
 | `4444` | Back Order |
 | `5555` | Purchase History |
 | `7777` | HOT |
-| `8888` | Promo |
 | `9999` | Recommend |
 {% enddocs %}
