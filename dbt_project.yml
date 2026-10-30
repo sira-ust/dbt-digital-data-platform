@@ -357,6 +357,36 @@ vars:
   social_trend_rising_min_growth: 2.0     # at least 2x its own baseline (a staple sits near 1x)
   social_trend_rising_min_mentions: 4     # recent window floors, so 1 -> 3 posts never qualifies
   social_trend_rising_min_authors: 3
+  # ── WORDS INSIDE POSTS: the "Driven by" line + the rising WORDS list ──────────────
+  # int_social_board_drivers / int_social_rising_words (models/docs/_social_windows.md,
+  # section 10). Counted from the words in the post text, so a trend the AI tags many
+  # different ways is still counted as one. Not the product Rising list above.
+  social_words_vocab_weeks: 13           # the word list = AI tags (dishes, products, ingredients) of the last N weeks
+                                         # (= the board's history; 8 missed 550 words a busy week had tagged)...
+  social_words_vocab_min_posts: 4        # ...tagged in at least this many posts
+  social_words_max_text_per_tag: 25      # a word in the TEXT of more than this many posts per post TAGGED with it is a
+                                         # building block of other words (Thai "tom" boil 288x, "phat" stir-fry 372x,
+                                         # "sai" filling 326x), not a thing. Real words sit at 1-15x (squishy 10x,
+                                         # tom klong 8x); measured 2026-10-30. Keep this file ASCII: dbt reads it with
+                                         # the Windows code page locally, and Thai bytes break the parse
+
+  social_words_baseline_weeks: 4         # "usual" = the share of posts over the N weeks before
+  social_words_account_cap: 2            # one account counts at most this many posts a week (11 replies = 1 voice)
+  social_rising_words_min_posts: 8       # a rising word needs this many posts (after the account cap)...
+  social_rising_words_min_accounts: 5    # ...from this many accounts...
+  social_rising_words_max_posts_per_account: 3  # ...no more than this many raw posts per account (shop listings)...
+  social_rising_words_min_growth: 2.0    # ...at least this many times its usual share...
+  social_rising_words_max_base_per_k: 20 # ...and not an everyday word (usual share above this per 1,000 posts)
+  social_rising_words_story_overlap: 0.7 # words sharing this much of their posts are one story
+  social_rising_words_count: 30          # rising stories kept per week
+  social_driver_min_posts: 3             # a driver word is in at least this many of the row's posts this week...
+  social_driver_min_accounts: 3          # ...from this many accounts...
+  social_driver_min_row_share: 0.15      # ...and at least this share of the row's posts...
+  social_driver_min_lift: 3              # ...is this many times more common in the row than in the week overall...
+  social_driver_min_row_growth: 1.5      # ...and this many times more common than in the row's own earlier posts
+  social_driver_story_overlap: 0.6       # driver words sharing this much of the row's posts are one story
+  social_driver_candidates: 8            # strongest words per row that are merged into stories
+  social_driver_story_count: 2           # stories shown per row
   social_trend_link_count: 5         # source_links per concept-week, top links by reach then engagement
   social_resolve_min_confidence: 0.7 # below this, ANY match (carried/substitute/basket) is suppressed
   social_carried_skus_max: 200       # RUNAWAY GUARD only — the SKU list is not meant to truncate

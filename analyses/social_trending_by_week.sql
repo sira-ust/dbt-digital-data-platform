@@ -74,6 +74,14 @@
 -- say which account", NOT as "no demand". It is also why ust_accounts is a floor on
 -- every row, never an exact headcount.
 --
+-- WHAT IS DRIVING THE ROW (2026-10). `driven_by` reads the words inside the row's own
+-- posts, not the product list, so it can say what the row's name hides — in 2026-W43
+-- "Mama Instant Noodles" read "spring onion ต้นหอม + mama tom klong noodles (มาม่าต้มโคล้ง)
+-- — together in 12 of 25 posts": the WaiWai Quik tom klong trend. Show it under the
+-- row's name. Blank = nothing stood out. `driven_by_detail` is the per-word evidence.
+-- Words rising this week WITHOUT a row of their own are in a separate query,
+-- analyses/social_rising_by_week.sql — one row per word, not per board row.
+--
 -- DO NOT SUM THESE DOWN THE PAGE. They are attributed to the PRODUCT, and the board can
 -- carry one product under two names (an English and a Thai spelling, before concept
 -- grouping merges them) — both rows then show the same numbers. That is one population
@@ -188,6 +196,9 @@ select
         else 'same'
     end                                                      as movement,
     b.concept_label                                          as trending,
+    -- what the row's own posts are about this week; shown under the name. See header.
+    b.driven_by,
+    b.driven_by_detail,
     b.product_type                                           as type,
     b.brand,
     -- new / rising / steady / cooling: where the product is in its run

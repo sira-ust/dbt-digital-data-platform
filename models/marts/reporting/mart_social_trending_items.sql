@@ -96,6 +96,8 @@ board as (
         b.is_fade_paused,
         v.top_variants,
         v.related_products,
+        d.driven_by,
+        d.driven_by_detail,
         t.trend_rank,
         t.rank_change,
         t.mention_count,
@@ -120,6 +122,10 @@ board as (
         on  v.week_start    = b.week_start
         and v.concept_class = b.concept_class
         and v.concept_norm  = b.concept_norm
+    left join {{ ref('int_social_board_drivers') }} as d
+        on  d.week_start    = b.week_start
+        and d.concept_class = b.concept_class
+        and d.concept_norm  = b.concept_norm
     left join trends as t
         on  t.week_start    = b.week_start
         and t.concept_class = b.concept_class
@@ -686,6 +692,8 @@ joined as (
         b.is_fade_paused,
         b.top_variants,
         b.related_products,
+        b.driven_by,
+        b.driven_by_detail,
         b.trend_rank,
         b.rank_change,
         b.mention_count,
@@ -766,6 +774,12 @@ select
     -- social_trend_variant_window_weeks — see int_social_product_variants
     j.top_variants,
     j.related_products,
+    -- WHAT IS DRIVING the row this week: words inside the row's own posts that are far
+    -- more common there than in the week overall and grew within the row — e.g.
+    -- "spring onion ต้นหอม + mama tom klong noodles (มาม่าต้มโคล้ง) — together in 12 of
+    -- 25 posts". Null when nothing stands out. See int_social_board_drivers.
+    j.driven_by,
+    j.driven_by_detail,
 
     -- social trend signal for THIS WEEK alone (null on a week with no posts)
     j.trend_rank,

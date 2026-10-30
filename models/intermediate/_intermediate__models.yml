@@ -1223,6 +1223,125 @@ models:
           arguments:
             combination_of_columns: [week_start, concept_class, concept_norm]
 
+  - name: int_social_words
+    description: >
+      The word list the "Driven by" line and the rising-words list look for inside post
+      text: every dish, product and ingredient the enrichment tagged over the last
+      social_words_vocab_weeks, in at least social_words_vocab_min_posts posts, minus every
+      active seed_social_generic_terms row. Brands are left out (mostly shops, delivery apps
+      and channels). One list for every week, built from the latest weeks. See
+      models/docs/_social_windows.md, section 10.
+    columns:
+      - name: term
+        description: The word, lower-cased, exactly as the enrichment wrote it (Thai in Thai script).
+        tests: [unique, not_null]
+      - name: is_latin
+        description: Latin-script word — matched as a WHOLE word ("tea" is not in "steak"). Thai words match anywhere, Thai having no spaces.
+        tests: [not_null]
+      - name: tagged_posts
+        description: Posts whose tags named the word in the vocabulary window.
+      - name: gloss
+        description: >
+          The English name the name step gave the word when it is itself a dish or product
+          name (ต้มโคล้ง -> "tom khlong soup"). Null for ingredient-only words such as ต้นหอม:
+          the name step reads dish and product names only.
+
+  - name: int_social_word_posts
+    description: >
+      The posts the word features read — every board week plus the
+      social_words_baseline_weeks before the first — with two judgements made once: a
+      YouTube video's comment thread is ONE post (thread_key), and the account behind a post
+      (owner) is the video's channel for a comment and its own unknown account for an
+      anonymised Instagram row.
+    columns:
+      - name: mention_id
+        tests: [unique, not_null]
+      - name: week_start
+        description: Monday-anchored posting week, straight off fct_social_mentions.
+        tests: [not_null]
+      - name: thread_key
+        description: "'yt:<video id>' for a YouTube comment, else the mention id."
+        tests: [not_null]
+      - name: owner
+        description: The account the post counts for (see the model description).
+      - name: post_text
+        description: Title + content, lower-cased — what int_social_post_words searches.
+
+  - name: int_social_post_words
+    description: >
+      Which words of int_social_words each post contains — the one expensive step of the
+      word features (every post against every word), done once. Matching is on the post
+      TEXT, never its tags: that is what counts a trend once however each post was tagged.
+      Thai words match anywhere; Latin words as whole words.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [mention_id, term]
+
+  - name: int_social_post_products
+    description: >
+      Every post's tags mapped to the product key the board counts it under — the name map
+      (int_social_concept_canon) then the resolver's grouping. MIRRORS
+      int_social_concept_trends.grouped, so a board row's posts here are the posts the board
+      counted; keep the two in step. term is the spelling the post used, which tells the
+      driver line which words ARE the row.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [mention_id, concept_class, concept_norm, term]
+
+  - name: int_social_board_drivers
+    description: >
+      The "Driven by" line: for each board row each week, the words inside the row's own
+      posts that are far more common there than in the week overall
+      (social_driver_min_lift), grew within the row (social_driver_min_row_growth) and are
+      not the row's own name — merged so one word written several ways is one word and
+      words riding on the same posts are one story. No row when nothing stands out. Built
+      because in 2026-W43 14 of the 25 "Mama Instant Noodles" posts were the WaiWai Quik
+      tom-klong-with-spring-onion trend, which no label showed.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, concept_class, concept_norm]
+    columns:
+      - name: driven_by
+        description: >
+          Up to social_driver_story_count stories, e.g. "spring onion ต้นหอม + mama tom klong
+          noodles (มาม่าต้มโคล้ง) — together in 12 of 25 posts". A Thai word shows its English
+          name when the name step has one. "of N posts" is the row's posts that week,
+          counted exactly as the board counts them.
+        tests: [not_null]
+      - name: driven_by_detail
+        description: >
+          Per word: posts this week, posts in the row over the baseline weeks before, and
+          the other spellings that were merged into it ("also written").
+
+  - name: int_social_rising_words
+    description: >
+      Words rising this week whether or not they have a board row: share of the week's
+      posts against the social_words_baseline_weeks before, smoothed, per 1,000 posts. Comment
+      threads count once, an account at most social_words_account_cap times, floors on posts
+      and accounts, everyday words out; words riding on the same posts are one story.
+      is_on_board false = a potential new trend. Not the product Rising list on the board
+      (int_social_trend_board.rising_rank): that ranks board products, this ranks words.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, rising_rank]
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, story]
+    columns:
+      - name: story
+        description: The key of the story — the word of its biggest group before display rules.
+        tests: [not_null]
+      - name: growth
+        description: (share this week + 0.5) / (usual share + 0.5), shares per 1,000 posts.
+        tests: [not_null]
+      - name: is_on_board
+        description: Half its posts already count on a board row, or its name is a board row's spelling.
+        tests: [not_null]
+
   - name: int_rep_period_sales
     description: >
       ONE ROW PER REP PER PERIOD — posted sales money and the target it is

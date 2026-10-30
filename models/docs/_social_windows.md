@@ -168,6 +168,31 @@ baseline. A staple talked about every week sits near 1x and never qualifies; a p
 new to the feed (no baseline share at all) qualifies on volume alone. This is the
 "potential trend" list — read it beside the board, not instead of it.
 
+### 10. Words inside posts — what drives a row, and what rises before it has one
+
+Everything above counts a post toward a PRODUCT through the AI's tags, and one trend can
+be tagged many ways. In Oct 2026 the WaiWai Quik tom klong + spring onion trend was
+written ~15 ways and split over ~30 tagged products, none big enough to rank; it showed
+only as "Mama Instant Noodles", because Thai posts call any instant noodle มาม่า. Two
+features count WORDS in the post text instead, so a trend is counted once however each
+post was tagged:
+
+- **Driven by** (`int_social_board_drivers`, `driven_by` on the mart): the words in a board
+  row's own posts that are much more common there than in the week overall and grew
+  within the row over the `social_words_baseline_weeks` (4) before. Mama in 2026-W43:
+  "spring onion ต้นหอม + mama tom klong noodles (มาม่าต้มโคล้ง) — together in 12 of 25 posts".
+- **Rising words** (`mart_social_rising_words`): words whose share of the week's posts
+  jumped against the same 4 weeks, board row or not. Tom klong was the top riser of
+  2026-W42, a week before it filled the Mama row.
+
+Two more windows come with them: the **word list** is the AI's dish, product and
+ingredient tags of the last `social_words_vocab_weeks` (13, the board's history), one list for every week (like
+`in_stock`, it is about today), and the **baseline** is the 4 weeks before each week.
+Both features merge spellings of one word and words that ride on the same posts
+(`macros/social_words.sql`), count a YouTube comment thread once and an account at most
+`social_words_account_cap` times. Category words and staples are kept out by
+`seed_social_generic_terms` (`applies_to = words` rows touch no board ranking).
+
 ### One product, one name (not a window, but it changes every number above)
 
 Every dish / product NAME the enrichment ever extracted — all history, not the 13

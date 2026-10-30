@@ -527,11 +527,18 @@ seeds:
           every row is 'item'. This is the escape hatch for "generic as an
           ingredient, specific as a dish": the two classes are separate rank
           spaces, so suppressing one side costs the other nothing.
+
+          'words' rows touch NO board ranking: they only leave the word list behind
+          the "Driven by" line and the rising-words list (int_social_words). They
+          hold category words (ขนม, เครื่องดื่ม, snacks) that rise with the feed's
+          mix, and the Thai / Vietnamese forms of staples the board stoplists in
+          English. The word list drops every ACTIVE row of this seed, whatever its
+          applies_to — a term too generic to rank is too generic to drive a row.
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: [dish, item, all]
+                values: [dish, item, all, words]
       - name: language
         description: >
           Which language the spelling belongs to — th / vi / en / any.
