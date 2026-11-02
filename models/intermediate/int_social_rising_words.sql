@@ -1,4 +1,4 @@
-{{ config(tags=['social']) }}
+{{ config(materialized='ephemeral', tags=['social']) }}
 {% set base_weeks = var('social_words_baseline_weeks') %}
 {% set cap = var('social_words_account_cap') %}
 {% set str = dbt.type_string() %}

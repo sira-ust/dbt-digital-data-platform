@@ -1,4 +1,4 @@
-{{ config(tags=['social']) }}
+{{ config(materialized='ephemeral', tags=['social']) }}
 {% set vocab_days = 7 * var('social_words_vocab_weeks') - 1 %}
 -- int_social_words — THE WORD LIST the "Driven by" line and the rising-words list look
 -- for inside post text. One row per word.

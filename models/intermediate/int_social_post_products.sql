@@ -1,4 +1,4 @@
-{{ config(tags=['social']) }}
+{{ config(materialized='ephemeral', tags=['social']) }}
 -- int_social_post_products — every post's tags mapped to the PRODUCT key the board
 -- counts it under: one row per (mention, product, spelling).
 --

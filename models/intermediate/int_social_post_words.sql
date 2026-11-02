@@ -3,6 +3,11 @@
 -- per (mention, word). The one expensive step of the word features, done ONCE here so
 -- the driver line and the rising list both read a table.
 --
+-- KEEP IT A TABLE. Every other step behind the word features is ephemeral, and making
+-- this one ephemeral too was tried (2026-11): same results, but the build went from
+-- ~37 s to ~7 min on duckdb, because the driver and rising logic read it in many places
+-- and an inlined step re-runs at every one of them.
+--
 -- Matching is on the post TEXT, never on its tags: that is the whole point (see
 -- int_social_words). Thai words match anywhere — Thai is written without spaces, so
 -- ต้มโคล้ง inside "มาม่าต้มโคล้งใส่ต้นหอม" is the word. Latin words must match as whole

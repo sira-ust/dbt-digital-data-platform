@@ -629,6 +629,10 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [week_start, rising_rank]
+      # one story per week: int_social_rising_words is ephemeral, so its story check sits here
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, head_word]
     columns:
       - name: week_start
         tests: [not_null]
@@ -659,6 +663,9 @@ models:
         description: >
           The board rows holding a real part of its posts (3+ and 20%+), with board and rank
           — or its own row when it is on the board. Null when no row holds a real part.
+      - name: head_word
+        description: The story's main word as written in the posts (Thai in Thai script) — its key within a week.
+        tests: [not_null]
 
   - name: mart_social_trending_items
     description: >

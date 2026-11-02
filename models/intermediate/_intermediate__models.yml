@@ -1231,13 +1231,13 @@ models:
       active seed_social_generic_terms row. Brands are left out (mostly shops, delivery apps
       and channels). One list for every week, built from the latest weeks. See
       models/docs/_social_windows.md, section 10.
+      Ephemeral (no table): compiled into the models that read it. One row per term
+      (grouped by term).
     columns:
       - name: term
         description: The word, lower-cased, exactly as the enrichment wrote it (Thai in Thai script).
-        tests: [unique, not_null]
       - name: is_latin
         description: Latin-script word — matched as a WHOLE word ("tea" is not in "steak"). Thai words match anywhere, Thai having no spaces.
-        tests: [not_null]
       - name: tagged_posts
         description: Posts whose tags named the word in the vocabulary window.
       - name: gloss
@@ -1252,16 +1252,15 @@ models:
       social_words_baseline_weeks before the first — with two judgements made once: a
       YouTube video's comment thread is ONE post (thread_key), and the account behind a post
       (owner) is the video's channel for a comment and its own unknown account for an
-      anonymised Instagram row.
+      anonymised Instagram row. Ephemeral (no table): compiled into the models that read
+      it. One row per mention, as in fct_social_mentions.
     columns:
       - name: mention_id
-        tests: [unique, not_null]
+        description: The post — one row per mention.
       - name: week_start
         description: Monday-anchored posting week, straight off fct_social_mentions.
-        tests: [not_null]
       - name: thread_key
         description: "'yt:<video id>' for a YouTube comment, else the mention id."
-        tests: [not_null]
       - name: owner
         description: The account the post counts for (see the model description).
       - name: post_text
@@ -1272,7 +1271,10 @@ models:
       Which words of int_social_words each post contains — the one expensive step of the
       word features (every post against every word), done once. Matching is on the post
       TEXT, never its tags: that is what counts a trend once however each post was tagged.
-      Thai words match anywhere; Latin words as whole words.
+      Thai words match anywhere; Latin words as whole words. The one TABLE the word features
+      keep in ust_intermediate: both features read it, so the matching runs once a build,
+      and it answers "which posts say X" when a driver line looks wrong. Every step around
+      it is ephemeral; inlining this one too gave the same results ~10x slower.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -1284,11 +1286,8 @@ models:
       (int_social_concept_canon) then the resolver's grouping. MIRRORS
       int_social_concept_trends.grouped, so a board row's posts here are the posts the board
       counted; keep the two in step. term is the spelling the post used, which tells the
-      driver line which words ARE the row.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [mention_id, concept_class, concept_norm, term]
+      driver line which words ARE the row. Ephemeral (no table): compiled into the models
+      that read it; select distinct, so one row per (mention, product, spelling).
 
   - name: int_social_board_drivers
     description: >
@@ -1298,11 +1297,9 @@ models:
       not the row's own name — merged so one word written several ways is one word and
       words riding on the same posts are one story. No row when nothing stands out. Built
       because in 2026-W43 14 of the 25 "Mama Instant Noodles" posts were the WaiWai Quik
-      tom-klong-with-spring-onion trend, which no label showed.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [week_start, concept_class, concept_norm]
+      tom-klong-with-spring-onion trend, which no label showed. Ephemeral (no table):
+      compiled into mart_social_trending_items, whose (week_start, concept_class,
+      concept_norm) test fails if a driver row ever duplicates a board row.
     columns:
       - name: driven_by
         description: >
@@ -1310,7 +1307,6 @@ models:
           noodles (มาม่าต้มโคล้ง) — together in 12 of 25 posts". A Thai word shows its English
           name when the name step has one. "of N posts" is the row's posts that week,
           counted exactly as the board counts them.
-        tests: [not_null]
       - name: driven_by_detail
         description: >
           Per word: posts this week, posts in the row over the baseline weeks before, and
@@ -1324,23 +1320,14 @@ models:
       and accounts, everyday words out; words riding on the same posts are one story.
       is_on_board false = a potential new trend. Not the product Rising list on the board
       (int_social_trend_board.rising_rank): that ranks board products, this ranks words.
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [week_start, rising_rank]
-      - dbt_utils.unique_combination_of_columns:
-          arguments:
-            combination_of_columns: [week_start, story]
+      Ephemeral (no table): compiled into mart_social_rising_words, which carries the tests.
     columns:
       - name: story
         description: The key of the story — the word of its biggest group before display rules.
-        tests: [not_null]
       - name: growth
         description: (share this week + 0.5) / (usual share + 0.5), shares per 1,000 posts.
-        tests: [not_null]
       - name: is_on_board
         description: Half its posts already count on a board row, or its name is a board row's spelling.
-        tests: [not_null]
 
   - name: int_rep_period_sales
     description: >

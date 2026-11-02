@@ -193,6 +193,14 @@ Both features merge spellings of one word and words that ride on the same posts
 `social_words_account_cap` times. Category words and staples are kept out by
 `seed_social_generic_terms` (`applies_to = words` rows touch no board ranking).
 
+Only two tables come with them: `int_social_post_words`, the one expensive step (which
+words each post contains), read by both features; and `mart_social_rising_words`. The
+driver lines are two columns on `mart_social_trending_items`. The word list, the post
+text, the post-to-row map, the driver lines and the rising scores are ephemeral models,
+compiled into the table that reads them. Inlining the matching as well was tried: the
+same results, but a build ~10x slower, since the marts read it in many places and an
+inlined step re-runs at each.
+
 ### One product, one name (not a window, but it changes every number above)
 
 Every dish / product NAME the enrichment ever extracted — all history, not the 13

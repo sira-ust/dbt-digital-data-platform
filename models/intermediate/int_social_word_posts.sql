@@ -1,4 +1,4 @@
-{{ config(tags=['social']) }}
+{{ config(materialized='ephemeral', tags=['social']) }}
 -- int_social_word_posts — the posts the word features read, one row per mention: every
 -- board week plus the social_words_baseline_weeks before the first one (the "usual" a
 -- week is compared with). Two judgements are made here, once, for both features:
