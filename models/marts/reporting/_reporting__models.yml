@@ -629,7 +629,7 @@ models:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [week_start, rising_rank]
-      # one story per week: int_social_rising_words is ephemeral, so its story check sits here
+      # one story per week (head_word is the story's main word)
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns: [week_start, head_word]

@@ -12,7 +12,7 @@
 --
 -- WHY. The board labels a row by its product, and the product can hide the trend: in
 -- 2026-W43 14 of the 25 "Mama Instant Noodles" posts were the WaiWai Quik tom-klong-with-
--- spring-onion trend, which never formed a row of its own (see int_social_words). Words
+-- spring-onion trend, which never formed a row of its own (see int_social_post_words). Words
 -- found inside the row's OWN posts say what the row is really about this week.
 --
 -- A DRIVER WORD, in the row's posts this week, is
@@ -45,8 +45,39 @@ with board as (
 
 ),
 
--- each board row's posts: this week (is_now) and the baseline weeks before it, mapped
--- exactly as the board maps them (int_social_post_products)
+-- int_social_post_words three ways: the words found in posts, every post (to size the
+-- week) and the word list (Latin or not, English name)
+hits as (
+
+    select mention_id, week_start, owner, term
+    from {{ ref('int_social_post_words') }}
+    where term is not null
+
+),
+
+posts as (
+
+    select distinct mention_id, week_start
+    from {{ ref('int_social_post_words') }}
+
+),
+
+words as (
+
+    select distinct term, is_latin, gloss
+    from {{ ref('int_social_post_words') }}
+    where term is not null
+
+),
+
+-- every post's board product, mapped exactly as the board maps it (macros/social_words.sql)
+post_products as (
+
+    {{ social_post_products() }}
+
+),
+
+-- each board row's posts: this week (is_now) and the baseline weeks before it
 row_posts as (
 
     select distinct
@@ -56,7 +87,7 @@ row_posts as (
         pp.mention_id,
         pp.week_start = b.week_start                                    as is_now
     from board as b
-    inner join {{ ref('int_social_post_products') }} as pp
+    inner join post_products as pp
         on  pp.concept_class = b.concept_class
         and pp.concept_norm  = b.concept_norm
         and pp.week_start between cast({{ dbt.dateadd('day', -7 * base_weeks, 'b.week_start') }} as date)
@@ -81,7 +112,7 @@ row_hits as (
 
     select rp.week_start, rp.concept_class, rp.concept_norm, rp.is_now, pw.term, pw.mention_id, pw.owner
     from row_posts as rp
-    inner join {{ ref('int_social_post_words') }} as pw
+    inner join hits as pw
         on pw.mention_id = rp.mention_id
 
 ),
@@ -90,7 +121,7 @@ row_hits as (
 week_size as (
 
     select week_start, count(*) as week_posts
-    from {{ ref('int_social_word_posts') }}
+    from posts
     group by 1
 
 ),
@@ -98,7 +129,7 @@ week_size as (
 word_week as (
 
     select week_start, term, count(*) as week_word_posts
-    from {{ ref('int_social_post_words') }}
+    from hits
     group by 1, 2
 
 ),
@@ -107,7 +138,7 @@ word_week as (
 spellings as (
 
     select concept_norm, term, count(*) as uses
-    from {{ ref('int_social_post_products') }}
+    from post_products
     group by 1, 2
 
 ),
@@ -170,7 +201,7 @@ scored as (
         on ws.week_start = c.week_start
     inner join word_week as ww
         on ww.week_start = c.week_start and ww.term = c.term
-    inner join {{ ref('int_social_words') }} as w
+    inner join words as w
         on w.term = c.term
     left join own_spelling as os
         on {{ _sw_on('os', 'c', part) }} and os.term = c.term
@@ -303,7 +334,7 @@ shown as (
     from drv_story as s
     inner join story_ranked as sr
         on {{ _sw_on('sr', 's', part) }} and sr.story = s.story
-    inner join {{ ref('int_social_words') }} as w
+    inner join words as w
         on w.term = s.head
     inner join row_size as rs
         on {{ _sw_on('rs', 's', part) }}
