@@ -6,13 +6,13 @@ writes multi-label attributes (is_spam, is_food_relevant, themes[], dishes[], �
 to the enrichment table keyed by mention_id. dbt then joins that table; dbt
 itself never calls the LLM, so the warehouse build stays deterministic.
 
-LLM access = Databricks-hosted Claude via the workspace serving endpoint
-(Option 1). No Anthropic API key: the anthropic SDK is pointed at
-https://<host>/serving-endpoints/anthropic and authenticated with a DATABRICKS
-token; the model is `databricks-claude-haiku-4-5`. Databricks serving is
-synchronous (no Batch API), so mentions are classified concurrently with a
-thread pool, and the model is prompted to return strict JSON (structured-output
-`output_config` may not pass through the serving proxy).
+LLM access = Databricks-hosted Claude through Unity AI Gateway (llm_gateway.py).
+No Anthropic API key: the anthropic SDK is pointed at
+https://<host>/ai-gateway/anthropic and authenticated with a DATABRICKS token;
+the model is `system.ai.claude-haiku-4-5`. Databricks serving is synchronous (no
+Batch API), so mentions are classified concurrently with a thread pool, and the
+model is prompted to return strict JSON (structured-output `output_config` may not
+pass through the serving proxy).
 
 Reads the dbt STAGING model (stg_mentionlytics__mentions), so dbt must build
 staging BEFORE this runs — the LLM only ever sees deduped, cleaned rows and the
@@ -21,8 +21,9 @@ enrich -> dbt (rest).
 
 Two backends, one core:
   --backend local       reads ust_staging.stg_mentionlytics__mentions from
-                        dev.duckdb, writes mention_enrichment.parquet. Needs
-                        DATABRICKS_HOST + DATABRICKS_TOKEN (a PAT) for the endpoint.
+                        dev.duckdb, writes mention_enrichment.parquet. Signs in
+                        with DATABRICKS_SERVING_TOKEN (an ai-gateway-scoped PAT)
+                        if set, else a browser sign-in.
   --backend databricks  reads ust_databricks.ust_staging.stg_mentionlytics__mentions,
                         writes ust_databricks.social.mention_enrichment (Delta).
 
@@ -30,8 +31,8 @@ Runs on Databricks as a **Python-script task** (spark_python_task) — no notebo
   - Source: Git, path scripts/enrich_mentions.py; Parameters: --backend databricks
   - Dependent libraries (PyPI): anthropic, databricks-sdk
   - Auth is AMBIENT — the task's run-as identity supplies the serving token via
-    databricks-sdk (no secret, no PAT, no env vars). The run-as user must have
-    model-serving access. (Local runs still use DATABRICKS_HOST/DATABRICKS_TOKEN.)
+    databricks-sdk (no secret, no PAT, no env vars). The run-as user needs EXECUTE
+    on the system.ai model service (account users have it by default).
 
 Incremental, VERSION-AWARE, and BOUNDED. A mention counts as done if it is enriched
 at the current model+prompt version, OR is enriched at all and sits outside the last
@@ -45,7 +46,7 @@ pre-filter labels obvious gambling/betting spam first (is_spam, no LLM call), so
 only the rest reach the model — see PREFILTER_SPAM_TERMS. Multi-label by design —
 arrays, never a single category key.
 
-Local smoke test (needs a Databricks PAT in env):
+Local smoke test (DATABRICKS_SERVING_TOKEN, or a browser sign-in):
     python scripts/enrich_mentions.py --backend local --limit 10
     python scripts/enrich_mentions.py --backend local --dry-run   # build prompts only, no calls
     python scripts/enrich_mentions.py --backend databricks --backfill-weeks 8
@@ -63,6 +64,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+except NameError:
+    pass
+
+import llm_gateway  # noqa: E402
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
@@ -99,7 +108,7 @@ def _dbt_var(name, default):
         return default
 
 
-MODEL = "databricks-claude-haiku-4-5"   # Databricks-hosted; billed via Databricks
+MODEL = "system.ai.claude-haiku-4-5"    # Databricks-hosted; billed via Databricks
 PROMPT_VERSION = "v4"                    # bump when INSTRUCTIONS change (stored in model_version).
                                          # v4 = added subject_dishes / subject_products: WHAT THE POST
                                          #      IS ABOUT, as opposed to everything it names. The
@@ -324,44 +333,11 @@ _REQUIRED_KEYS = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Serving-endpoint client (Databricks-hosted Claude)
+# LLM client (Claude through Databricks Unity AI Gateway — see llm_gateway.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _resolve_host_token(backend):
-    """Databricks workspace host + serving token. Env vars win (DATABRICKS_HOST /
-    DATABRICKS_TOKEN — used for local runs with a PAT). Otherwise, on the
-    databricks backend, use AMBIENT auth via databricks-sdk: the compute's run-as
-    identity supplies the token, so no PAT and no secret are needed (the run-as
-    user must have model-serving access)."""
-    host = os.environ.get("DATABRICKS_HOST")
-    token = os.environ.get("DATABRICKS_TOKEN")
-    if backend == "databricks" and (not host or not token):
-        from databricks.sdk.core import Config
-        cfg = Config()
-        host = host or cfg.host
-        if not token:
-            bearer = (cfg.authenticate() or {}).get("Authorization", "")
-            if bearer.lower().startswith("bearer "):
-                token = bearer.split(" ", 1)[1]
-    if not host or not token:
-        raise SystemExit(
-            "Need a Databricks host + token: set DATABRICKS_HOST / DATABRICKS_TOKEN "
-            "for local runs, or run on Databricks compute (ambient auth)."
-        )
-    return host.replace("https://", "").rstrip("/"), token
-
-
 def get_client(backend):
-    import anthropic
-    host, token = _resolve_host_token(backend)
-    # Per Databricks docs: point the SDK at the serving endpoint, api_key unused,
-    # real auth via the Bearer header.
-    return anthropic.Anthropic(
-        api_key="unused",
-        base_url=f"https://{host}/serving-endpoints/anthropic",
-        default_headers={"Authorization": f"Bearer {token}"},
-        max_retries=MAX_RETRIES,   # backs off + honors retry-after on 429/5xx
-    )
+    return llm_gateway.get_client(backend, max_retries=MAX_RETRIES)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -527,8 +503,9 @@ def _current_versions():
     gambling spam), so an LLM-version bump must NOT drag them back through the
     pipeline — they have empty arrays by definition and fct_social_mentions filters
     them out anyway. Bump PREFILTER_VERSION when the term list changes and they
-    re-run instead."""
-    return {f"{MODEL}/{PROMPT_VERSION}", PREFILTER_VERSION}
+    re-run instead. Labels stamped with the model's pre-gateway name
+    (databricks-claude-*) are the same model, so they count too."""
+    return {*llm_gateway.same_model_versions(f"{MODEL}/{PROMPT_VERSION}"), PREFILTER_VERSION}
 
 
 def is_prefilter_spam(m):

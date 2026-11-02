@@ -1,7 +1,7 @@
 """Resolve trending social CONCEPTS to WMS SKUs (step ③, OUT-OF-BAND from dbt).
 
 Sibling of scripts/enrich_mentions.py — SAME LLM setup (Databricks-hosted Claude
-via the workspace serving endpoint, ambient auth on the databricks backend). dbt
+through Unity AI Gateway, ambient auth on the databricks backend). dbt
 stays deterministic and never calls the LLM; this writes a table dbt then reads.
 GATED: only the top-N ranked concepts are resolved, so the long tail costs nothing.
 
@@ -61,9 +61,10 @@ Flow position (weekly social job):
   --backend databricks  reads ust_databricks.ust_intermediate.*, writes
                         ust_databricks.social.concept_resolution (Delta)
 
-NOTE: the serving endpoint needs the model-serving scope — available to the
-Databricks job's run-as identity, NOT to a plain SQL PAT. Run the real resolution
-as the databricks job. Smoke-test prompts locally with --dry-run.
+NOTE: the gateway refuses the plain SQL PAT. The Databricks job's run-as identity
+works; locally, set DATABRICKS_SERVING_TOKEN (an ai-gateway-scoped PAT) or sign in
+through the browser. Run the real resolution as the databricks job. Smoke-test
+prompts locally with --dry-run.
 
     python scripts/resolve_trending_concepts.py --backend local --dry-run
 """
@@ -81,6 +82,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
+
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+except NameError:
+    pass
+
+import llm_gateway  # noqa: E402
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
@@ -127,7 +136,7 @@ def _dbt_var(name, default):
         return default
 
 
-MODEL = "databricks-claude-haiku-4-5"   # same endpoint as enrich_mentions
+MODEL = "system.ai.claude-haiku-4-5"    # same model as enrich_mentions
 PROMPT_VERSION = "v11"                   # v5 = propose + independent VERIFY pass; deglossed snippet keys
                                          # v6 = SECOND LOOK on a "none": recall matters as much as
                                          #      precision here, because a false "we don't carry this"
@@ -447,38 +456,11 @@ _MATCHED_RESULTS = {"carried", "substitute", "basket"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Serving-endpoint client — identical pattern to enrich_mentions.py
+# LLM client (Claude through Databricks Unity AI Gateway — see llm_gateway.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _resolve_host_token(backend):
-    host = os.environ.get("DATABRICKS_HOST")
-    token = os.environ.get("DATABRICKS_TOKEN")
-    if backend == "databricks" and (not host or not token):
-        from databricks.sdk.core import Config
-        cfg = Config()
-        host = host or cfg.host
-        if not token:
-            bearer = (cfg.authenticate() or {}).get("Authorization", "")
-            if bearer.lower().startswith("bearer "):
-                token = bearer.split(" ", 1)[1]
-    if not host or not token:
-        raise SystemExit(
-            "Need a Databricks host + token: set DATABRICKS_HOST / DATABRICKS_TOKEN "
-            "for local runs, or run on Databricks compute (ambient auth). The token "
-            "must have the model-serving scope."
-        )
-    return host.replace("https://", "").rstrip("/"), token
-
-
 def get_client(backend):
-    import anthropic
-    host, token = _resolve_host_token(backend)
-    return anthropic.Anthropic(
-        api_key="unused",
-        base_url=f"https://{host}/serving-endpoints/anthropic",
-        default_headers={"Authorization": f"Bearer {token}"},
-        max_retries=MAX_RETRIES,
-    )
+    return llm_gateway.get_client(backend, max_retries=MAX_RETRIES)
 
 
 # Whether the serving proxy accepts `temperature`. Determinism matters here (the
@@ -670,13 +652,16 @@ def _snippet_source_sql(fct_rel, window_start=None, window_end=None):
 def _current_rows_sql(table, version):
     """Current-version resolution rows, deduped the same way staging does
     (latest resolved_at per concept). Read so alias harmonisation (below) can
-    see concepts resolved in EARLIER runs, not just this batch."""
+    see concepts resolved in EARLIER runs, not just this batch. Rows stamped with
+    the model's pre-gateway name (databricks-claude-*) are the same model, so they
+    count as current too."""
+    in_list = ", ".join(f"'{v}'" for v in llm_gateway.same_model_versions(version))
     return f"""
         select * from (
             select *, row_number() over (
                 partition by concept_norm order by resolved_at desc) as _rn
             from {table}
-            where model_version = '{version}'
+            where model_version in ({in_list})
         ) where _rn = 1
     """
 

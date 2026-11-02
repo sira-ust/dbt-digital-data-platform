@@ -61,6 +61,7 @@ from promo_common import (  # noqa: E402
     INTERMEDIATE_SCHEMA, LANDING, STAGING_SCHEMA, append_records, dbt_var, ensure_landing, extract_json,
     find_project_root, get_llm_client, landing_path, query, split_terms,
 )
+from llm_gateway import same_model_versions  # noqa: E402
 
 PROMPT_VERSION = "v4"   # v2: brand-code glossary; no "D " private-label rule. v3: Chinese terms + query.
                         # v4: frozen items with no brand still get product terms + search queries
@@ -211,10 +212,13 @@ def attach_siblings(backend: str, rows: list[dict]) -> None:
 def items_needing_terms(backend: str, version: str) -> list[dict]:
     """Items with no terms yet, plus the latest month's unreviewed items whose draft
     was made with another version (never a reviewed seed row, never an older
-    month). The newer draft wins in stg_promo__item_terms_draft."""
+    month). The newer draft wins in stg_promo__item_terms_draft. A draft stamped
+    with the model's pre-gateway name (databricks-claude-*) is the same model, so
+    it is not re-drafted."""
     dbx = backend == "databricks"
     rel = f"{INTERMEDIATE_SCHEMA}.int_promo_items_enriched" if dbx else "ust_intermediate.int_promo_items_enriched"
     drafts = f"{STAGING_SCHEMA}.stg_promo__item_terms_draft" if dbx else "ust_staging.stg_promo__item_terms_draft"
+    current = ", ".join(f"'{v}'" for v in same_model_versions(version))
     rows = query(backend, f"""
         select i.*
         from {rel} as i
@@ -222,7 +226,7 @@ def items_needing_terms(backend: str, version: str) -> list[dict]:
         where i.terms_source = 'missing'
            or (i.terms_source = 'draft'
                and i.promo_month = (select max(promo_month) from {rel})
-               and coalesce(d.model_version, '') <> '{version}')
+               and coalesce(d.model_version, '') not in ({current}))
     """)
     seen, out = set(), []
     for r in rows:                      # one draft per item, however many months list it
@@ -307,7 +311,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--backend", choices=["local", "databricks"], default="local")
     ap.add_argument("--to-seed", action="store_true", help="append drafts to the seed CSV (local)")
-    ap.add_argument("--model", default=dbt_var("promo_terms_model", "databricks-claude-sonnet-5-5"))
+    ap.add_argument("--model", default=dbt_var("promo_terms_model", "system.ai.claude-sonnet-5-5"))
     ap.add_argument("--concurrency", type=int, default=6)
     args = ap.parse_args(argv)
 

@@ -26,7 +26,8 @@
 # ONE-TIME SETUP, before the first run (each is a Databricks write, so it is a
 # person's call, not this file's):
 #   1. create volumes ust_databricks.social.promo_landing and .promo_output
-#   2. the run-as identity needs: model-serving access (the judge), READ on secret
+#   2. the run-as identity needs: EXECUTE on the system.ai Claude model services
+#      (the judge; account users have it by default), READ on secret
 #      scope ust-social (the YouTube key), and write on ust_databricks.social
 #      (the promo_* landing tables are created by load_promo_list.py on first run)
 #   3. the daily job must exclude tag:promo — see scripts/databricks/job.yml
