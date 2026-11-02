@@ -23,7 +23,8 @@
 # builds would otherwise run early and fail on a table that does not exist yet (it did on
 # the first run, 2026-10-06). The final dbt_social step runs every test.
 #
-# The run-as identity needs: model-serving access (enrich, canonicalize, resolve) and
+# The run-as identity needs: EXECUTE on the system.ai Claude model services (enrich,
+# canonicalize, resolve; account users have it by default) and
 # write on ust_databricks.social (the scripts create concept_canon / product_profile
 # with `create table if not exists` on first use).
 

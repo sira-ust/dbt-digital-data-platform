@@ -245,37 +245,14 @@ def final_status(keyword_level, verdict):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LLM (Databricks-hosted Claude)
+# LLM (Claude through Databricks Unity AI Gateway)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _bearer_token(backend: str) -> str:
-    """A token allowed to call model serving.
-    databricks backend: the job's run-as identity (ambient, no secret).
-    local: DATABRICKS_SERVING_TOKEN if set, otherwise a browser sign-in (cached
-    after the first time). The everyday DATABRICKS_TOKEN PAT is deliberately NOT
-    used: it is scoped to SQL and is refused by model serving."""
-    from databricks.sdk.core import Config
-    if backend == "databricks":
-        return Config().authenticate()["Authorization"].split(" ", 1)[1]
-    if os.environ.get("DATABRICKS_SERVING_TOKEN"):
-        return os.environ["DATABRICKS_SERVING_TOKEN"]
-    saved = os.environ.pop("DATABRICKS_TOKEN", None)
-    try:
-        cfg = Config(host=f"https://{DATABRICKS_HOST}", auth_type="external-browser")
-        return cfg.authenticate()["Authorization"].split(" ", 1)[1]
-    finally:
-        if saved is not None:
-            os.environ["DATABRICKS_TOKEN"] = saved
-
-
 def get_llm_client(backend: str, max_retries: int = 8):
-    import anthropic
-    return anthropic.Anthropic(
-        api_key="unused",
-        base_url=f"https://{DATABRICKS_HOST}/serving-endpoints/anthropic",
-        default_headers={"Authorization": f"Bearer {_bearer_token(backend)}"},
-        max_retries=max_retries,
-    )
+    """Route and sign-in live in llm_gateway.py, shared with the social scripts.
+    Imported here, not at the top, so the pure helpers stay import-free."""
+    from llm_gateway import get_client
+    return get_client(backend, max_retries=max_retries)
 
 
 def extract_json(text):

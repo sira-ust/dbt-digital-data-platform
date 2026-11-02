@@ -58,16 +58,16 @@ resolve -> dbt (rest).
     python scripts/canonicalize_concepts.py --profile-products  # phase 2: label new products
     python scripts/canonicalize_concepts.py --backend databricks [--profile-products]
 
-Local runs authenticate to model serving with DATABRICKS_SERVING_TOKEN if set, else a
-browser sign-in (the everyday DATABRICKS_TOKEN PAT is SQL-only and is refused by model
-serving). On Databricks, auth is the job's run-as identity.
+Claude is reached through Databricks Unity AI Gateway (llm_gateway.py). Local runs
+sign in with DATABRICKS_SERVING_TOKEN (an ai-gateway-scoped PAT) if set, else a browser
+sign-in (the everyday DATABRICKS_TOKEN PAT is SQL-only and is refused). On Databricks,
+auth is the job's run-as identity.
 """
 
 from __future__ import annotations
 
 import argparse
 import difflib
-import os
 import re
 import sys
 import time
@@ -76,7 +76,15 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-MODEL = "databricks-claude-sonnet-5"
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+except NameError:
+    pass
+
+import llm_gateway  # noqa: E402
+
+MODEL = "system.ai.claude-sonnet-5"
 PROMPT_VERSION = "v1"
 BATCH_SIZE = 60          # names per call: a 60-line reply fits comfortably in max_tokens
 CONCURRENCY = 6
@@ -89,8 +97,6 @@ LOCAL_CANON_PATH = "data/mock/mentionlytics/concept_canon.parquet"
 DUCKDB_NAMES_REL = "ust_intermediate.int_social_concept_mentions"
 DBX_NAMES_REL = "ust_databricks.ust_intermediate.int_social_concept_mentions"
 DBX_CANON_TABLE = "ust_databricks.social.concept_canon"
-DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST", "adb-7405618436278207.7.azuredatabricks.net") \
-    .replace("https://", "").rstrip("/")
 COLUMNS = ["concept_class", "concept_norm", "concept_text", "canonical_name",
            "canonical_class", "canonicalized_at", "model_version"]
 
@@ -152,35 +158,13 @@ Reply with one line per input and nothing else, TAB-separated, copying the input
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LLM client (Databricks-hosted Claude)
+# LLM client (Claude through Databricks Unity AI Gateway — see llm_gateway.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _bearer_token(backend: str) -> str:
-    from databricks.sdk.core import Config
-    if backend == "databricks":
-        return Config().authenticate()["Authorization"].split(" ", 1)[1]
-    if os.environ.get("DATABRICKS_SERVING_TOKEN"):
-        return os.environ["DATABRICKS_SERVING_TOKEN"]
-    saved = os.environ.pop("DATABRICKS_TOKEN", None)   # SQL-only PAT: refused by serving
-    try:
-        cfg = Config(host=f"https://{DATABRICKS_HOST}", auth_type="external-browser")
-        return cfg.authenticate()["Authorization"].split(" ", 1)[1]
-    finally:
-        if saved is not None:
-            os.environ["DATABRICKS_TOKEN"] = saved
-
-
 def get_client(backend: str):
-    import anthropic
-    return anthropic.Anthropic(
-        api_key="unused",
-        base_url=f"https://{DATABRICKS_HOST}/serving-endpoints/anthropic",
-        default_headers={"Authorization": f"Bearer {_bearer_token(backend)}"},
-        # bounded: the SDK default (10-minute timeout x 8 retries) let one network drop
-        # stall a wave for 73 minutes on 2026-10-06. A failed batch is retried next run.
-        timeout=120.0,
-        max_retries=4,
-    )
+    # bounded: the SDK default (10-minute timeout x 8 retries) let one network drop
+    # stall a wave for 73 minutes on 2026-10-06. A failed batch is retried next run.
+    return llm_gateway.get_client(backend, max_retries=4, timeout=120.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

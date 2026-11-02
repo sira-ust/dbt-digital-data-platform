@@ -82,8 +82,10 @@ ignores). Then add `--vars '{local_data_root: data/real}'` to every dbt command 
 `PROMO_LOCAL_DATA_ROOT=data/real` for the scripts.
 
 **Credentials:**
-- Local AI calls sign in through the browser. The everyday `DATABRICKS_TOKEN` PAT is
-  SQL-only and model serving refuses it.
+- Local AI calls go through Databricks Unity AI Gateway (`scripts/llm_gateway.py`) and
+  sign in with `DATABRICKS_SERVING_TOKEN` (an `ai-gateway`-scoped PAT) if set, else
+  through the browser. The everyday `DATABRICKS_TOKEN` PAT is SQL-only and the gateway
+  refuses it.
 - The YouTube key comes from `YOUTUBE_API_KEY` in `.env` locally, or secret scope
   `ust-social` / `youtube-api-key` on Databricks.
 

@@ -111,7 +111,7 @@ models:
       - name: enriched_at
         description: Classification time (dedup tiebreak).
       - name: model_version
-        description: Model + prompt version (e.g. databricks-claude-haiku-4-5/v1).
+        description: Model + prompt version (e.g. system.ai.claude-haiku-4-5/v4; databricks-claude-haiku-4-5 before 2026-11 — the same model).
 
   - name: stg_mentionlytics__concept_resolution
     description: >
@@ -189,7 +189,8 @@ models:
       - name: model_version
         description: >
           Model + prompt version that produced it (e.g.
-          databricks-claude-haiku-4-5/v5). A '-noverify' suffix marks a smoke-test
+          system.ai.claude-haiku-4-5/v11; databricks-claude-haiku-4-5 before 2026-11).
+          A '-noverify' suffix marks a smoke-test
           row written without the review pass; those never pass as verified and are
           re-resolved on the next normal run.
 

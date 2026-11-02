@@ -101,8 +101,8 @@ sources:
         identifier: "{{ 'mention_enrichment' if target.type == 'databricks' else 'temp_mention_enrichment' }}"
         description: >
           LLM-derived attributes per mention, produced OUT-OF-BAND by
-          scripts/enrich_mentions.py via the Databricks-hosted Claude serving
-          endpoint (databricks-claude-haiku-4-5). dbt only reads this — it never
+          scripts/enrich_mentions.py via Databricks-hosted Claude through Unity
+          AI Gateway (system.ai.claude-haiku-4-5). dbt only reads this — it never
           calls the LLM. Keyed by mention_id (NOT a WMS key). Multi-label arrays
           by design. On DuckDB reads the pulled sample parquet; on Databricks the
           social.mention_enrichment Delta table (append-only; staging dedupes on
@@ -157,7 +157,7 @@ sources:
           - name: enriched_at
             description: When this row was classified (dedup tiebreak — latest wins).
           - name: model_version
-            description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v1).
+            description: Model + prompt version that produced it (e.g. system.ai.claude-haiku-4-5/v4; rows before 2026-11 carry the same model's legacy name, databricks-claude-haiku-4-5).
 
       - name: concept_resolution
         identifier: "{{ 'concept_resolution' if target.type == 'databricks' else 'temp_concept_resolution' }}"
@@ -225,7 +225,7 @@ sources:
           - name: resolved_at
             description: When this concept was resolved (dedup tiebreak — latest wins).
           - name: model_version
-            description: Model + prompt version that produced it (e.g. databricks-claude-haiku-4-5/v5); a '-noverify' suffix marks a smoke-test row written without the review pass.
+            description: Model + prompt version that produced it (e.g. system.ai.claude-haiku-4-5/v11; rows before 2026-11 carry the same model's legacy name, databricks-claude-haiku-4-5); a '-noverify' suffix marks a smoke-test row written without the review pass.
 
       - name: concept_canon
         identifier: "{{ 'concept_canon' if target.type == 'databricks' else 'temp_concept_canon' }}"
@@ -258,7 +258,7 @@ sources:
           - name: canonicalized_at
             description: When the name was canonicalised (dedup tiebreak — latest wins).
           - name: model_version
-            description: Model + prompt version, e.g. databricks-claude-sonnet-5/v1.
+            description: Model + prompt version, e.g. system.ai.claude-sonnet-5/v1 (databricks-claude-sonnet-5/v1 before 2026-11 — the same model).
 
       - name: product_profile
         identifier: "{{ 'product_profile' if target.type == 'databricks' else 'temp_product_profile' }}"
@@ -283,4 +283,4 @@ sources:
           - name: profiled_at
             description: When the label was written. Dedup tiebreak within a prompt version -- latest wins.
           - name: model_version
-            description: Model + prompt version, e.g. databricks-claude-sonnet-5/v1. The highest version wins per product_key.
+            description: Model + prompt version, e.g. system.ai.claude-sonnet-5/v1 (databricks-claude-sonnet-5/v1 before 2026-11 — the same model). The highest version wins per product_key.
