@@ -285,7 +285,7 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true", help="show items and queries; no API calls")
     ap.add_argument("--max-queries", type=int, default=int(dbt_var("promo_youtube_max_queries_per_item", 3)))
     ap.add_argument("--results", type=int, default=int(dbt_var("promo_youtube_results_per_query", 25)))
-    ap.add_argument("--model", default=dbt_var("promo_judge_model", "databricks-claude-sonnet-5"))
+    ap.add_argument("--model", default=dbt_var("promo_judge_model", "system.ai.claude-sonnet-5"))
     ap.add_argument("--votes", type=int, default=int(dbt_var("promo_judge_votes", 3)))
     ap.add_argument("--concurrency", type=int, default=8)
     args = ap.parse_args(argv)

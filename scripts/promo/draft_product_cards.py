@@ -48,7 +48,7 @@ except NameError:
 
 from promo_common import (  # noqa: E402
     INTERMEDIATE_SCHEMA, LANDING, STAGING_SCHEMA, append_records, dbt_var, ensure_landing, extract_json,
-    get_llm_client, landing_path, query, read_photo, split_terms,
+    get_llm_client, landing_path, query, read_photo, same_model_versions, split_terms,
 )
 
 CARD_PROMPT_VERSION = "v1"
@@ -135,7 +135,10 @@ def items_needing_cards(backend: str, version: str) -> tuple[list[dict], list[di
             continue
         r["_photo"] = _photo_bytes(r.get("photo_path"))
         r["_fingerprint"] = input_fingerprint(r, r["_photo"])
-        if r.get("card_version") != version or r.get("input_fingerprint") != r["_fingerprint"]:
+        # a card stamped with the model's pre-gateway name (databricks-claude-*) is the
+        # same model, so it is still current
+        if (r.get("card_version") not in same_model_versions(version)
+                or r.get("input_fingerprint") != r["_fingerprint"]):
             todo.append(r)
     return items, todo
 
@@ -208,7 +211,7 @@ def draft_one(client, model: str, version: str, row: dict, month_items: list[dic
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--backend", choices=["local", "databricks"], default="local")
-    ap.add_argument("--model", default=dbt_var("promo_terms_model", "databricks-claude-sonnet-5-5"))
+    ap.add_argument("--model", default=dbt_var("promo_terms_model", "system.ai.claude-sonnet-5-5"))
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--only", nargs="*", help="draft just these item numbers (a test run)")
     ap.add_argument("--dry-run", action="store_true", help="list the items to draft; no model calls")

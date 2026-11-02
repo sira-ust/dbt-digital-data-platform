@@ -167,7 +167,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--backend", choices=["local", "databricks"], default="local")
     ap.add_argument("--dry-run", action="store_true", help="keyword pass only; print candidates, no LLM")
-    ap.add_argument("--model", default=dbt_var("promo_judge_model", "databricks-claude-sonnet-5-5"))
+    ap.add_argument("--model", default=dbt_var("promo_judge_model", "system.ai.claude-sonnet-5"))
     ap.add_argument("--votes", type=int, default=int(dbt_var("promo_judge_votes", 3)))
     ap.add_argument("--concurrency", type=int, default=8)
     ap.add_argument("--limit", type=int, help="judge at most this many new candidates")

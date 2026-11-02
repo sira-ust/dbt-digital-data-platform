@@ -174,7 +174,7 @@ to run twice; run it before or after step 5, then do step 6.
 
 ## Running a month locally
 
-DuckDB, nothing written to Databricks except the AI calls (model serving) and the
+DuckDB, nothing written to Databricks except the AI calls (Unity AI Gateway) and the
 YouTube API:
 
 ```
@@ -200,9 +200,10 @@ python scripts/promo/export_promo_social_match.py
 
 ## Credentials
 
-- **AI calls** (draft terms, judge) go to Databricks model serving. Locally they sign in
-  through the browser the first time; the everyday `DATABRICKS_TOKEN` is SQL-only and is
-  refused. Or set `DATABRICKS_SERVING_TOKEN`.
+- **AI calls** (draft terms, product cards, judge) go through Databricks Unity AI Gateway
+  (`scripts/llm_gateway.py`). Locally they sign in through the browser the first time;
+  the everyday `DATABRICKS_TOKEN` is SQL-only and is refused. Or set
+  `DATABRICKS_SERVING_TOKEN` (an `ai-gateway`-scoped PAT).
 - **YouTube**: `YOUTUBE_API_KEY` in `.env` locally; secret scope `ust-social`, key
   `youtube-api-key`, on Databricks. The free quota is 10,000 units a day, about 200 per
   item searched.
