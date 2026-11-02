@@ -109,13 +109,14 @@ select
     try_cast({{ response_part('location', 2) }} as double)              as longitude,
 
     -- ── actor: sales apps act on behalf of a customer; customer apps are
-    --    the customer themselves (username = customer account number) ─────
+    --    the customer themselves (username = customer account number).
+    --    PDA = PDA 2.0 (no platform suffix, API doc v1.6); PDA-A = PDA 1.92 ──
     case
-        when source in ('PDA-A', 'CatalogFS-I', 'CatalogFS-A') then 'sales'
+        when source in ('PDA-A', 'PDA', 'CatalogFS-I', 'CatalogFS-A') then 'sales'
         else 'customer'
     end                                                                 as actor_type,
     case
-        when source in ('PDA-A', 'CatalogFS-I', 'CatalogFS-A')
+        when source in ('PDA-A', 'PDA', 'CatalogFS-I', 'CatalogFS-A')
             then coalesce(
                 nullif(ust_customer_no, ''),
                 {{ parse_kv_response('response', 'ust_customer_no') }}

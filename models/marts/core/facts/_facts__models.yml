@@ -96,7 +96,8 @@ models:
       - name: feature_name
         description: >
           Canonical product feature (search, filter, icon_click, catalog_view,
-          item_detail, image_enlarge, oos_check). Null for non-feature events.
+          market_highlights, item_detail, image_enlarge, oos_check). Null for
+          non-feature events.
       - name: feature_group
         description: "Feature rollup: discovery / navigation / cart / stock."
       - name: page_context

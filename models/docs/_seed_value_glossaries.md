@@ -1040,24 +1040,32 @@ Catalog viewing-layout codes (dev team 2026-07-22).
 {% docs warn_event_codes_glossary %}
 WARN-level system_event_log codes
 
-33 description_codes that fire at the WARN log level (network-layer errors); filter events on these to drop error-string noise. See error_payload rows in seed_category_name_aliases.
+59 description_codes that fire at the WARN log level (network-layer errors); filter events on these to drop error-string noise. See error_payload rows in seed_category_name_aliases.
 
 > Auto-generated from the seed CSV by `scripts/generate_seed_value_glossaries.py` — do not edit by hand.
 
 | description_code | log_level | Notes |
 |---|---|---|
+| 01040200 | WARN | v1.6: INFO->WARN |
+| 01040700 | WARN | v1.6: new code |
+| 01040900 | WARN | v1.6: new code |
 | 02010200 | WARN |  |
 | 02020200 | WARN |  |
 | 02030102 | WARN |  |
 | 02030202 | WARN |  |
+| 02050200 | WARN | v1.6: new code |
 | 03010200 | WARN |  |
 | 03020200 | WARN |  |
+| 03030200 | WARN | v1.6: INFO->WARN |
 | 03050200 | WARN |  |
 | 03060200 | WARN |  |
 | 03070200 | WARN |  |
 | 03080200 | WARN |  |
 | 03100200 | WARN |  |
 | 03110300 | WARN |  |
+| 03120200 | WARN | v1.6: new code |
+| 03130200 | WARN | v1.6: new code |
+| 03140200 | WARN | v1.6: new code |
 | 04010200 | WARN |  |
 | 04020200 | WARN |  |
 | 04030200 | WARN |  |
@@ -1070,15 +1078,33 @@ WARN-level system_event_log codes
 | 06030200 | WARN |  |
 | 07010200 | WARN |  |
 | 07020200 | WARN |  |
+| 10010500 | WARN | v1.6: new code |
+| 10020500 | WARN | v1.6: new code |
+| 10170202 | WARN | v1.6: new code |
+| 10170302 | WARN | v1.6: new code |
 | 13010200 | WARN |  |
 | 13020200 | WARN |  |
+| 16180400 | WARN | v1.6: new code |
+| 16220000 | WARN | v1.6: new code |
+| 16230000 | WARN | v1.6: new code |
+| 17010900 | WARN | v1.6: new code |
+| 17020102 | WARN | v1.6: INFO->WARN |
+| 17020302 | WARN | v1.6: INFO->WARN |
+| 17020500 | WARN | v1.6: new code |
+| 17020602 | WARN | v1.6: new code |
 | 17040102 | WARN |  |
 | 17040202 | WARN |  |
 | 17040302 | WARN |  |
 | 17040402 | WARN |  |
 | 17040502 | WARN |  |
+| 17060102 | WARN | v1.6: new code |
+| 17060202 | WARN | v1.6: new code |
+| 19020300 | WARN | v1.6: new code |
 | 20010200 | WARN |  |
 | 20020402 | WARN |  |
+| 21050200 | WARN | v1.6: new code |
+| 22050300 | WARN | v1.6: new code |
+| 22050400 | WARN | v1.6: new code |
 {% enddocs %}
 
 
