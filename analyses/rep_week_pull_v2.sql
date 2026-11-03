@@ -1,7 +1,7 @@
--- rep_week_pull, rolled up to three scenarios.
+-- The field-coverage extract, rolled up to three scenarios.
 --
 -- GRAIN: one row per REP x CUSTOMER x DAY x SCENARIO, where scenario is now the
--- rolled-up group rather than the mart's six. v1 returns the six; this returns
+-- rolled-up group rather than the mart's six. This returns
 -- these three (four, once a day with no GPS shows up):
 --
 --   Onsite                 the rep was physically at the store
