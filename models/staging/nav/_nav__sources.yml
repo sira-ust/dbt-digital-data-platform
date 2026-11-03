@@ -1262,10 +1262,10 @@ sources:
           55%. The paired flag names the company brand threshold, under 60%,
           which is stated nowhere else in the warehouse.
 
-          NO COST OR MARGIN. Removed from the ingestion select on 2026-10-30.
-          [Cost Amount] is still in the table but the ADF login is denied
-          SELECT on it, and including it fails the whole copy. [Invoice
-          Margin %] and [Invoice Margin < 13%] are no longer available.
+          NO NAV MARGIN FIELDS. [Invoice Margin %] and [Invoice Margin < 13%]
+          are no longer in the table (removed from the select 2026-10-30).
+          [Cost Amount] was out from 2026-10-30 to 2026-11-03 while the ADF
+          login was denied SELECT on it; the grant was restored and it is back.
 
           BRAND % DIVIDES BY PRODUCT SALES, NOT TOTAL SALES. NAV's brand_pct
           matches brand_sales_amount / product_sales_amount on 50,572 of 50,620
@@ -1292,6 +1292,8 @@ sources:
             description: "0 = invoice (56,320 rows, +$313.4M), 1 = credit memo (5,677 rows, -$1.2M). Staging signs credit memos negative so they net."
           - name: sales_amount
             description: "NAV's [Sales ($)] — total invoiced value INCLUDING freight, CRV and pallet charges. Populated on 57,946 of 61,997 rows."
+          - name: cost_amount
+            description: "Cost of the document. Populated on 56,100 rows."
           - name: brand_sales_amount
             description: "Value of own-brand product on the document. Populated on 52,129 rows. What 'Brand' means is still undefined anywhere in NAV — the amount exists, the rule behind it does not."
           - name: product_sales_amount

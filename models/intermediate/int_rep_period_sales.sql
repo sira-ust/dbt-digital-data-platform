@@ -65,6 +65,7 @@ with documents as (
         sales_code,
         posting_date,
         sales_amount,
+        cost_amount,
         brand_sales_amount,
         product_sales_amount,
         is_credit_memo,
@@ -211,6 +212,7 @@ period_actuals as (
 
         -- amounts are already signed in staging, so these net credit memos
         sum(d.sales_amount)                                              as sales_amount,
+        sum(d.cost_amount)                                               as cost_amount,
         sum(d.brand_sales_amount)                                        as brand_sales_amount,
         sum(d.product_sales_amount)                                      as product_sales_amount,
 
@@ -259,6 +261,7 @@ select
     -- genuinely means zero sold, unlike a missing target which means no goal
     -- was set.
     coalesce(pa.sales_amount, 0)                                         as sales_amount,
+    coalesce(pa.cost_amount, 0)                                          as cost_amount,
     coalesce(pa.brand_sales_amount, 0)                                   as brand_sales_amount,
     coalesce(pa.product_sales_amount, 0)                                 as product_sales_amount,
     coalesce(pa.document_count, 0)                                       as document_count,

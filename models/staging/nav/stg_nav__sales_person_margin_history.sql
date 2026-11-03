@@ -27,13 +27,12 @@
 -- consumer having to remember — the alternative is a mart that silently
 -- reports gross as net the first time someone forgets the CASE.
 --
--- ═══ NO COST, NO MARGIN ═══════════════════════════════════════════════════
--- Removed from the ingestion select 2026-10-30. [Invoice Margin %] and
--- [Invoice Margin < 13%] are no longer available. [Cost Amount] is still in the
--- table, but the ADF login is denied SELECT on it: putting it back in the query
--- fails the whole copy ("The SELECT permission was denied on the column 'Cost
--- Amount'"). Nothing built on this table can report cost, gross profit or
--- margin until that grant changes.
+-- ═══ COST YES, NAV'S MARGIN FIELDS NO ═════════════════════════════════════
+-- [Invoice Margin %] and [Invoice Margin < 13%] are no longer in the table
+-- (removed from the ingestion 2026-10-30). Margin is computed downstream from
+-- cost_amount instead. [Cost Amount] was out from 2026-10-30 to 2026-11-03
+-- while the ADF login was denied SELECT on it; a DBA granted it back and it
+-- returned to the ingestion on 2026-11-03.
 --
 -- ═══ PERCENTAGES ARRIVE 0-1, AND ARE PUBLISHED THAT WAY ═══════════════════
 -- brand_pct averages 0.5492 — 55%, not 0.55%. It is NOT rescaled to 0-100
@@ -77,6 +76,7 @@ typed as (
              then -1 else 1 end                                               as sign,
 
         cast(sales_amount as {{ dbt.type_numeric() }})                        as sales_amount_raw,
+        cast(cost_amount as {{ dbt.type_numeric() }})                         as cost_amount_raw,
         cast(brand_sales_amount as {{ dbt.type_numeric() }})                  as brand_sales_amount_raw,
         cast(product_sales_amount as {{ dbt.type_numeric() }})                as product_sales_amount_raw,
 
@@ -104,6 +104,7 @@ select
     -- there would average into every margin figure downstream as though the
     -- goods had been given away.
     sales_amount_raw          * sign                                          as sales_amount,
+    cost_amount_raw           * sign                                          as cost_amount,
     brand_sales_amount_raw    * sign                                          as brand_sales_amount,
     product_sales_amount_raw  * sign                                          as product_sales_amount,
 
