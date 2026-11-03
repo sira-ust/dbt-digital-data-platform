@@ -20,7 +20,7 @@
   LITERAL CHARACTERS, NO BACKSLASHES: DuckDB and Databricks disagree on escaping inside
   a regex string (see strip_parenthetical_gloss), and regexp_extract behaves the same on
   both (see parse_response). KEEP IN STEP with phrase_language() in
-  scripts/promo_common.py, which labels the TikTok list's phrases with the same rule.
+  scripts/promo/promo_common.py, which labels the TikTok list's phrases with the same rule.
 #}
 {% macro promo_search_language(col) -%}
     case

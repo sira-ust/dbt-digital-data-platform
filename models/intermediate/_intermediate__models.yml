@@ -1098,21 +1098,22 @@ models:
       The top 1-3 (var promo_scraped_max_per_item) judged-Exact YouTube videos per
       promo item, month and SEARCH LANGUAGE (the script of the phrase that found the
       video), ranked by views, then engagement (likes + comments). Per language, so an
-      English search's view counts do not crowd out the Vietnamese or Chinese finds.
+      English search's view counts do not crowd out the Thai or Vietnamese finds.
       Only videos posted within var promo_scraped_max_age_months (24) before the promo
       month when the item-language has any; otherwise its older videos (is_recent =
       false). Source = Scraped.
     columns:
       - name: search_language
         description: >
-          Chinese / Thai / Vietnamese / English — the language of the search phrase that
+          Thai / Vietnamese / English — the language of the search phrase that
           first returned the video (macro promo_search_language). The workbook's column
-          block. Khmer and Japanese are detected but not searched; their videos are left out.
+          block. Khmer and Japanese are detected but not searched; Chinese is searched
+          only on RedNote, by hand. Their videos are left out.
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: [English, Thai, Vietnamese, Chinese]
+                values: [English, Thai, Vietnamese]
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

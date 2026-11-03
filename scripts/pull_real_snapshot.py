@@ -22,9 +22,9 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path.cwd() / "scripts" / "promo"))           # promo_common
 try:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "promo"))
 except NameError:
     pass
 

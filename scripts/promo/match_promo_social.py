@@ -19,9 +19,9 @@ Every judged pair is stored, rejects included, so a rerun only judges new posts
 (or every post again after a JUDGE_PROMPT_VERSION bump). A pair whose judge call
 fails is NOT stored and is retried next run, rather than shipping a guess.
 
-    python scripts/match_promo_social.py --dry-run      # keyword pass only, no LLM
-    python scripts/match_promo_social.py                # judge new candidates
-    python scripts/match_promo_social.py --backend databricks
+    python scripts/promo/match_promo_social.py --dry-run      # keyword pass only, no LLM
+    python scripts/promo/match_promo_social.py                # judge new candidates
+    python scripts/promo/match_promo_social.py --backend databricks
 
 Reads dbt models, so run `dbt build --select +int_promo_items_enriched
 +stg_mentionlytics__mentions` first. Local runs sign in to Databricks through the
@@ -38,21 +38,21 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path.cwd() / "scripts" / "promo"))
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 except NameError:
     pass
 
 from promo_common import (  # noqa: E402
-    INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, STAGING_SCHEMA, ItemTerms,
+    CARD_FIELDS, INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, STAGING_SCHEMA, ItemTerms,
     append_records, dbt_var, ensure_landing, get_llm_client, judge_majority, landing_path,
     match_text, query, read_local_parquet,
 )
 
 ITEM_FIELDS = ["item_no", "promo_description", "item_full_description", "brand", "product",
                "flavor_variant", "pack_format", "brand_terms", "product_terms", "flavor_terms",
-               "negative_terms"]
+               "negative_terms"] + CARD_FIELDS     # the product card, for the judge
 
 
 def _rel(backend, schema_dbx, schema_local, name):

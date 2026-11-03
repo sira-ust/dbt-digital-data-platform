@@ -4,7 +4,8 @@ For every BRANDED promo item of the month with no Social Listening match (no row
 in int_promo_social_matches), for every UST own-brand item whether matched or not
 (is_own_brand), and for every FROZEN item with no brand (is_frozen: searched as a
 frozen product, "frozen" standing in for the brand), run the item's reviewed search_queries through the YouTube
-Data API v3:
+Data API v3. Chinese phrases are left out: Chinese is searched only on RedNote,
+by hand (promo_common.platform_phrases), so an item costs ~2 searches, not 3:
 
     search.list   top N videos per query            100 quota units each
     videos.list   title, description, tags, views,   1 unit per 50 videos
@@ -30,9 +31,9 @@ API key: local runs read YOUTUBE_API_KEY from the environment or .env; on
 Databricks it comes from secret scope ust-social, key youtube-api-key (the job's
 run-as identity needs READ on that scope).
 
-    python scripts/youtube_search.py --dry-run      # list items + queries, no API calls
-    python scripts/youtube_search.py                # search, verify, judge
-    python scripts/youtube_search.py --backend databricks
+    python scripts/promo/youtube_search.py --dry-run      # list items + queries, no API calls
+    python scripts/promo/youtube_search.py                # search, verify, judge
+    python scripts/promo/youtube_search.py --backend databricks
 """
 
 from __future__ import annotations
@@ -49,16 +50,16 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path.cwd() / "scripts" / "promo"))
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 except NameError:
     pass
 
 from promo_common import (  # noqa: E402
-    INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, ItemTerms, append_records, dbt_var,
-    ensure_landing, find_project_root, flag, get_llm_client, judge_majority, landing_path, match_text,
-    query, read_local_parquet, search_phrases,
+    CARD_FIELDS, INTERMEDIATE_SCHEMA, JUDGE_PROMPT_VERSION, LANDING, ItemTerms, append_records, dbt_var,
+    ensure_landing, fetch_image, find_project_root, flag, get_llm_client, judge_majority, landing_path,
+    match_text, platform_phrases, query, read_local_parquet, read_photo,
 )
 
 API = "https://www.googleapis.com/youtube/v3"
@@ -121,7 +122,8 @@ def is_short(video_id: str) -> bool:
 
 ITEM_FIELDS = ["promo_month", "item_no", "promo_description", "item_full_description", "brand",
                "product", "flavor_variant", "pack_format", "brand_terms", "product_terms",
-               "flavor_terms", "negative_terms", "search_queries", "is_branded", "is_frozen"]
+               "flavor_terms", "negative_terms", "search_queries", "is_branded", "is_frozen",
+               "photo_path"] + CARD_FIELDS
 
 
 def items_to_search(backend: str, promo_month: str | None) -> tuple[str, list[dict]]:
@@ -164,25 +166,31 @@ def _attach_siblings(backend, sch, promo_month, items):
 
 
 def already_searched(backend: str, promo_month: str) -> set[str]:
-    """Items searched this month AFTER their latest terms draft. An item re-drafted
-    since (draft_promo_terms.py re-drafts after a brand-code change, e.g. once "HB" became Honeybee) was
-    searched with the old terms, so it is searched again. Both timestamps are ISO
-    strings, so they compare as text."""
-    spec, draft = LANDING["youtube_videos"], LANDING["item_terms_draft"]
+    """Items searched this month AFTER their latest terms draft AND their latest product
+    card. An item re-drafted since (draft_promo_terms.py re-drafts after a brand-code
+    change, e.g. once "HB" became Honeybee), or given a new card (draft_product_cards.py:
+    new pack-text phrases), was searched with the old terms, so it is searched again.
+    The timestamps are ISO strings, so they compare as text."""
+    spec = LANDING["youtube_videos"]
+    drafts = [LANDING["item_terms_draft"], LANDING["product_cards"]]
     if backend == "databricks":
         searched = query(backend, f"select item_no, max(searched_at) as at from {spec['dbx']} "
                                   f"where promo_month = '{promo_month}' group by item_no")
-        drafted = query(backend, f"select item_no, max(drafted_at) as at from {draft['dbx']} group by item_no")
+        drafted = [r for d in drafts for r in
+                   query(backend, f"select item_no, max(drafted_at) as at from {d['dbx']} group by item_no")]
     else:
-        searched, drafted = {}, {}
+        searched, drafted = {}, []
         for r in read_local_parquet(landing_path("youtube_videos")):
             if str(r.get("promo_month"))[:10] == promo_month:
                 searched[str(r["item_no"])] = max(searched.get(str(r["item_no"])) or "", str(r.get("searched_at") or ""))
-        for r in read_local_parquet(landing_path("item_terms_draft")):
-            drafted[str(r["item_no"])] = max(drafted.get(str(r["item_no"])) or "", str(r.get("drafted_at") or ""))
+        for name in ("item_terms_draft", "product_cards"):
+            drafted += [{"item_no": r["item_no"], "at": r.get("drafted_at")}
+                        for r in read_local_parquet(landing_path(name))]
         searched = [{"item_no": k, "at": v} for k, v in searched.items()]
-        drafted = [{"item_no": k, "at": v} for k, v in drafted.items()]
-    last_draft = {str(r["item_no"]): str(r["at"] or "") for r in drafted}
+    last_draft = {}
+    for r in drafted:
+        k = str(r["item_no"])
+        last_draft[k] = max(last_draft.get(k, ""), str(r["at"] or ""))
     return {str(r["item_no"]) for r in searched
             if str(r["at"] or "") >= last_draft.get(str(r["item_no"]), "")}
 
@@ -194,7 +202,7 @@ def already_searched(backend: str, promo_month: str) -> set[str]:
 def search_item(key: str, item: dict, max_queries: int, per_query: int) -> tuple[list[dict], int]:
     """Every distinct video the item's queries return, with stats. -> (videos, quota units)."""
     units, order, first_query = 0, [], {}
-    for q in search_phrases(item["search_queries"])[:max_queries]:
+    for q in platform_phrases(item["search_queries"], "youtube")[:max_queries]:
         res = _get("search", {"part": "snippet", "type": "video", "maxResults": per_query, "q": q, "key": key})
         units += UNITS_SEARCH
         for rank, hit in enumerate(res.get("items", []), start=1):
@@ -241,10 +249,16 @@ def verify(client, model: str, item: dict, videos: list[dict], concurrency: int,
         if ev["keyword_level"] == "exact":
             todo.append((v, ev))
 
+    # with a product photo, the judge sees it next to each video's thumbnail
+    photo = read_photo(item.get("photo_path"))
+
     def one(pair):
         v, ev = pair
         post = {"channel": "YouTube video",
                 "text": f"TITLE: {v['title']}\nTAGS: {v['tags'] or '-'}\nDESCRIPTION: {(v['description'] or '')[:2000]}"}
+        if photo:
+            thumb = fetch_image(f"https://i.ytimg.com/vi/{v['video_id']}/hqdefault.jpg")
+            post["images"] = [photo, thumb] if thumb else [photo]
         try:
             res = judge_majority(client, model, item, post, ev, votes)
         except Exception as e:
@@ -284,7 +298,7 @@ def main(argv=None):
           f"{len(items) - len(todo)} already searched this month; {len(todo)} to search "
           f"(~{len(todo) * (args.max_queries * UNITS_SEARCH + 1):,} quota units)")
     for it in todo:
-        print(f"  {it['item_no']} {it['promo_description'][:32]:32s} {search_phrases(it['search_queries'])[:args.max_queries]}")
+        print(f"  {it['item_no']} {it['promo_description'][:32]:32s} {platform_phrases(it['search_queries'], 'youtube')[:args.max_queries]}")
     if args.dry_run or not todo:
         return
 

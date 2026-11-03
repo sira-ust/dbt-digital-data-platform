@@ -1,6 +1,6 @@
 """Brand codes in the term drafter: which codes a description carries, and what a
 brand or frozen code forces on the LLM's draft. No database or LLM needed: the
-model is a stub that returns a fixed reply. Run:  python -m pytest scripts/tests
+model is a stub that returns a fixed reply. Run:  python -m pytest scripts/promo/tests
 """
 
 import json

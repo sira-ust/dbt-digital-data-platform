@@ -1,15 +1,17 @@
 # The monthly promo x social match job (models/docs/_promo_social.md).
 #
-# RUN BY HAND, once a month: upload "UST <YYYY> <MON> NEW PROMO.xlsx" to
+# RUN BY HAND, once a month: upload the merged "UST <YYYY> <MON> PROMO INPUT.xlsx"
+# (scripts/promo/prompts/promo_merge_input.md; checked by validate_promo_input.py) to
 # /Volumes/ust_databricks/social/promo_landing/, then Run now. The finished workbook
 # appears in /Volumes/ust_databricks/social/promo_output/.
 # No file-arrival trigger: on 2026-10-07 it could not start ("Failed to provision file
 # events resources", Azure 403 — the workspace identity lacks the Event Grid / queue
 # roles on the volume's storage account). Re-add one only after an Azure admin grants
 # those roles; nothing else in the job depends on how it is started.
-# TikTok is NOT a task: it is a manual pass in Claude in Chrome over that workbook
-# (scripts/prompts/tiktok_promo_search.md), because TikTok offers a for-profit
-# company no search API.
+# TikTok and RedNote are NOT tasks: one manual pass in Claude in Chrome over that
+# workbook (scripts/promo/prompts/tiktok_rednote_search_prompt.md), because
+# neither offers a for-profit company a search API. Chinese phrases are searched only on
+# RedNote; YouTube (task 5) and TikTok search the other languages.
 #
 # WHY SO MANY dbt STEPS. dbt never calls the LLM or the YouTube API (the
 # warehouse build stays deterministic), so every out-of-band script sits between
@@ -43,7 +45,7 @@ resources:
         # 1. land the workbook (pure from source) + create any missing landing table
         - task_key: load-promo
           spark_python_task:
-            python_file: scripts/load_promo_list.py
+            python_file: scripts/promo/load_promo_list.py
             parameters: ["--backend", "databricks"]
             source: GIT
           environment_key: promo-python
@@ -55,7 +57,7 @@ resources:
             project_directory: ""
             commands:
               - dbt deps
-              - dbt build --select seed_promo_item_terms stg_promo__items stg_promo__item_terms_draft int_promo_items_enriched --indirect-selection cautious
+              - dbt build --select seed_promo_item_terms stg_promo__items stg_promo__item_terms_draft stg_promo__product_cards int_promo_items_enriched --indirect-selection cautious
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
@@ -70,18 +72,30 @@ resources:
         - task_key: draft-terms
           depends_on: [{task_key: dbt-items}]
           spark_python_task:
-            python_file: scripts/draft_promo_terms.py
+            python_file: scripts/promo/draft_promo_terms.py
+            parameters: ["--backend", "databricks"]
+            source: GIT
+          environment_key: promo-python
+
+        # 3b. a PRODUCT CARD for each item with a photo or description (the INPUT file):
+        #    the pack text, pack, market and lookalikes, read off the photo by the model.
+        #    The card's phrases go first in the searches and the judge checks against it.
+        #    Re-drafted when the photo or text changes; YouTube then re-searches the item.
+        - task_key: draft-cards
+          depends_on: [{task_key: draft-terms}]
+          spark_python_task:
+            python_file: scripts/promo/draft_product_cards.py
             parameters: ["--backend", "databricks"]
             source: GIT
           environment_key: promo-python
 
         - task_key: dbt-items-with-drafts
-          depends_on: [{task_key: draft-terms}]
+          depends_on: [{task_key: draft-cards}]
           dbt_task:
             project_directory: ""
             commands:
               - dbt deps
-              - dbt build --select stg_promo__item_terms_draft int_promo_items_enriched --indirect-selection cautious
+              - dbt build --select stg_promo__item_terms_draft stg_promo__product_cards int_promo_items_enriched --indirect-selection cautious
             warehouse_id: 0fa7b986f30f8aab
             catalog: ust_databricks
             source: GIT
@@ -91,7 +105,7 @@ resources:
         - task_key: match-social
           depends_on: [{task_key: dbt-items-with-drafts}]
           spark_python_task:
-            python_file: scripts/match_promo_social.py
+            python_file: scripts/promo/match_promo_social.py
             parameters: ["--backend", "databricks"]
             source: GIT
           environment_key: promo-python
@@ -108,12 +122,12 @@ resources:
             source: GIT
           environment_key: dbt-default
 
-        # 5. YouTube for branded items social listening did not match (cached per
-        #    item and month, so a rerun spends no quota)
+        # 5. YouTube for branded items social listening did not match, in every
+        #    language but Chinese (cached per item and month, so a rerun spends no quota)
         - task_key: youtube-search
           depends_on: [{task_key: dbt-social-matches}]
           spark_python_task:
-            python_file: scripts/youtube_search.py
+            python_file: scripts/promo/youtube_search.py
             parameters: ["--backend", "databricks"]
             source: GIT
           environment_key: promo-python
@@ -136,7 +150,7 @@ resources:
         - task_key: export
           depends_on: [{task_key: dbt-mart}]
           spark_python_task:
-            python_file: scripts/export_promo_social_match.py
+            python_file: scripts/promo/export_promo_social_match.py
             parameters: ["--backend", "databricks"]
             source: GIT
           environment_key: promo-python
@@ -161,6 +175,7 @@ resources:
               - openpyxl>=3.1
               - pandas>=2.0
               - PyYAML>=6.0
+              - Pillow>=10.0          # the product photos on the TikTok / RedNote lists
             environment_version: "5"
 
       performance_target: STANDARD

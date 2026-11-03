@@ -20,8 +20,8 @@ loaded is skipped, so a second run uploads nothing.
                             cache check compares against
     promo_item_terms_draft  keyed by (item_no, model_version)
 
-    python scripts/bootstrap_promo_results.py --from data/real/promo --month 2026-10           # dry run
-    python scripts/bootstrap_promo_results.py --from data/real/promo --month 2026-10 --confirm
+    python scripts/promo/bootstrap_promo_results.py --from data/real/promo --month 2026-10           # dry run
+    python scripts/promo/bootstrap_promo_results.py --from data/real/promo --month 2026-10 --confirm
 
 Auth: DATABRICKS_TOKEN (the SQL-warehouse PAT is enough — no files or secrets API).
 """

@@ -1,6 +1,14 @@
 """Load the monthly promo workbook into the promo_items landing table (step 1).
 
-The workbook arrives by email once a month, e.g. "UST 2026 OCT NEW PROMO.xlsx",
+TWO LAYOUTS. Since NOV 2026 the month's files (the promo list, and the description
+file with photos) are merged into one INPUT workbook in a fixed layout
+(scripts/promo/promo_input_schema.py; "UST 2026 NOV PROMO INPUT.xlsx", sheets items + meta).
+A workbook with those sheets is read that way: validated first (an error stops the
+load), every schema column kept, and each row's photo saved as
+<photo dir>/<YYYYMM>/<item_no>.<ext> with its path in photo_path. Any other workbook
+is read the original way, below.
+
+The original layout: the workbook arrives by email once a month, e.g. "UST 2026 OCT NEW PROMO.xlsx",
 with one sheet per list: "OCT NEW" and "OCT PROMO" (future months follow
 "<MON> NEW" / "<MON> PROMO", so sheets are found by SUFFIX, never by name).
 The two sheets do not share a layout — OCT NEW has 17 columns including Vendor
@@ -28,8 +36,8 @@ Two backends:
                         replaces the earlier one.
 
 Usage:
-    python scripts/load_promo_list.py "C:/Users/me/Downloads/UST 2026 OCT NEW PROMO.xlsx"
-    python scripts/load_promo_list.py --backend databricks      # every .xlsx in the landing Volume
+    python scripts/promo/load_promo_list.py "C:/Users/me/Downloads/UST 2026 OCT NEW PROMO.xlsx"
+    python scripts/promo/load_promo_list.py --backend databricks      # every .xlsx in the landing Volume
 """
 
 from __future__ import annotations
@@ -43,16 +51,18 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path.cwd() / "scripts"))
+sys.path.insert(0, str(Path.cwd() / "scripts" / "promo"))
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 except NameError:
     pass
 
 from promo_common import SOCIAL_SCHEMA, append_records, ensure_landing, local_data_root  # noqa: E402
+from promo_input_schema import COLUMN_NAMES, SHEET_ITEMS, SHEET_META  # noqa: E402
 
 LANDING_DIR = "/Volumes/ust_databricks/social/promo_landing"
 ARCHIVE_DIR = f"{LANDING_DIR}/_archive"
+PHOTO_DIR_DBX = f"{LANDING_DIR}/_photos"
 DBX_TABLE = f"{SOCIAL_SCHEMA}.promo_items"
 SHEET_SUFFIXES = ("NEW", "PROMO")
 REQUIRED_HEADERS = ["Item No.", "Promo Code", "Description", "Size"]
@@ -111,6 +121,63 @@ def resolve_promo_month(filename: str, sheet_names: list[str], ending_dates: lis
         return date(latest.year, latest.month, 1)
     raise SystemExit(f"cannot tell the promo month of {filename}: no year in the name, "
                      f"no '<MON> NEW/PROMO' sheet names, no Ending Date")
+
+
+def is_input_file(path: str) -> bool:
+    """The merged INPUT layout (promo_input_schema.py): sheets items AND meta."""
+    import openpyxl
+    wb = openpyxl.load_workbook(path, read_only=True)
+    try:
+        return {SHEET_ITEMS, SHEET_META} <= set(wb.sheetnames)
+    finally:
+        wb.close()
+
+
+def read_input_file(path: str, photo_dir: Path) -> list[dict]:
+    """The rows of a merged INPUT workbook, in the same record shape as
+    read_workbook(): promo_sheet is "<MON> <list>" ("NOV NEW"), so the rest of the
+    pipeline and the output workbook read it as before. Photos are written to
+    photo_dir/<YYYYMM>/<item_no>.<ext>."""
+    from validate_promo_input import read_input, validate
+
+    filename = os.path.basename(path)
+    data = read_input(path)
+    errors, warnings = validate(path, data)
+    for w in warnings:
+        print(f"  {filename}: warning: {w}")
+    if errors:
+        raise SystemExit(f"{filename}: not loaded, {len(errors)} schema error(s):\n  "
+                         + "\n  ".join(errors))
+    month = data["meta"]["promo_month"][0]
+    promo_month = date(int(month[:4]), int(month[5:7]), 1)
+    mon = [k for k, v in MONTHS.items() if v == promo_month.month][0]
+    loaded_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
+    out_dir = Path(photo_dir) / f"{promo_month:%Y%m}"
+    sheet_order, row_order, out = {}, {}, []
+    for r in data["rows"]:
+        lst = r["promo_list"].upper()
+        sheet_order.setdefault(lst, len(sheet_order) + 1)
+        row_order[lst] = row_order.get(lst, 0) + 1
+        rec = {c: r.get(c) for c in COLUMN_NAMES if c not in ("promo_month", "promo_list", "photo")}
+        photo = data["photos"].get(r["_row"])
+        rec["photo_path"] = None
+        if photo:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            target = out_dir / f"{r['item_no']}.{photo[1]}"
+            target.write_bytes(photo[0])
+            rec["photo_path"] = str(target).replace("\\", "/")
+        rec.update(promo_month=promo_month.isoformat(), promo_sheet=f"{mon} {lst}",
+                   sheet_order=sheet_order[lst], row_order=row_order[lst], loaded_at=loaded_at,
+                   source_file=filename)
+        out.append(rec)
+    print(f"  {filename}: INPUT layout, promo month {promo_month:%Y-%m}, "
+          + ", ".join(f"{mon} {k} {v} rows" for k, v in row_order.items())
+          + f", {sum(1 for r in out if r['photo_path'])} photos")
+    return out
+
+
+def read_any(path: str, photo_dir: Path) -> list[dict]:
+    return read_input_file(path, photo_dir) if is_input_file(path) else read_workbook(path)
 
 
 def read_workbook(path: str) -> list[dict]:
@@ -184,7 +251,7 @@ def _columns(records: list[dict]) -> list[str]:
 def load_local(paths: list[str], out_root=None) -> None:
     import pandas as pd
     for path in paths:
-        recs = read_workbook(path)
+        recs = read_any(path, local_data_root(out_root) / "promo" / "photos")
         month = recs[0]["promo_month"][:7].replace("-", "")
         out = local_data_root(out_root) / "promo" / f"promo_items_{month}.parquet"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -197,7 +264,7 @@ def load_databricks() -> None:
     files = sorted(glob.glob(os.path.join(LANDING_DIR, "*.xlsx")))
     print(f"{len(files)} xlsx file(s) in {LANDING_DIR}")
     for path in files:
-        recs = read_workbook(path)
+        recs = read_any(path, Path(PHOTO_DIR_DBX))
         append_records("databricks", recs, None, DBX_TABLE, _columns(recs))
         os.makedirs(ARCHIVE_DIR, exist_ok=True)
         shutil.move(path, os.path.join(ARCHIVE_DIR, os.path.basename(path)))
