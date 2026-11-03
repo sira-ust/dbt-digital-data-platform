@@ -421,6 +421,15 @@ left join rep_day_tz as t
     on t.sales_code = e.sales_code
    and t.local_date = cast({{ add_hours('e.event_at_utc', 'tp.offset_hours') }} as date)
 
-where e.sales_code not in ('000')
+-- coalesce, NOT `e.sales_code not in ('000')`. NULL not in (...) is NULL, not
+-- true, so that form dropped every event with no sales code -- which is ALL of
+-- Vegas-I, because the iOS customer app never sends one. Measured 2026-10-30:
+-- 10,345 deduped Vegas-I events in the week to 10-28 reached int_events_decoded
+-- and none got past here, so customer-app browsing and cart activity was missing
+-- from fct_events and every mart built on it (ASI074 added 60 items in the app
+-- during rep 008's 10-25 visit, all invisible). Orders were never affected: no
+-- order receipt arrives without a sales code. The username test below always
+-- had this guard; this one never did. tests/assert_events_survive_enrichment_filters.sql
+where coalesce(e.sales_code, '') <> '000'
   and (e.username is null or e.username not in (select username from system_accounts))
   and e.event_at_utc is not null
