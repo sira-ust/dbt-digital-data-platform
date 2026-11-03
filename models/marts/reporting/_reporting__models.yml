@@ -2421,6 +2421,10 @@ models:
       as "Brand" is defined in no NAV table; we can report the share, not
       explain it.
 
+      NO MARGIN. Since 2026-10-30 the ingestion cannot read [Cost Amount]
+      (SELECT denied to the ADF login) and [Invoice Margin %] is gone, so this
+      table carries no cost, gross profit or margin figure.
+
       PRIOR YEAR IS NULL BEFORE 2026. The feed starts 2025-01-02, so 2026
       periods have a counterpart and 2025 ones do not. Null, never zero.
 
@@ -2460,10 +2464,6 @@ models:
         description: Share of the period's TARGET DAYS that have happened, 0-1.
       - name: sales_amount
         description: Posted sales, net of credit memos. Can legitimately be negative.
-      - name: cost_amount
-        description: Cost, net.
-      - name: gross_profit
-        description: sales_amount - cost_amount.
       - name: document_count
         description: Documents posted.
       - name: credit_memo_count
@@ -2500,8 +2500,6 @@ models:
         description: Where the rep lands at the current rate. NULL for a closed period.
       - name: pct_of_target_projected
         description: Projected finish as a share of the target. NULL for a closed period.
-      - name: margin_pct
-        description: (sales - cost) / sales, recomputed from summed amounts, 0-1.
       - name: brand_pct_of_sales
         description: brand / TOTAL sales, 0-1. The figure the business asked for.
       - name: brand_pct_of_product_sales
@@ -2512,8 +2510,6 @@ models:
         description: Product-only value, net.
       - name: brand_below_target
         description: Whether brand share of sales is under the company's 60% threshold.
-      - name: margin_below_target
-        description: Whether margin is under the company's 13% threshold.
       - name: prev_year_sales
         description: >
           Same rep, same period, one year earlier. NULL before 2026 because the
@@ -2554,7 +2550,7 @@ models:
       # a ratio only exists where there was something to divide
       - dbt_utils.expression_is_true:
           arguments:
-            expression: "margin_pct is null or sales_amount > 0"
+            expression: "brand_pct_of_sales is null or sales_amount > 0"
       # A change percentage cannot exist without a prior-year figure to compute
       # it from. This replaced an assertion that prev_year_sales is only
       # populated from 2026 onward -- true of production today, because the

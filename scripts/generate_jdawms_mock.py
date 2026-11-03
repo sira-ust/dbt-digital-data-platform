@@ -741,15 +741,12 @@ KEYED["sales_person_margin_history"] = {
                                       datetime.min.time())
                      for _ in _mh_docs],
     "sales_amount": _mh_sales,
-    "cost_amount": [round(s * rng.uniform(0.70, 0.95), 2) for s in _mh_sales],
     "brand_sales_amount": _mh_brand,
     "product_sales_amount": _mh_product,
     # 0-1 SCALE, not 0-100, and over PRODUCT sales -- NAV's own denominator
     "brand_pct": [round(b / p, 2) for b, p in zip(_mh_brand, _mh_product)],
-    "invoice_margin_pct": [round(rng.uniform(-0.05, 0.35), 4) for _ in _mh_docs],
     "brand_below_target": [1 if b / p < 0.60 else 0
                            for b, p in zip(_mh_brand, _mh_product)],
-    "invoice_margin_below_target": [1 if rng.random() < 0.5 else 0 for _ in _mh_docs],
 }
 
 

@@ -3,7 +3,12 @@
 -- mart_rep_period_sales — ONE ROW PER REP PER PERIOD. POSTED SALES DOLLARS,
 -- THE TARGET, AND LAST YEAR. "Am I going to make my number?"
 --
---   Period | Sold | Target | % there | On pace? | Margin | Branded % | vs LY
+--   Period | Sold | Target | % there | On pace? | Branded % | vs LY
+--
+-- NO MARGIN. Since 2026-10-30 the ingestion cannot read [Cost Amount] (SELECT
+-- denied to the ADF login) and [Invoice Margin %] is gone, so cost, gross
+-- profit, margin_pct and margin_below_target were removed rather than
+-- published as nulls.
 --
 -- THE THIRD REP-PERIOD MART, and the three do not agree about a period on
 -- purpose. Join on (sales_code, period_type, period_start) and READ EACH
@@ -135,8 +140,6 @@ select
     -- Net of credit memos: staging signs them negative, so a bad month can
     -- legitimately be negative and that is not a bug.
     p.sales_amount,
-    p.cost_amount,
-    p.sales_amount - p.cost_amount                                       as gross_profit,
     p.document_count,
     p.credit_memo_count,
     p.accounts_sold,
@@ -193,11 +196,7 @@ select
                       / p.target_days_elapsed) / p.period_target, 4)
     end                                                                  as pct_of_target_projected,
 
-    -- ── margin and brand, RECOMPUTED from the summed amounts ─────────────
-    case when p.sales_amount > 0
-         then round((p.sales_amount - p.cost_amount) / p.sales_amount, 4)
-    end                                                                  as margin_pct,
-
+    -- ── brand, RECOMPUTED from the summed amounts ────────────────────────
     -- AS THE BUSINESS ASKED: share of TOTAL sales, charges included.
     case when p.sales_amount > 0
          then round(p.brand_sales_amount / p.sales_amount, 4)
@@ -211,13 +210,10 @@ select
     p.brand_sales_amount,
     p.product_sales_amount,
 
-    -- the company thresholds, which are recorded in no other table
+    -- the company threshold, which is recorded in no other table
     case when p.sales_amount > 0
          then (p.brand_sales_amount / p.sales_amount) < 0.60
     end                                                                  as brand_below_target,
-    case when p.sales_amount > 0
-         then ((p.sales_amount - p.cost_amount) / p.sales_amount) < 0.13
-    end                                                                  as margin_below_target,
 
     -- ── last year. TWO FIGURES, AND THE SECOND IS THE ONE TO DIVIDE BY ───
     -- prev_year_sales is the WHOLE period last year. Useful context, and

@@ -27,12 +27,19 @@
 -- consumer having to remember — the alternative is a mart that silently
 -- reports gross as net the first time someone forgets the CASE.
 --
+-- ═══ NO COST, NO MARGIN ═══════════════════════════════════════════════════
+-- Removed from the ingestion select 2026-10-30. [Invoice Margin %] and
+-- [Invoice Margin < 13%] are no longer available. [Cost Amount] is still in the
+-- table, but the ADF login is denied SELECT on it: putting it back in the query
+-- fails the whole copy ("The SELECT permission was denied on the column 'Cost
+-- Amount'"). Nothing built on this table can report cost, gross profit or
+-- margin until that grant changes.
+--
 -- ═══ PERCENTAGES ARRIVE 0-1, AND ARE PUBLISHED THAT WAY ═══════════════════
--- brand_pct averages 0.5492 and invoice_margin_pct 0.1181 — 55% and 11.8%, not
--- 0.55% and 0.12%. They are NOT rescaled to 0-100 here: the paired NAV flags
--- ([Brand < 60%], [Invoice Margin < 13%]) are the only written record of the
--- company's thresholds, and keeping value and flag on the same scale is what
--- lets them be checked against each other.
+-- brand_pct averages 0.5492 — 55%, not 0.55%. It is NOT rescaled to 0-100
+-- here: the paired NAV flag [Brand < 60%] is the only written record of the
+-- company's brand threshold, and keeping value and flag on the same scale is
+-- what lets them be checked against each other.
 --
 -- THE PERCENTAGES ARE NOT RECOMPUTED. brand_pct is NAV's own and divides by
 -- PRODUCT sales, not total sales — it matches brand/product on 50,572 of
@@ -70,14 +77,11 @@ typed as (
              then -1 else 1 end                                               as sign,
 
         cast(sales_amount as {{ dbt.type_numeric() }})                        as sales_amount_raw,
-        cast(cost_amount as {{ dbt.type_numeric() }})                         as cost_amount_raw,
         cast(brand_sales_amount as {{ dbt.type_numeric() }})                  as brand_sales_amount_raw,
         cast(product_sales_amount as {{ dbt.type_numeric() }})                as product_sales_amount_raw,
 
         cast(brand_pct as {{ dbt.type_numeric() }})                           as brand_pct_nav,
-        cast(invoice_margin_pct as {{ dbt.type_numeric() }})                  as invoice_margin_pct_nav,
         cast(brand_below_target as {{ dbt.type_int() }})                      as brand_below_target_raw,
-        cast(invoice_margin_below_target as {{ dbt.type_int() }})             as invoice_margin_below_target_raw,
 
         cast(loaddate as timestamp)                                           as loaded_at
     from source
@@ -100,18 +104,15 @@ select
     -- there would average into every margin figure downstream as though the
     -- goods had been given away.
     sales_amount_raw          * sign                                          as sales_amount,
-    cost_amount_raw           * sign                                          as cost_amount,
     brand_sales_amount_raw    * sign                                          as brand_sales_amount,
     product_sales_amount_raw  * sign                                          as product_sales_amount,
 
-    -- ── NAV's own ratios, 0-1, UNSIGNED and NOT recomputed ───────────────
-    -- A ratio has no sign to flip: a credit memo's margin is still its margin.
-    -- These describe the single document only; a period figure must be
-    -- recomputed from the summed amounts, never averaged from these.
+    -- ── NAV's own ratio, 0-1, UNSIGNED and NOT recomputed ────────────────
+    -- A ratio has no sign to flip: a credit memo's brand share is still its
+    -- brand share. This describes the single document only; a period figure
+    -- must be recomputed from the summed amounts, never averaged from this.
     brand_pct_nav,
-    invoice_margin_pct_nav,
     (brand_below_target_raw = 1)                                              as brand_below_target,
-    (invoice_margin_below_target_raw = 1)                                     as invoice_margin_below_target,
 
     -- marks the rows a value total can be built from, the same way
     -- stg_nav__sales_invoice_lines.has_value does.

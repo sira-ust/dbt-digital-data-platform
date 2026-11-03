@@ -1270,8 +1270,6 @@ models:
         tests: [not_null]
       - name: sales_amount
         description: Posted sales, net of credit memos. Zero where the rep sold nothing.
-      - name: cost_amount
-        description: Cost, net of credit memos.
       - name: brand_sales_amount
         description: Own-brand value, net.
       - name: product_sales_amount

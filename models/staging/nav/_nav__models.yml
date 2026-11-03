@@ -704,6 +704,10 @@ models:
       staging means SUM() nets without the consumer having to remember.
 
       PERCENTAGES ARE 0-1, not 0-100, and are NAV's own — not recomputed.
+
+      NO COST OR MARGIN. Removed from the ingestion 2026-10-30: the ADF login
+      is denied SELECT on [Cost Amount], and [Invoice Margin %] and
+      [Invoice Margin < 13%] are no longer available.
     columns:
       - name: document_no
         description: Posted document number. The grain.
@@ -731,20 +735,14 @@ models:
         description: >
           Total invoiced value INCLUDING freight, CRV and pallet charges,
           signed negative on a credit memo. NULL where NAV exported none.
-      - name: cost_amount
-        description: Cost of the document, signed.
       - name: brand_sales_amount
         description: Own-brand product value, signed. What 'Brand' means is undefined in NAV.
       - name: product_sales_amount
         description: Product-only value, signed. Excludes freight and charges.
       - name: brand_pct_nav
         description: NAV's own brand share, 0-1, = brand / PRODUCT sales. For reconciliation.
-      - name: invoice_margin_pct_nav
-        description: NAV's own margin on the document, 0-1.
       - name: brand_below_target
         description: NAV's [Brand < 60%] flag — the only record of the company brand threshold.
-      - name: invoice_margin_below_target
-        description: NAV's [Invoice Margin < 13%] flag — the only record of the margin threshold.
       - name: has_value
         description: Whether an amount was exported for this document.
         tests: [not_null]
