@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ust_digital_platform · lineage & data-flow map</title>
 <style>
   :root {
@@ -14,10 +19,12 @@
     --l-staging: #10a99b;
     --l-seed: #e08a12;
     --l-int: #7c6cf0;
+    --l-dim: #0b93d1;
     --l-fact: #3b82f6;
     --l-mart: #12a56f;
     --l-dq: #ef4d63;
     --l-llm: #cf3fd6;
+    --l-voice: #5f9a0c;
 
     --shadow: 0 1px 2px rgba(20,28,44,.06), 0 6px 20px -12px rgba(20,28,44,.28);
     --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
@@ -25,7 +32,7 @@
     --r: 9px;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #0a0d13;
       --surface: #111621;
       --surface-2: #161c28;
@@ -38,10 +45,12 @@
       --l-staging: #21c9b9;
       --l-seed: #f4a935;
       --l-int: #9a8cff;
+      --l-dim: #38bdf8;
       --l-fact: #5b9bff;
       --l-mart: #2fce93;
       --l-dq: #ff6478;
       --l-llm: #e668ec;
+      --l-voice: #a3e635;
       --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
     }
   }
@@ -49,23 +58,27 @@
     --bg: #eef1f6; --surface: #ffffff; --surface-2: #f4f6fb; --line: #d6dde8;
     --line-strong: #b9c3d3; --ink: #161b26; --muted: #5d6779; --faint: #8b95a7;
     --l-source: #6b7a90; --l-staging: #10a99b; --l-seed: #e08a12; --l-int: #7c6cf0;
-    --l-fact: #3b82f6; --l-mart: #12a56f; --l-dq: #ef4d63; --l-llm: #cf3fd6;
+    --l-dim: #0b93d1; --l-fact: #3b82f6; --l-mart: #12a56f; --l-dq: #ef4d63; --l-llm: #cf3fd6;
+    --l-voice: #5f9a0c;
     --shadow: 0 1px 2px rgba(20,28,44,.06), 0 6px 20px -12px rgba(20,28,44,.28);
   }
   :root[data-theme="dark"] {
     --bg: #0a0d13; --surface: #111621; --surface-2: #161c28; --line: #232c3b;
     --line-strong: #33415a; --ink: #e7ecf5; --muted: #96a1b4; --faint: #667186;
     --l-source: #8695ab; --l-staging: #21c9b9; --l-seed: #f4a935; --l-int: #9a8cff;
-    --l-fact: #5b9bff; --l-mart: #2fce93; --l-dq: #ff6478; --l-llm: #e668ec;
+    --l-dim: #38bdf8; --l-fact: #5b9bff; --l-mart: #2fce93; --l-dq: #ff6478; --l-llm: #e668ec;
+    --l-voice: #a3e635;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
   }
 
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
     font-family: var(--sans); line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
+  code { font-family: var(--mono); }
   .wrap { max-width: 1260px; margin: 0 auto; padding: clamp(20px, 4vw, 52px) clamp(16px, 3vw, 40px) 80px; }
 
   /* ---- header ---- */
@@ -82,18 +95,16 @@
   .tagline { color: var(--muted); max-width: 84ch; font-size: 15px; margin: 0 0 6px; }
   .tagline b { color: var(--ink); font-weight: 600; }
   .tagline.plain { color: var(--faint); font-style: italic; }
-  .meta-row {
-    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px;
-    font-family: var(--mono); font-size: 12.5px;
+
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .toc a {
+    font-family: var(--mono); font-size: 12px; color: var(--muted); text-decoration: none;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 100px; padding: 4px 11px;
   }
-  .meta-row span {
-    background: var(--surface-2); border: 1px solid var(--line);
-    padding: 4px 10px; border-radius: 100px; color: var(--muted);
-  }
-  .meta-row span b { color: var(--ink); font-weight: 600; }
+  .toc a:hover { color: var(--ink); border-color: var(--line-strong); }
 
   /* ---- stats ---- */
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 26px 0 34px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 26px 0 34px; }
   .stat {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
     padding: 14px 15px; box-shadow: var(--shadow); position: relative; overflow: hidden;
@@ -104,25 +115,39 @@
   .stat .k b { color: var(--ink); font-weight: 600; }
 
   /* ---- section heads ---- */
-  .sec-head { display: flex; align-items: baseline; gap: 14px; margin: 46px 0 8px; flex-wrap: wrap; }
-  .sec-head h2 { font-family: var(--mono); font-size: 16px; font-weight: 700; letter-spacing: .02em; margin: 0; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin: 54px 0 8px; flex-wrap: wrap; scroll-margin-top: 16px; }
+  .sec-head h2 { font-family: var(--mono); font-size: 16px; font-weight: 700; letter-spacing: .02em; margin: 0; word-break: break-word; }
   .sec-head .rule { flex: 1; height: 1px; background: var(--line); min-width: 40px; }
+  .sub-head { font-family: var(--mono); font-size: 13.5px; font-weight: 700; margin: 30px 0 6px; color: var(--ink); }
   .sec-sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; max-width: 88ch; }
   .sec-sub b { color: var(--ink); font-weight: 600; }
-  .sec-sub code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  .sec-sub code, .note code { font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 
   /* ---- legend ---- */
-  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 20px; font-size: 12.5px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 16px; font-size: 12.5px; }
   .legend .item { display: flex; align-items: center; gap: 7px; color: var(--muted); }
   .legend .item b { color: var(--ink); font-weight: 600; }
   .legend .sw { width: 11px; height: 11px; border-radius: 3px; background: var(--c); flex: none; }
+
+  /* ---- DAG filters ---- */
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; align-items: center; }
+  .filters .lbl { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); margin-right: 4px; }
+  .chip {
+    font: inherit; font-size: 12.5px; cursor: pointer; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 100px; padding: 5px 12px;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--line-strong); }
+  .chip[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); background: var(--surface-2); font-weight: 600; }
+  .chip:focus-visible { outline: 2px solid var(--l-fact); outline-offset: 2px; }
+  .filters .count { font-family: var(--mono); font-size: 11.5px; color: var(--faint); margin-left: auto; }
 
   /* ---- DAG ---- */
   .dag-shell { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
   .dag-scroll { overflow-x: auto; overflow-y: hidden; }
   .dag-inner { position: relative; width: max-content; min-width: 100%; padding: 26px 26px 30px; }
-  .dag-cols { position: relative; z-index: 2; display: flex; gap: clamp(34px, 5vw, 72px); align-items: stretch; }
-  .col { display: flex; flex-direction: column; justify-content: center; gap: 14px; min-width: 194px; }
+  .dag-cols { position: relative; z-index: 2; display: flex; gap: clamp(34px, 5vw, 64px); align-items: stretch; }
+  .col { display: flex; flex-direction: column; justify-content: center; gap: 12px; width: 206px; flex: none; }
   .col-label {
     font-family: var(--mono); font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
     color: var(--faint); text-align: center; padding-bottom: 4px; border-bottom: 1px dashed var(--line);
@@ -138,39 +163,46 @@
   .node .nm { font-family: var(--mono); font-size: 12px; font-weight: 600; line-height: 1.3; word-break: break-word; }
   .node .desc { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
   .node .mt {
-    display: flex; gap: 6px; align-items: center; margin-top: 8px;
+    display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin-top: 8px;
     font-family: var(--mono); font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em;
   }
-  .node .pipe-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--nc); opacity: .6; flex: none; }
   .srcflags { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--line); }
   .sflag { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
   .sflag i { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
   .tag { font-size: 9.5px; padding: 1px 5px; border-radius: 4px; letter-spacing: .04em; font-family: var(--mono); }
   .tag.view { color: var(--l-staging); border: 1px solid color-mix(in srgb, var(--l-staging) 40%, transparent); }
-  .tag.table { color: var(--l-fact); border: 1px solid color-mix(in srgb, var(--l-fact) 40%, transparent); }
+  .tag.table, .tag.incremental { color: var(--l-fact); border: 1px solid color-mix(in srgb, var(--l-fact) 40%, transparent); }
   .tag.src { color: var(--muted); border: 1px solid var(--line); }
   .tag.csv { color: var(--l-seed); border: 1px solid color-mix(in srgb, var(--l-seed) 40%, transparent); }
   .tag.ext { color: var(--l-seed); border: 1px solid color-mix(in srgb, var(--l-seed) 45%, transparent); background: color-mix(in srgb, var(--l-seed) 10%, transparent); font-weight: 700; }
   .tag.ai { color: var(--l-llm); border: 1px solid color-mix(in srgb, var(--l-llm) 45%, transparent); background: color-mix(in srgb, var(--l-llm) 10%, transparent); font-weight: 700; }
+  .tag.voice { color: var(--l-voice); border: 1px solid color-mix(in srgb, var(--l-voice) 50%, transparent); background: color-mix(in srgb, var(--l-voice) 10%, transparent); font-weight: 700; }
+  .tag.wip { color: var(--l-dq); border: 1px dashed color-mix(in srgb, var(--l-dq) 60%, transparent); font-weight: 700; }
   .aisrc { font-family: var(--mono); font-size: 10px; color: var(--l-llm); opacity: .85; margin-top: 6px; word-break: break-word; }
+  .aisrc.plain { color: var(--l-seed); }
   .node .badge {
     margin-left: auto; background: var(--surface-2); border: 1px solid var(--line);
     border-radius: 100px; padding: 1px 7px; font-size: 10px; color: var(--muted); font-family: var(--mono);
   }
+  /* overview mode: the whole graph at once, names only — descriptions are in the tooltip */
+  .dag-inner.compact .node { padding: 7px 10px; }
+  .dag-inner.compact .node .desc, .dag-inner.compact .aisrc { display: none; }
+  .dag-inner.compact .node .mt { margin-top: 5px; }
+  .dag-inner.compact .srcflags { margin-top: 5px; padding-top: 5px; }
 
   /* edges */
   #edges { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-  #edges path { fill: none; stroke: var(--line-strong); stroke-width: 1.4; opacity: .5; transition: stroke .18s, opacity .18s, stroke-width .18s; }
-  .dag-inner.hovering #edges path { opacity: .12; }
+  #edges path { fill: none; stroke: var(--line-strong); stroke-width: 1.3; opacity: .45; transition: stroke .18s, opacity .18s, stroke-width .18s; }
+  .dag-inner.hovering #edges path { opacity: .08; }
   .dag-inner.hovering #edges path.hot { opacity: .95; stroke-width: 2.2; }
-  .dag-inner.hovering .node { opacity: .38; }
+  .dag-inner.hovering .node { opacity: .32; }
   .dag-inner.hovering .node.lit { opacity: 1; }
   .dag-inner.hovering .node.root { opacity: 1; box-shadow: var(--shadow); }
   .hint { font-size: 12.5px; color: var(--faint); text-align: center; padding: 4px 0 0; }
 
-  /* ---- social flow ---- */
+  /* ---- flows (social, promo) ---- */
   .sflow { margin-top: 8px; }
-  .stage { display: grid; grid-template-columns: 34px 1fr; gap: 16px; }
+  .stage { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 16px; }
   .stage__spine { display: flex; flex-direction: column; align-items: center; }
   .stage__num {
     width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center;
@@ -181,41 +213,75 @@
   .stage:last-child .stage__line { display: none; }
   .stage__card {
     background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--sc, var(--line-strong));
-    border-radius: 9px; padding: 13px 16px; box-shadow: var(--shadow); margin-bottom: 12px;
+    border-radius: 9px; padding: 13px 16px; box-shadow: var(--shadow); margin-bottom: 12px; min-width: 0;
   }
   .stage__title { font-family: var(--mono); font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; word-break: break-word; }
+  .stage__title .from { font-weight: 400; color: var(--muted); font-size: 12px; }
   .stage__lead { font-size: 14px; color: var(--ink); margin: 8px 0 0; max-width: 86ch; }
   .stage__how { font-size: 13px; color: var(--muted); margin: 6px 0 0; max-width: 86ch; }
   .stage__how b { color: var(--ink); font-weight: 600; }
-  .stage__how code, .stage__lead code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  .stage__how code, .stage__lead code, .sp-body code, .loop-note code { font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; word-break: break-word; }
   .stage__meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
-  .pill { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 100px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .pill { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 100px; border: 1px solid var(--line); color: var(--muted); max-width: 100%; overflow-wrap: anywhere; }
   .pill.llm { color: var(--l-llm); border-color: color-mix(in srgb, var(--l-llm) 50%, transparent); background: color-mix(in srgb, var(--l-llm) 9%, transparent); }
   .pill.cost { color: var(--l-llm); border-color: color-mix(in srgb, var(--l-llm) 50%, transparent); font-weight: 700; }
   .pill.gate { color: var(--l-int); border-color: color-mix(in srgb, var(--l-int) 50%, transparent); background: color-mix(in srgb, var(--l-int) 9%, transparent); }
   .pill.board { color: var(--l-mart); border-color: color-mix(in srgb, var(--l-mart) 50%, transparent); background: color-mix(in srgb, var(--l-mart) 9%, transparent); }
-  .pill.out { color: var(--ink); border-style: dashed; }
+  .pill.new { color: var(--l-voice); border-color: color-mix(in srgb, var(--l-voice) 55%, transparent); background: color-mix(in srgb, var(--l-voice) 9%, transparent); font-weight: 700; }
   .codeblock {
     display: block; font-family: var(--mono); font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--line);
     border-radius: 6px; padding: 9px 11px; margin-top: 10px; color: var(--ink); overflow-x: auto; white-space: nowrap;
   }
+  .codeblock.pre { white-space: pre; line-height: 1.6; }
   .codeblock .op { color: var(--l-fact); }
   .codeblock .cm { color: var(--faint); }
+  .codeblock .ai { color: var(--l-llm); }
   .loop-note {
     margin-top: 11px; font-size: 13px; color: var(--muted); border-left: 2px dashed var(--l-llm);
-    padding: 3px 0 3px 12px;
+    padding: 3px 0 3px 12px; max-width: 86ch;
   }
   .loop-note b { color: var(--l-llm); }
   .sig { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
   .sig span { font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px; color: var(--muted); }
-  .sig span code { font-family: var(--mono); color: var(--ink); font-size: 11px; }
+  .sig span code { color: var(--ink); font-size: 11px; }
   .script-panel { margin-top: 12px; border: 1px dashed color-mix(in srgb, var(--sp-color, var(--l-source)) 55%, var(--line)); border-radius: 8px; padding: 11px 13px; background: color-mix(in srgb, var(--sp-color, var(--l-source)) 7%, transparent); }
-  .script-panel .sp-head { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--sp-color, var(--l-source)); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .script-panel .sp-head { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--sp-color, var(--l-source)); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; word-break: break-word; }
   .script-panel .sp-body { font-size: 12.5px; color: var(--muted); margin-top: 7px; }
   .script-panel .sp-body b { color: var(--ink); font-weight: 600; }
+  .script-panel ol { margin: 6px 0 0; padding-left: 20px; }
+  .script-panel li { margin: 3px 0; }
+
+  /* ---- windows panel ---- */
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: 15px 18px 13px; margin: 0 0 20px; }
+  .panel__cap { font-family: var(--mono); font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 11px; }
+  .win { display: grid; grid-template-columns: 26px minmax(110px, auto) minmax(150px, auto) 1fr; gap: 7px 16px; font-size: 13px; align-items: baseline; }
+  .win .grp { grid-column: 1 / -1; font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 4px; }
+  .win .grp:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+  .win .no { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+  .win .set { font-family: var(--mono); font-size: 12px; color: var(--l-fact); word-break: break-word; }
+  .win .gov { color: var(--muted); }
+  .win code { font-size: 12px; }
+  @media (max-width: 760px) {
+    .win { grid-template-columns: 26px 1fr; }
+    .win .set, .win .gov { grid-column: 2; }
+  }
+  .panel .foot { margin: 12px 0 0; font-size: 12.5px; color: var(--faint); }
+
+  /* ---- search branch ---- */
+  .branch { margin: 4px 0 0 50px; border: 1px solid var(--line); border-left: 3px solid var(--l-int); border-radius: 9px; background: var(--surface); box-shadow: var(--shadow); padding: 14px 17px; }
+  @media (max-width: 640px) { .branch { margin-left: 0; } }
+  .branch__title { font-family: var(--mono); font-size: 13.5px; font-weight: 700; display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+  .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 4px; font-family: var(--mono); font-size: 11.5px; }
+  .chain span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px; word-break: break-word; }
+  .chain i { font-style: normal; color: var(--faint); }
+  .facts { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+  .facts li { font-size: 13px; color: var(--muted); padding-left: 14px; position: relative; max-width: 92ch; }
+  .facts li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 2px; background: var(--line-strong); }
+  .facts li b { color: var(--ink); font-weight: 600; }
+  .facts code { font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 
   /* ---- dq grid ---- */
-  .dq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 14px; }
+  .dq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 268px), 1fr)); gap: 14px; }
   .dqc { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--l-dq); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
   .dqc .type { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--l-dq); }
   .dqc h4 { font-family: var(--mono); font-size: 13px; margin: 4px 0 0; word-break: break-word; }
@@ -223,7 +289,7 @@
   .dqc .taps::before { content: "taps "; color: var(--muted); }
   .dqc p { font-size: 13px; color: var(--muted); margin: 0; }
   .dqc p b { color: var(--ink); font-weight: 600; }
-  .dqc p code { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+  .dqc p code { font-size: 11.5px; color: var(--ink); }
   .sev { display: flex; gap: 5px; margin-top: 13px; flex-wrap: wrap; }
   .sev span { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--line); }
   .sev .warn { color: var(--l-seed); border-color: color-mix(in srgb, var(--l-seed) 45%, transparent); }
@@ -231,46 +297,108 @@
   .sev .ok { color: var(--l-mart); border-color: color-mix(in srgb, var(--l-mart) 45%, transparent); }
   .sev .quar { color: var(--l-dq); border-color: color-mix(in srgb, var(--l-dq) 45%, transparent); }
 
+  /* ---- rep voice ai ---- */
+  .ask-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; margin: 0 0 8px; }
+  .ask { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); position: relative; }
+  .ask .k { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--l-voice); font-weight: 700; }
+  .ask h4 { margin: 4px 0 6px; font-size: 14px; }
+  .ask p { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .ask code { font-size: 11.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; word-break: break-word; }
+
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 12px; }
+  .rule-c { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--l-voice); border-radius: 9px; padding: 13px 15px; box-shadow: var(--shadow); }
+  .rule-c h4 { margin: 0 0 5px; font-size: 13.5px; }
+  .rule-c p { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .rule-c p b { color: var(--ink); font-weight: 600; }
+  .rule-c code { font-size: 11.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; word-break: break-word; }
+
+  .q { margin: 30px 0 10px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .q h3 { margin: 0; font-size: 16px; font-weight: 700; }
+  .q .qs { font-size: 13px; color: var(--faint); font-style: italic; }
+  .tcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr)); gap: 14px; }
+  .tcard { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--tc, var(--l-mart)); border-radius: 10px; padding: 15px 17px; box-shadow: var(--shadow); min-width: 0; }
+  .tcard .tn { font-family: var(--mono); font-size: 13px; font-weight: 700; word-break: break-word; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tcard .tm { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-top: 4px; line-height: 1.5; word-break: break-word; }
+  .tcard .tm b { color: var(--muted); font-weight: 600; }
+  .tcard > p { font-size: 13px; color: var(--muted); margin: 9px 0 0; }
+  .tcard > p b { color: var(--ink); font-weight: 600; }
+  .tcard code { font-size: 11.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; word-break: break-word; }
+  .cols { margin: 11px 0 0; padding: 10px 0 0; border-top: 1px dashed var(--line); display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 5px 12px; font-size: 12.5px; }
+  .cols dt { font-family: var(--mono); font-size: 11.5px; color: var(--ink); word-break: break-word; }
+  .cols dd { margin: 0; color: var(--muted); }
+  @media (max-width: 520px) { .cols { grid-template-columns: 1fr; } .cols dd { margin-bottom: 5px; } }
+  .builds { font-size: 12px; color: var(--faint); margin-top: 10px; }
+  .builds code { font-size: 11px; }
+
+  .gaps-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  table.gaps { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  .gaps th { text-align: left; font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--faint); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .gaps td { padding: 9px 14px; border-bottom: 1px solid var(--line); color: var(--muted); vertical-align: top; }
+  .gaps tr:last-child td { border-bottom: 0; }
+  .gaps td:first-child { color: var(--ink); font-weight: 600; }
+  .gaps code { font-size: 11.5px; color: var(--ink); }
+  .note { font-size: 13px; color: var(--muted); margin: 12px 0 0; max-width: 92ch; }
+  .note b { color: var(--ink); font-weight: 600; }
+
   /* ---- cadence ---- */
-  .cadence { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 640px) { .cadence { grid-template-columns: 1fr; } }
-  .cad { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .cadence { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 14px; }
+  .cad { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); min-width: 0; }
   .cad.daily { border-top: 3px solid var(--l-fact); }
   .cad.weekly { border-top: 3px solid var(--l-llm); }
+  .cad.monthly { border-top: 3px solid #db2777; }
+  .cad.geo { border-top: 3px solid var(--l-seed); }
   .cad .when { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
   .cad .cmd { font-family: var(--mono); font-size: 13px; margin: 9px 0 8px; color: var(--ink); word-break: break-all; }
   .cad .cmd .flag { color: var(--l-fact); }
   .cad .desc { font-size: 13px; color: var(--muted); }
+  .cad .desc code { font-size: 12px; }
 
   footer { margin-top: 46px; padding-top: 18px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11.5px; color: var(--faint); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 
   @media (prefers-reduced-motion: no-preference) {
-    .node { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
+    .node { animation: rise .45s cubic-bezier(.2,.7,.2,1) both; }
     @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   }
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header>
     <div class="eyebrow"><span class="dot"></span> dbt project · lineage &amp; data-flow map <span class="dot"></span> duckdb (dev) → databricks (prod)</div>
     <h1>ust_digital_platform</h1>
-    <p class="tagline">Read-only analytics warehouse over three sources — the <b>MySQL system-event log</b> (~600k events/mo), the <b>JDA / Blue&nbsp;Yonder WMS replica</b> (16 tables), and weekly <b>Mentionlytics</b> social listening — flowing <b>staging → intermediate → facts → reporting marts</b>, with an offline LLM sidecar that keeps the dbt build deterministic.</p>
-    <p class="tagline plain">In business terms: what customers do in our apps, what's in the warehouse, and what people say online — turned into demand-vs-supply and trending-product reports.</p>
+    <p class="tagline">A read-only analytics warehouse over six source schemas: the <b>MySQL system-event log</b>, the <b>JDA / Blue&nbsp;Yonder WMS replica</b>, the <b>NAV ERP</b> (customers, items, posted invoices, targets, margin history), weekly <b>Mentionlytics</b> social listening, the <b>monthly promo workbook</b>, and a geocode table. Data flows <b>staging → intermediate → dims &amp; facts → reporting marts</b>. Offline LLM scripts write tables that dbt reads, so the dbt build itself never calls a model and stays deterministic.</p>
+    <p class="tagline plain">In business terms: what customers do in our apps, what's in the warehouse, what we invoice and what people say online, turned into the sales reps' voice assistant, a demand-vs-supply report and a weekly trending board.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#lineage">Lineage graph</a>
+      <a href="#social">Social listening</a>
+      <a href="#search">Search demand</a>
+      <a href="#promo">Promo × social</a>
+      <a href="#voice">Rep Voice AI</a>
+      <a href="#dq">Data quality</a>
+      <a href="#cadence">Run cadence</a>
+    </nav>
   </header>
 
   <div class="stats">
-    <div class="stat" style="--c:var(--l-source)"><div class="n">4</div><div class="k">data sources</div></div>
-    <div class="stat" style="--c:var(--l-int)"><div class="n">47</div><div class="k">data models <b>(source → report)</b></div></div>
-    <div class="stat" style="--c:var(--l-mart)"><div class="n">8</div><div class="k">business reports <b>(marts)</b></div></div>
-    <div class="stat" style="--c:var(--l-dq)"><div class="n">5</div><div class="k">data-quality checks</div></div>
+    <div class="stat" style="--c:var(--l-source)"><div class="n">6</div><div class="k">source schemas <b>+ 21 seeds</b></div></div>
+    <div class="stat" style="--c:var(--l-int)"><div class="n">95</div><div class="k">dbt models <b>(source → report)</b></div></div>
+    <div class="stat" style="--c:var(--l-mart)"><div class="n">17</div><div class="k">business reports <b>(marts)</b></div></div>
+    <div class="stat" style="--c:var(--l-voice)"><div class="n">16</div><div class="k">tables the <b>Rep Voice AI</b> reads</div></div>
+    <div class="stat" style="--c:var(--l-dq)"><div class="n">6</div><div class="k">data-quality checks</div></div>
   </div>
 
+  <!-- ================================================================ LINEAGE -->
+  <div class="sec-head" id="lineage"><h2>Lineage graph</h2><span class="rule"></span></div>
+  <p class="sec-sub">Every model and the <code>ref()</code> / <code>source()</code> edges between them. A model's column is how many build steps it sits from a raw source. The 16 WMS staging views are drawn as one box, and the 21 seeds as another. Pick a subject area to see just the models behind it, with descriptions, or hover any box to trace its lineage both ways. DQ models are listed in their own section, not drawn here.</p>
+
   <div class="legend" id="legend"></div>
+  <div class="filters" id="filters" role="group" aria-label="Subject area"><span class="lbl">Show</span></div>
 
   <div class="dag-shell">
     <div class="dag-scroll">
       <div class="dag-inner" id="dag">
-        <svg id="edges"><defs>
+        <svg id="edges" aria-hidden="true"><defs>
           <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M0.5,0.5 L7.5,4 L0.5,7.5" fill="none" stroke="context-stroke" stroke-width="1.4"/>
           </marker>
@@ -279,41 +407,40 @@
       </div>
     </div>
   </div>
-  <p class="hint">Scroll sideways to follow the graph · hover any model to trace its lineage both ways</p>
+  <p class="hint" id="hint">Scroll sideways to follow the graph · hover any model to trace its lineage both ways</p>
 
-  <div class="sec-head"><h2>Social listening → mart_social_trending_items</h2><span class="rule"></span></div>
-  <p class="sec-sub">Six boxes, six real dbt views/tables — the <b>table flow only</b>. Three of them are built from a source an offline Python script writes; that script (and any LLM call it makes) is shown as an inset panel <b>inside</b> that table's box, not as a step of its own — the script is how the table got its data, not a separate stop the data visits.</p>
+  <!-- ================================================================ SOCIAL -->
+  <div class="sec-head" id="social"><h2>Social listening → the weekly trending board</h2><span class="rule"></span></div>
+  <p class="sec-sub">Eleven boxes covering thirteen dbt models, showing <b>the table flow only</b>. Five of the boxes are built from a source that an offline Python script writes. That script, and any LLM call it makes, is shown as an inset panel <b>inside</b> the box: it is how the table got its data, not a separate stop the data visits. <b>Since 2026-10 the board a reader sees is <code>int_social_trend_board</code></b>, which ranks products rather than spellings and has staying power. The weekly ranking is one input to it.</p>
 
-  <div style="background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
-              box-shadow:var(--shadow); padding:15px 18px 13px; margin:0 0 20px;">
-    <div style="font-family:var(--mono); font-size:11.5px; letter-spacing:.07em; text-transform:uppercase;
-                color:var(--muted); margin-bottom:11px;">
-      Five time windows — independent of each other. Only the first two change a published number.
+  <div class="panel">
+    <div class="panel__cap">Nine time windows, independent of each other. Windows 1–2 make the weekly numbers; 6–9 make the board.</div>
+    <div class="win">
+      <div class="grp">The weekly ranking</div>
+      <div class="no">1</div><div><b>Ranking</b></div><div class="set">1 calendar week</div>
+      <div class="gov"><code>trend_rank</code>, <code>trend_score</code>, <code>mention_count</code>, <code>mention_share</code>. Complete weeks only: the week in progress isn't computed until it finishes</div>
+      <div class="no">2</div><div><b>Comparison</b></div><div class="set">the previous week</div>
+      <div class="gov"><code>rank_change</code>, <code>is_rising</code>, <code>mention_share_change</code>. Strict: these are null when the previous row isn't exactly last week, which means "no comparison", never "flat"</div>
+
+      <div class="grp">The board (int_social_trend_board)</div>
+      <div class="no">6</div><div><b>Fade</b></div><div class="set">half-life 2 wk</div>
+      <div class="gov"><code>faded_score</code> → <code>board_rank</code>. A week's share of the board counts 100%, ~71%, 50%, ~35%, then 25%, so a spike trails off over 3–4 weeks instead of vanishing</div>
+      <div class="no">7</div><div><b>Stay-on</b></div><div class="set">3 wk · top 25 · 4 quiet wk</div>
+      <div class="gov">A product is on the board if it is top-20 by faded score, <i>or</i> top-20 this week (the fast lane for new spikes), <i>or</i> it got on within 3 weeks, is still top-25 and has posted within 4 normal weeks</div>
+      <div class="no">8</div><div><b>Coverage</b></div><div class="set">&lt; 0.4 × prior-4-week median</div>
+      <div class="gov"><code>is_low_coverage</code>: a data hole (quota out, keyword cut) stops the fade clock for at most 2 weeks in a row, instead of reading as a quiet week</div>
+      <div class="no">9</div><div><b>Rising</b></div><div class="set">last 4 wk vs 8 before</div>
+      <div class="gov"><code>is_rising_candidate</code>, <code>rising_rank</code>: at least 2× its own baseline share, with floors on posts and authors. This is the "potential trend" list, read beside the board</div>
+
+      <div class="grp">Housekeeping: none of these moves a rank</div>
+      <div class="no">3</div><div><b>Retention</b></div><div class="set">social_trend_history_weeks · 13</div>
+      <div class="gov">Chart length only, proven not to move a rank. Rolling and unarchived: when week 14 arrives, week 1 is gone</div>
+      <div class="no">4</div><div><b>Re-label</b></div><div class="set">social_enrich_backfill_weeks · 4</div>
+      <div class="gov">How far back a prompt-version bump re-labels mentions. It is a cost control and is week-aligned, because a <i>partly</i> re-labelled week is the one broken state</div>
+      <div class="no">5</div><div><b>Snippets</b></div><div class="set">SNIPPET_WINDOW_DAYS · 28</div>
+      <div class="gov">How much mention text the SKU resolver reads to work out what a token <i>means</i>. Deliberately wider than one week</div>
     </div>
-    <div style="display:grid; grid-template-columns:auto auto 1fr; gap:7px 16px; font-size:13px; align-items:baseline;">
-      <div><b>1 · ranking</b></div>
-      <div style="font-family:var(--mono); font-size:12px; color:var(--l-fact);">1 calendar week</div>
-      <div style="color:var(--muted);">every published number — <code>trend_rank</code>, <code>trend_score</code>, <code>mention_count</code>, <code>mention_share</code>. Complete weeks only; the week in progress isn't computed until it finishes</div>
-
-      <div><b>2 · comparison</b></div>
-      <div style="font-family:var(--mono); font-size:12px; color:var(--l-fact);">the previous week</div>
-      <div style="color:var(--muted);">movement only — <code>rank_change</code>, <code>is_rising</code>, <code>mention_share_change</code>. Strict: null when the previous row isn't exactly last week, which means "no comparison", never "flat"</div>
-
-      <div><b>3 · retention</b></div>
-      <div style="font-family:var(--mono); font-size:12px;">social_trend_history_weeks · 13</div>
-      <div style="color:var(--muted);">chart length, nothing else. Proven not to move a single rank. Rolling and unarchived — week 14 arriving means week 1 is gone</div>
-
-      <div><b>4 · re-label</b></div>
-      <div style="font-family:var(--mono); font-size:12px;">social_enrich_backfill_weeks · 4</div>
-      <div style="color:var(--muted);">how far back a prompt-version bump re-labels mentions. A cost control on the offline LLM, not a ranking input. Week-aligned — a <i>partly</i> re-labelled week is the one broken state</div>
-
-      <div><b>5 · snippets</b></div>
-      <div style="font-family:var(--mono); font-size:12px;">SNIPPET_WINDOW_DAYS · 28</div>
-      <div style="color:var(--muted);">how much mention text the SKU resolver reads to decide what a token <i>means</i>. Wider than one week on purpose, so a mid-week run can't leave a concept with no evidence</div>
-    </div>
-    <p style="margin:12px 0 0; font-size:12.5px; color:var(--faint);">
-      Defined once, with the trade-off each one accepts, in <code>models/docs/_social_windows.md</code> — the authority if these ever disagree.
-    </p>
+    <p class="foot">Each window is defined once, with the trade-off it accepts, in <code>models/docs/_social_windows.md</code>. That file is the authority if these ever disagree.</p>
   </div>
 
   <div class="legend" style="margin-bottom:18px">
@@ -322,7 +449,7 @@
     <div class="item"><span class="sw" style="--c:var(--l-int)"></span><b>dbt intermediate table</b></div>
     <div class="item"><span class="sw" style="--c:var(--l-mart)"></span><b>dbt mart table</b></div>
     <div class="item"><span class="sw" style="--c:var(--l-source)"></span><b>inset: plain offline script</b></div>
-    <div class="item"><span class="sw" style="--c:var(--l-llm)"></span><b>inset: offline LLM — bills MODEL_SERVING</b></div>
+    <div class="item"><span class="sw" style="--c:var(--l-llm)"></span><b>inset: offline LLM (bills MODEL_SERVING)</b></div>
   </div>
 
   <div class="sflow">
@@ -330,11 +457,11 @@
       <div class="stage__spine"><div class="stage__num">1</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">stg_mentionlytics__mentions</div>
-        <p class="stage__lead">Cleaned, de-duplicated social media posts — the entry point for everything else.</p>
-        <p class="stage__how"><b>How:</b> view; dedupe overlapping weekly files on <code>mention_id</code> (<b>latest <code>loaded_at</code> wins</b>, <code>source_file</code> as tiebreak), cast + trim only.</p>
+        <p class="stage__lead">Cleaned, de-duplicated social posts. This is the entry point for everything else, including the promo match.</p>
+        <p class="stage__how"><b>How:</b> a view that dedupes overlapping weekly files on <code>mention_id</code> (<b>the latest <code>loaded_at</code> wins</b>, with <code>source_file</code> as the tiebreak), then casts and trims. Nothing else.</p>
         <div class="script-panel">
-          <div class="sp-head"><span class="pill">offline script</span> convert_mentionlytics.py <span class="pill">weekly</span></div>
-          <div class="sp-body">Writes the <code>social.mentions</code> source this view reads. Pure <code>xlsx → parquet</code>/Delta reshape — no transformation, no LLM.</div>
+          <div class="sp-head"><span class="pill">offline script</span> parse_mentions.py (Databricks) · convert_mentionlytics.py (local) <span class="pill">weekly</span></div>
+          <div class="sp-body">Writes the <code>social.mentions</code> source this view reads. It is a pure <code>xlsx → Delta</code>/parquet reshape, append-only, with no transformation and no LLM. Overlapping drops reconcile here, in the dedupe.</div>
         </div>
         <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:social</span></div>
       </div>
@@ -344,11 +471,11 @@
       <div class="stage__spine"><div class="stage__num">2</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">stg_mentionlytics__mention_enrichment</div>
-        <p class="stage__lead">The AI's read on each post — is it about food? is it spam? which dishes?</p>
-        <p class="stage__how"><b>How:</b> view; cast + trim only — no dedupe needed here, the script already writes one row per <code>mention_id</code>.</p>
+        <p class="stage__lead">The AI's read on each post: is it about food, is it spam, and which dishes and products does it name?</p>
+        <p class="stage__how"><b>How:</b> a view that casts and trims only. It needs no dedupe, because the script already writes one row per <code>mention_id</code>.</p>
         <div class="script-panel" style="--sp-color:var(--l-llm)">
           <div class="sp-head"><span class="pill llm">offline LLM</span> enrich_mentions.py <span class="pill cost">MODEL_SERVING</span></div>
-          <div class="sp-body">Reads box <b>#1</b>'s cleaned posts and writes the table this view reads. A quick keyword check catches obvious gambling spam first — no AI needed for those. Everything else goes to the AI, which reads the post and answers: is this about food, is it spam, which dishes/ingredients/brands are mentioned, and what's the tone. Only new posts are sent each run. This step runs outside dbt — it reads a dbt table (box #1) and writes back a new one dbt picks up right here.</div>
+          <div class="sp-body">The script reads box <b>#1</b>'s posts and writes the table this view reads. A keyword check catches obvious gambling spam first, with no AI. Everything else goes to the AI, which answers: is this food, is it spam, which <b>dishes</b> and which <b>products / ingredients</b> are named, and, since prompt v4, the <b>role</b> each one plays (the subject of the post, or merely an ingredient in it). Sentiment was dropped as out of scope. Only new posts are sent, except that a <code>PROMPT_VERSION</code> bump re-labels the last 4 weeks (window 4).</div>
         </div>
         <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:social</span></div>
       </div>
@@ -358,47 +485,118 @@
       <div class="stage__spine"><div class="stage__num">3</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">fct_social_mentions</div>
-        <p class="stage__lead">Only the genuine, real food posts — spam and off-topic noise filtered out.</p>
-        <p class="stage__how"><b>How:</b> <code>LEFT JOIN</code> box #1 to box #2, add conformed dimensions (<code>posted_week</code> + <code>market</code> from the tracker; split <code>followers_or_rank</code> into <code>follower_count</code> vs <code>domain_rank</code>), then filter — keep food-relevant rows and drop spam only when the model is confident, so a shaky spam call can't hide a real mention:</p>
+        <p class="stage__lead">Only the genuine food posts, with spam and off-topic noise filtered out.</p>
+        <p class="stage__how"><b>How:</b> <code>LEFT JOIN</code> box #1 to box #2 and add conformed dimensions: <code>posted_week</code> and <code>market</code> from the tracker, and <code>followers_or_rank</code> split into <code>follower_count</code> vs <code>domain_rank</code>. Then filter. Spam is dropped only when the model is confident, so a shaky spam call can't hide a real mention:</p>
         <code class="codeblock">where is_food_relevant <span class="op">and not</span> (is_spam <span class="op">and</span> confidence <span class="op">&gt;=</span> social_spam_confidence_min) <span class="cm">-- 0.7</span></code>
-        <div class="stage__meta"><span class="pill">dbt · table · fact</span></div>
+        <div class="stage__meta"><span class="pill">dbt · table · fact</span><span class="pill">tag:social</span></div>
       </div>
     </div>
 
     <div class="stage" style="--sc:var(--l-int)">
       <div class="stage__spine"><div class="stage__num">4</div><div class="stage__line"></div></div>
       <div class="stage__card">
-        <div class="stage__title">int_social_concept_trends <span class="pill gate">the gate</span></div>
-        <p class="stage__lead">Ranks what's trending each calendar week — dishes and stockable items on two separate boards.</p>
-        <p class="stage__how"><b>Two streams, ranked separately</b> so viral dishes can't crowd out items: <code>unnest(mentioned_dishes)</code> → class <code>dish</code>, <code>unnest(mentioned_products)</code> → class <code>item</code>. Which of the two a word belongs to is decided by the enrichment prompt, not filtered here — <code>seed_social_generic_terms</code> is only a backstop for commodity/category tokens that slip through.</p>
-        <p class="stage__how"><b>One identity per thing:</b> <code>strip_parenthetical_gloss()</code> then <code>fold_concept()</code> collapse language and spelling variants (bánh khọt → banh khot) to one key.</p>
-        <p class="stage__how"><b>Then per calendar week:</b> aggregate → score → <code>row_number()</code> partitioned by (week, class), so each week and each class gets its own 1..N. Week 1 of the series and the week still in progress are dropped as incomplete — a fragment can't be ranked against a whole week.</p>
-        <p class="stage__how"><b>Read movement, not volume:</b> <code>mention_share</code> is a concept's share of that week's mentions, so it survives a change in collection volume; raw counts don't. Materialized as a table because it's the gate the resolver reads.</p>
-        <code class="codeblock">trend_score <span class="op">=</span> distinct_authors <span class="op">×</span> (1 <span class="op">+</span> ln(1+engagement_norm)/5 <span class="op">+</span> ln(1+views_norm)/10) <span class="op">×</span> single_channel_dampener</code>
-        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">≥ 2 mentions</span><span class="pill">calendar week</span><span class="pill">top-20 per class per week</span><span class="pill">13wk history (~3mo)</span></div>
+        <div class="stage__title">int_social_concept_mentions <span class="pill new">new</span></div>
+        <p class="stage__lead">Every dish or product name a post mentions, cleaned, across all history.</p>
+        <p class="stage__how"><b>How:</b> one row per (mention, class, name), from <code>unnest(mentioned_dishes)</code> → <code>dish</code> and <code>unnest(mentioned_products)</code> → <code>item</code>. This is <b>the single home of the cleaning</b>: <code>strip_parenthetical_gloss()</code>, then <code>fold_concept()</code> (bánh khọt → banh khot), then an anti-join on <code>seed_social_generic_terms</code>, the backstop for commodity words that slip through. Both the weekly ranking and the canonicaliser script read it, so they can't disagree about what a name is. It is not unique: a post that names a thing twice yields two rows.</p>
+        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">all history</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">5</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_social_concept_canon <span class="from">← stg_mentionlytics__concept_canon</span> <span class="pill new">new</span></div>
+        <p class="stage__lead">One product, one name. Every spelling, script and board a thing was named under resolves to a single product.</p>
+        <p class="stage__how"><b>How:</b> the name → product map. Each <code>(concept_class, concept_norm)</code> gets one <code>product_key</code> (the merge key), one <code>product_name</code> for display, and one <code>product_class</code>. The class is <code>item</code> or <code>dish</code>, by its spellings' votes weighted by posts, with ties going to item. Names with the same words in a different order are merged here in SQL, with no LLM. A name that hasn't been canonicalised yet has no row and ranks as itself. Measured 2026-10-05: Lay's ice cream had been split across 9+ names on both boards.</p>
+        <div class="script-panel" style="--sp-color:var(--l-llm)">
+          <div class="sp-head"><span class="pill llm">offline LLM</span> canonicalize_concepts.py, run twice <span class="pill cost">MODEL_SERVING</span></div>
+          <div class="sp-body">The script reads box <b>#4</b> and writes <code>social.concept_canon</code>, and dbt rebuilds this box after each pass:
+            <ol>
+              <li><b>names → products</b>, each name asked once and new names only.</li>
+              <li><b><code>--consolidate</code></b>: products whose names share most of their words are asked "same product?" in small star-shaped groups. It never merges a branded product with an unbranded one, after the first run tried "fresh eggs" → "cp fresh eggs".</li>
+            </ol></div>
+        </div>
+        <div class="stage__meta"><span class="pill">dbt · view → table</span><span class="pill">covers all history, because promo matching does too</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">6</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_social_product_labels <span class="from">← stg_mentionlytics__product_profile</span> <span class="pill new">new</span></div>
+        <p class="stage__lead">What kind of thing each product is (<b>branded</b>, <b>shelf</b> or <b>generic</b>) and whose brand it is.</p>
+        <p class="stage__how"><b>How:</b> one label per canonical product. <code>seed_social_product_overrides</code> is applied over the LLM's label (a blank field keeps the LLM's value), and every brand gets ONE spelling: <code>brand_key</code> folds "Lay's" and "Lays", and the display brand is the most-posted spelling. <b>Labels a person can correct:</b> after a label run, review the top of the board and add a seed row for anything wrong. That is cheaper and more certain than re-labelling 22k products.</p>
+        <div class="script-panel" style="--sp-color:var(--l-llm)">
+          <div class="sp-head"><span class="pill llm">offline LLM</span> canonicalize_concepts.py --profile-products <span class="pill cost">MODEL_SERVING</span></div>
+          <div class="sp-body">The third pass. It labels every product branded / shelf / generic and names its brand, then writes <code>social.product_profile</code>. New products only.</div>
+        </div>
+        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">human override seed</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">7</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_social_concept_trends <span class="pill gate">weekly ranking</span></div>
+        <p class="stage__lead">Ranks each calendar week's dishes and items on two separate boards, by product. This is windows 1–2.</p>
+        <p class="stage__how"><b>One product before counting:</b> every name is replaced by its canonical product from box #5 <i>before</i> anything is counted. That merges across scripts and across the two boards, so a post naming two spellings counts once (<code>assert_social_merged_product_counts_each_post_once</code>).</p>
+        <p class="stage__how"><b>Then, per calendar week:</b> aggregate, score, then <code>row_number()</code> partitioned by (week, class). The first week ever collected, and the week in progress, are dropped as incomplete. <b>Read movement, not volume:</b> <code>mention_share</code> is a product's share of that week's mentions, so it survives a change in how much the feed collected.</p>
+        <p class="stage__how"><b>Why it ranks, not just how strongly:</b> <code>subject_mentions</code> (posts <i>about</i> it) vs <code>ingredient_mentions</code> (posts that cook with it) give <code>demand_type</code>. It is <code>talked_about</code> at a subject share of ≥ 0.5 and <code>cooked_with</code> at ≤ 0.3, with <code>mixed</code> between. Soy sauce sits at 5% (pure ingredient demand) and nam phrik at 78% (genuine product interest).</p>
+        <code class="codeblock">trend_score <span class="op">=</span> distinct_authors <span class="op">×</span> (1 <span class="op">+</span> ln(1+engagement_norm)/5 <span class="op">+</span> ln(1+views_norm)/10) <span class="op">×</span> single_channel_dampener <span class="cm">-- 0.85 if one platform</span></code>
+        <div class="loop-note"><b>Reads the resolver's grouping from the previous run.</b> This model also refs <code>stg_mentionlytics__concept_resolution</code> (box #10) for <code>group_primary</code>. That is a dbt <i>source</i>, so there is no cycle, but the reader runs before the writer in the job. Any new resolution column read here needs a one-line <code>ALTER TABLE … ADD COLUMNS</code> first. It bit on the v6 deploy, 2026-08-20.</div>
+        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">≥ 2 mentions</span><span class="pill">calendar week</span><span class="pill">dish + item boards</span><span class="pill">13 wk history</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">8</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_social_trend_board <span class="pill gate">the board</span> <span class="pill new">new</span></div>
+        <p class="stage__lead">The trending board with staying power: who is on it, in what order, and with what status. This is windows 6–9.</p>
+        <p class="stage__how"><b>Why it exists:</b> ranked one week at a time, a viral product disappeared the week its posting slowed. Measured 2026-10-05, 63% of the item board changed every week and an item stayed 1.6 weeks on average. At the shipped settings, churn is ~17%, the board holds ~28 items, and an item stays ~4.5 weeks.</p>
+        <p class="stage__how"><b>How:</b> one row per (week, class, product) for every product ever on the board or the Rising list, from its first appearance onwards, including weeks with no posts. <code>faded_score</code> is the sum of each past week's <i>share</i> of the board's trend score × 0.5^(normal weeks since / 2). The feed changed size three times in 2026 for reasons that aren't trends, and shares keep those weeks comparable. Then the fast lane, the stay-on rule, low-coverage pauses, and the Rising list are applied.</p>
+        <p class="stage__how"><b>Stockable first, on the item board:</b> branded and shelf products (box #6) are ranked as their own scope, ahead of every generic category, which gets smaller slots (top 8, stay-rank 10) after them (<code>assert_social_board_shelf_before_generic</code>). The dish board ranks on buzz alone.</p>
+        <div class="sig">
+          <span><code>new</code> · first week of a run</span>
+          <span><code>rising</code> · share ≥ 1.25× last week</span>
+          <span><code>steady</code></span>
+          <span><code>cooling</code> · quiet week, or under half its peak</span>
+        </div>
+        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">board_status</span><span class="pill">weeks_on_board</span><span class="pill">best_board_rank</span></div>
+      </div>
+    </div>
+
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">9</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_social_product_variants <span class="pill new">new</span></div>
+        <p class="stage__lead">"Which Pepsi? Which Magnum?" For every board product each week, the related products behind it.</p>
+        <p class="stage__how"><b>How:</b> for a branded product, products of the same brand; otherwise, longer names that contain its whole name. Each comes with its posts over the last 4 weeks, up to 5 per row, and becomes <code>top_variants</code> on the mart. It is <b>deterministic on purpose</b>: an LLM "family / variant" label was tried and grouped one family several ways depending on batch order. It's an evidence list, not a hierarchy, so every product still ranks on its own. The window is recent on purpose: Pepsi's Dubai-chocolate posts ran late July to Aug 24, so the Sep 21 row shows that week's brand campaign, not July's flavour.</p>
+        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">4 wk window</span></div>
       </div>
     </div>
 
     <div class="stage" style="--sc:var(--l-staging)">
-      <div class="stage__spine"><div class="stage__num">5</div><div class="stage__line"></div></div>
+      <div class="stage__spine"><div class="stage__num">10</div><div class="stage__line"></div></div>
       <div class="stage__card">
         <div class="stage__title">stg_mentionlytics__concept_resolution</div>
-        <p class="stage__lead">The AI's answer for each trending concept: do we sell it, or something close?</p>
-        <p class="stage__how"><b>How:</b> view exposing <code>concept_norm → matched_prtnum</code>, <code>recommended_prtnums</code>, <code>match_confidence</code>. Cast + dedupe (latest <code>resolved_at</code> wins per concept — the source is append-only).</p>
+        <p class="stage__lead">The AI's answer for each board product: do we sell it, or something close?</p>
+        <p class="stage__how"><b>How:</b> a view exposing <code>concept_norm → matched_prtnum</code>, <code>recommended_prtnums</code>, <code>rejected_prtnums</code>, <code>match_confidence</code> and <code>group_primary</code>. It casts and dedupes (the latest <code>resolved_at</code> per concept wins, because the source is append-only).</p>
         <div class="script-panel" style="--sp-color:var(--l-llm)">
           <div class="sp-head"><span class="pill llm">offline LLM</span> resolve_trending_concepts.py <span class="pill cost">MODEL_SERVING</span></div>
-          <div class="sp-body">Takes this week's top 20 of each class (dishes and items) from box <b>#4</b>, plus real example posts from box <b>#3</b> and our product catalog, and asks the AI: do we sell this, or something close? The AI checks stock first — if we carry the item directly, that wins, even for a whole dish. Then a SECOND, independent pass reviews every candidate against its real catalog name and throws out what it can't defend, and only the survivors are saved — so the board can't show a confident-looking wrong match. Answers are checked against the real catalog too, so they can never point to a product that doesn't exist. This step runs outside dbt — it reads dbt tables and writes back a new one dbt picks up right here.</div>
+          <div class="sp-body"><b>SKU matching follows the board.</b> The script resolves this week's top-N of each class <i>plus every product on the board</i> (box #8), so a product held on through a quiet week still gets its "do we carry it" answer. Each one comes with 28 days of real posts from box #3 (window 5) and the active catalog. Carried stock wins, even for a whole dish. A <b>second, independent pass</b> reviews every candidate against its real catalog name and throws out what it can't defend. Since prompt v10 that reviewer can also <b>promote a recommendation to the carried match</b>, when the "substitute" turns out to be the trending thing itself ('vietnamese coffee' → VIETNAMESE INSTANT COFFEE). Answers are checked against the catalog, so they can't name a product that doesn't exist. Only products not yet resolved are sent.</div>
         </div>
-        <div class="stage__meta"><span class="pill">dbt · view</span></div>
+        <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:social</span></div>
       </div>
     </div>
 
     <div class="stage" style="--sc:var(--l-mart)">
-      <div class="stage__spine"><div class="stage__num">6</div><div class="stage__line"></div></div>
+      <div class="stage__spine"><div class="stage__num">11</div><div class="stage__line"></div></div>
       <div class="stage__card">
-        <div class="stage__title">mart_social_trending_items <span class="pill board">the board</span></div>
-        <p class="stage__lead">The finished weekly report: what's trending this week, whether it climbed since last week, do we stock it, what to do about it.</p>
-        <p class="stage__how"><b>How:</b> <code>trends ⋈ resolution ⋈ int_jdawms_items_active</code> (authoritative name) <code>⋈</code> current stock (latest snapshot week). One row per (calendar week, class, concept): <code>where is_top_n and week_start = max(week_start)</code> is this week's board, the other weeks are the trajectory behind it (kept in full for any concept that ever reached the top 20, so charted lines have no holes). A confidence floor <code>social_resolve_min_confidence</code> (0.7) suppresses <b>any</b> match below it (a 0.45 sushi→corn-oil guess is dropped, not shown) — and since resolver v5 that floor gates a <i>verified</i> confidence, not the proposing model's self-rating. <code>recommended_prtnums</code> are re-verified against the active item master (hallucinated SKUs, discontinued items and duplicate names dropped). Emits <code>action_signal</code>:</p>
+        <div class="stage__title">mart_social_trending_items <span class="pill board">published</span></div>
+        <p class="stage__lead">The finished weekly report: what's on the board, why it's there, whether it's climbing, whether we stock it, and what to do about it.</p>
+        <p class="stage__how"><b>How:</b> <code>board ⋈ weekly trends ⋈ variants ⋈ resolution ⋈ int_jdawms_items_active</code> (the authoritative name) <code>⋈</code> current stock (latest snapshot week, CABOT). One row per (calendar week, class, product). <code>where is_top_n and week_start = max(week_start)</code> is this week's board, with <code>board_rank</code>, <code>scope_rank</code>, <code>board_status</code>, <code>product_type</code>, <code>brand</code> and <code>top_variants</code>. A row can show 0 mentions and still be on the board: read <code>board_status</code> beside it.</p>
+        <p class="stage__how"><b>What we stock, three ways:</b> <code>carried_prtnums</code> lists <i>every</i> SKU of the product we stock (other brands, sizes and pack formats), with <code>matched_prtnum</code> first. <code>recommended_prtnums</code> are substitutes or an ingredient basket, re-verified against the active item master. <code>nearest_prtnums</code> are SKUs the resolver named that didn't survive verification or the confidence floor. A floor of <code>social_resolve_min_confidence</code> (0.7, on the <i>verified</i> confidence) suppresses any weaker match. A 0.45 sushi → corn-oil guess is dropped, not shown. The mart emits <code>action_signal</code>:</p>
         <div class="sig">
           <span><code>promote_now</code> · carried &amp; in stock</span>
           <span><code>restock</code> · carried, no stock</span>
@@ -407,28 +605,311 @@
           <span><code>source_new</code> · none</span>
           <span><code>monitor</code></span>
         </div>
-        <div class="stage__meta"><span class="pill">dbt · table · mart</span><span class="pill">single current snapshot</span></div>
+        <div class="stage__meta"><span class="pill">dbt · table · mart</span><span class="pill">stock = today's, even on old weeks</span><span class="pill">export: analyses/social_trending_by_week.sql</span></div>
       </div>
     </div>
   </div>
 
-  <div class="sec-head"><h2>Data quality — dq_* models</h2><span class="rule"></span></div>
-  <p class="sec-sub">Distinct from the YAML / singular <b>gate tests</b> that block a build (PK, not-null, accepted-values, relationships). These <code>dq_*</code> models run every build but <b>never block it</b> — queryable bad-row / drift tables. Decision rule: blocks the pipeline → a test; ongoing drift to monitor or quarantine → a <code>dq_</code> model.</p>
+  <div class="branch" id="search">
+    <div class="branch__title">Search demand: what our own customers type <span class="pill new">new</span> <span class="pill">joins the board in the export</span></div>
+    <div class="chain">
+      <span>int_events_decoded</span><i>→</i><span>int_search_queries</span><i>→</i><span>int_search_terms_weekly</span><i>·</i><span>int_search_product_weekly</span><i>⇢</i><span>analyses/social_trending_by_week.sql</span>
+    </div>
+    <p class="stage__how">Social listening captures what the market talks about, and almost none of it comes from anyone who buys from us. Search is the opposite: every row is an account we invoice, typing what it wants into our own search box. There are 114,901 searches since 2026-01-19 (83,263 customers on web or app, 31,638 reps building an order) and 24,902 distinct terms, against the 364 concepts the resolver has ever named. The board export puts <code>web_search</code>, <code>pda_ipad_search</code>, <code>ust_accounts</code> and <code>searched_as</code> beside each row. On the newest week, 9 rows have mentions, 16 have searches, and only 4 have both.</p>
+    <ul class="facts">
+      <li><b>Reads <code>int_events_decoded</code>, not <code>_enriched</code>, deliberately.</b> Enriched filters <code>sales_code not in ('000')</code>, and '000' is what a customer event carries. That filter plus the SQL NULL trap would drop 144,625 of 247,417 searches, and every one of them comes from a customer.</li>
+      <li><b>Accounts, not searches, is the demand number.</b> 'mama' is 56 searches from 20 accounts. One pasted SKU line is 260 searches from a single account. Rank on <code>ust_accounts</code>.</li>
+      <li><b>The join goes through the canon map.</b> The board stores 'mama instant noodles', but customers type 'mama'. Joined on raw text, 2 rows in 20 match. Through <code>int_social_concept_canon</code>, 54 matched terms become 418. The bridge fans out 2× silently, because it is keyed on (class, name), so <b>both sides join on both key parts</b>.</li>
+      <li><b>The distinct count is taken once per product.</b> Summing <code>ust_accounts</code> across a product's spellings counts an account once per spelling it tried. That overstates 271 of 8,735 product-weeks ('spring rolls' sums to 4 accounts against a true 2). This is why <code>int_search_product_weekly</code> exists.</li>
+      <li><b>A blank is not a zero.</b> A blank means the search log doesn't cover that week. A 0 means it does, and nobody searched. A fallback name match fills in only where canon has no row, which recovered Thai Coffee (Oliang): 17 mentions and 10 accounts, previously shown as zero.</li>
+    </ul>
+    <div class="stage__meta"><span class="pill">dbt · view + 2 tables</span><span class="pill">built daily (no tag)</span><span class="pill">dbt leaf: no model refs it yet</span></div>
+  </div>
+
+  <!-- ================================================================ PROMO -->
+  <div class="sec-head" id="promo"><h2>Monthly promo × social match → mart_promo_social_match</h2><span class="rule"></span></div>
+  <p class="sec-sub">Each month's promo workbook is matched against <b>everything social listening has ever collected</b>, the raw posts and not the enrichment tags. Items social listening can't find are searched on YouTube, then on TikTok by hand. The output is <code>UST_&lt;MON&gt;_Promo_Social_Listening_Match.xlsx</code>. Everything here carries <code>tag:promo</code> and is run by hand once a month, after the workbook is uploaded. How-to and known false-positive patterns: <code>models/docs/_promo_social.md</code>.</p>
+
+  <div class="sflow">
+    <div class="stage" style="--sc:var(--l-staging)">
+      <div class="stage__spine"><div class="stage__num">1</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">stg_promo__items</div>
+        <p class="stage__lead">The month's promo workbook, typed. One row per workbook row, in workbook order.</p>
+        <p class="stage__how">The grain is the <b>position in the workbook</b>, not <code>item_no</code>, so the output keeps every row in place. Only the latest load of each <code>promo_month</code> counts: a corrected re-drop replaces the whole month.</p>
+        <div class="script-panel"><div class="sp-head"><span class="pill">offline script</span> load_promo_list.py</div><div class="sp-body">Reads the <code>&lt;MON&gt; NEW</code> and <code>&lt;MON&gt; PROMO</code> sheets from <code>/Volumes/ust_databricks/social/promo_landing/</code> into <code>promo.promo_items</code>. No LLM.</div></div>
+        <div class="stage__meta"><span class="pill">dbt · view</span><span class="pill">tag:promo</span></div>
+      </div>
+    </div>
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">2</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_promo_items_enriched <span class="from">← stg_promo__item_terms_draft</span></div>
+        <p class="stage__lead">Each promo row, joined to its NAV item, its WMS item, and the terms to search for.</p>
+        <p class="stage__how">NAV has no brand column and the promo text is truncated, so the reviewed <code>seed_promo_item_terms</code> is the source of truth for brand, product, flavour, English / Thai / Vietnamese search terms and <i>negative</i> terms. The latest LLM draft is used only where the seed has no row. Every promo row is kept. <code>nav_match</code> / <code>wms_match</code> say which joins failed, and <code>terms_source</code> says where the terms came from.</p>
+        <div class="script-panel" style="--sp-color:var(--l-llm)"><div class="sp-head"><span class="pill llm">offline LLM</span> draft_promo_terms.py <span class="pill cost">MODEL_SERVING</span></div><div class="sp-body">Drafts terms only for items the seed doesn't cover (<code>terms_source = 'missing'</code>). A draft is used until someone reviews it into the seed.</div></div>
+        <div class="stage__meta"><span class="pill">dbt · table</span><span class="pill">reviewed seed beats AI draft</span></div>
+      </div>
+    </div>
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">3</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_promo_social_matches <span class="from">← stg_promo__social_judgments · stg_mentionlytics__mentions</span></div>
+        <p class="stage__lead">Every social post the AI judge kept for a promo item. Source = Social Listening.</p>
+        <p class="stage__how">A row is <b>exact</b> only when the judge said exact <i>and</i> the brand, product and (where the item has one) flavour terms all appear in the post's own text (<code>assert_promo_exact_has_terms</code>). The judge can lower the keyword level but never raise it. Rejects are kept in staging for audit, and the highest <code>judge_version</code> wins, so a prompt bump re-judges without a truncate.</p>
+        <div class="script-panel" style="--sp-color:var(--l-llm)"><div class="sp-head"><span class="pill llm">offline LLM</span> match_promo_social.py <span class="pill cost">MODEL_SERVING</span></div><div class="sp-body">A keyword pass over every raw post's title and content makes a post a candidate when it names the brand plus the product or flavour. The AI judge (a majority over <code>promo_judge_votes</code> calls) then rules on each candidate. <b>exact</b> means this brand, product and flavour. <b>close</b> means right product, but the flavour is unstated or it's another format. <b>reject</b> covers a different flavour, an unnamed "new flavour", a bare hashtag, a sale post, news, or the brand word meaning something else.</div></div>
+        <div class="stage__meta"><span class="pill">dbt · table</span></div>
+      </div>
+    </div>
+    <div class="stage" style="--sc:var(--l-int)">
+      <div class="stage__spine"><div class="stage__num">4</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">int_promo_scraped_matches <span class="from">← stg_promo__youtube_videos</span></div>
+        <p class="stage__lead">The top 1–3 judged-exact YouTube videos per promo item and month, by views. Source = Scraped.</p>
+        <div class="script-panel" style="--sp-color:var(--l-llm)"><div class="sp-head"><span class="pill llm">offline LLM</span> youtube_search.py <span class="pill cost">MODEL_SERVING</span></div><div class="sp-body">Runs only for <b>branded items with no social-listening row</b>. It runs up to 3 of each item's search queries, applies the same keyword rule and judge to title, description and tags, and caches the API results in <code>promo.youtube_videos</code>.</div></div>
+        <div class="stage__meta"><span class="pill">dbt · table</span></div>
+      </div>
+    </div>
+    <div class="stage" style="--sc:var(--l-mart)">
+      <div class="stage__spine"><div class="stage__num">5</div><div class="stage__line"></div></div>
+      <div class="stage__card">
+        <div class="stage__title">mart_promo_social_match <span class="pill board">the sheet</span></div>
+        <p class="stage__lead">The "Promo vs Social Listening" sheet as a table: at least one row per workbook row, with each matched post or video on its own row.</p>
+        <p class="stage__how"><b>Precedence per item:</b> its Social Listening <b>Exact</b> posts; else its <b>Close</b> posts; else up to 3 verified <b>YouTube</b> videos; else one <b>Unmatched</b> row. <code>export_promo_social_match.py</code> writes the workbook from this table to <code>promo_output/</code>. TikTok has no search API open to a for-profit company, so the workbook's <i>TikTok Search List</i> sheet is worked by hand with <code>scripts/prompts/tiktok_promo_search.md</code>.</p>
+        <div class="stage__meta"><span class="pill">dbt · table · mart</span><span class="pill">tag:promo</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ VOICE -->
+  <div class="sec-head" id="voice"><h2>Rep Voice AI: the sales agent's tables</h2><span class="rule"></span></div>
+  <p class="sec-sub">The UST Sales Agent is a voice assistant a sales rep talks to. It signs in as that rep and answers by querying Unity Catalog tables in <code>ust_databricks</code> on the rep's behalf. The tables below were built for it from the <i>Draft UST Sales Agent Questions</i> (2026-09-08). Each one answers a question a rep actually asks, carries every name beside its code so nothing needs a join to be said out loud, and carries a coverage column wherever a number can be incomplete. The full coverage write-up is <code>models/docs/_sales_agent_tables.md</code>.</p>
+
+  <div class="sub-head">How a question gets answered</div>
+  <div class="ask-flow">
+    <div class="ask"><div class="k">1 · who is asking</div><h4>Login → sales_code</h4><p><code>dim_rep_logins</code> where <code>username = :login</code>. This is many-to-one and always safe. Admins come back with a null <code>sales_code</code>, which is distinct from "unknown login".</p></div>
+    <div class="ask"><div class="k">2 · which account</div><h4>Spoken name → customer_key</h4><p>Look the name up in <code>dim_customers</code>, scoped to the rep's own book first. One match: proceed. Several: ask, using address and owner rep. None: say so, rather than guessing at the nearest string.</p></div>
+    <div class="ask"><div class="k">3 · the question</div><h4>Pick the mart</h4><p>Filter on <code>sales_code</code>, and on <code>period_type</code> and <code>is_current</code> for the period tables. The call list and pitch list come pre-ranked: <code>order by attention_priority</code>, <code>opportunity_rank</code>.</p></div>
+    <div class="ask"><div class="k">4 · before speaking</div><h4>Read the clock &amp; coverage</h4><p>Say which date the answer is true as of (<code>as_of_date</code>). Check <code>has_value</code> / <code>value_coverage</code> before quoting money, and say which reason backs a suggestion.</p></div>
+  </div>
+
+  <div class="sub-head">Six things to know before quoting any number</div>
+  <div class="rules">
+    <div class="rule-c"><h4>Invoice dollars start 2026-09-20</h4><p>ADF began exporting line amounts that day, and history is never revisited: 19.65M of 19.70M invoice lines will never carry an amount. Counts, dates and quantities are complete throughout. <b>The exception is <code>stg_nav__sales_person_margin_history</code></b>, the only dollar history reaching back to 2025-01-02, which is why targets and prior-year comparisons use it.</p></div>
+    <div class="rule-c"><h4>Nothing is coalesced to zero</h4><p>A line with no exported amount has <b>no</b> value, not $0. A zero would average into every revenue figure as though the goods were given away. Read <code>has_value</code>, <code>value_coverage</code>, <code>valued_purchase_days</code> or <code>return_rate_is_measurable</code> first.</p></div>
+    <div class="rule-c"><h4>There are four clocks, on four dates</h4><p><code>rep_log_today()</code> (the app event log, yesterday) · <code>nav_posted_today()</code> (posted invoices, which lag) · the margin history's own posting edge · <code>stock_snapshot_date</code> (the WMS, last night). They advance independently. Every table publishes its own <code>as_of_date</code>, so <b>say which one you used</b>.</p></div>
+    <div class="rule-c"><h4>Orders and invoices never tie out</h4><p><code>fct_orders</code> is what a rep <b>submitted</b> (app channels, same day). <code>fct_invoices</code> is what was <b>invoiced</b> (every channel including phone and email, full history, lagging). Orders get cut, short-shipped or posted days later. An order keyed on the 30th is in March's orders and April's sales, and neither is wrong.</p></div>
+    <div class="rule-c"><h4>A customer name is not a key</h4><p>222 of 3,742 active customers share a name. <code>ASIAN MARKET</code> is <b>22 different accounts</b>, and <code>LEE'S SANDWICHES</code> in San Jose is 3. Normalising punctuation makes this worse. Every mart carries <code>city</code>, <code>county</code>, <code>post_code</code> and <code>owner_rep_name</code> for disambiguation. Rep codes have no such problem.</p></div>
+    <div class="rule-c"><h4>Absent is not zero, and period tables repeat</h4><p><code>is_in_stock</code> null means the WMS doesn't cover the item, not that it's out of stock. <code>has_store_type</code> false means unknown. And <b>always filter <code>period_type</code></b>: day / week / month / quarter / year all live in one table, and summing without that filter counts the same sales five times.</p></div>
+  </div>
+
+  <div class="q"><h3>How am I doing?</h3><span class="qs">"How did yesterday go? This month? How does that compare to last month?"</span></div>
+  <div class="tcards">
+    <div class="tcard">
+      <div class="tn">mart_rep_period_status <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_reporting</b> · rep × period (cumulative to date) · clock: <code>rep_log_today()</code> · from <b>orders</b></div>
+      <p>The rep's orders as <b>submitted</b> in the app, from the event log, in exact dollars from the order payload. A day is just the shortest <code>period_type</code>, so there's no separate daily table. Sales and order metrics only: no visits, GPS or app time, because those rest on heuristics not yet accurate enough to tell a rep.</p>
+      <dl class="cols">
+        <dt>orders_submitted</dt><dd>Orders sent in the period to date, split <code>orders_pda</code> / <code>_app</code> / <code>_web</code> with values per channel.</dd>
+        <dt>order_value_total</dt><dd>Sum of <code>grand_total</code>, exact. Null rather than 0 when nothing was ordered.</dd>
+        <dt>accounts_ordered</dt><dd>Distinct accounts. <b>Not additive</b>: ask for the longer period, never sum a shorter one.</dd>
+        <dt>order_value_projected</dt><dd>A straight-line pace to period end, measured to <code>as_of_date</code>. Not a forecast or attainment.</dd>
+        <dt>prev_order_value_total</dt><dd>Strictly the preceding period, never a gap-skipping <code>lag</code>.</dd>
+        <dt>order_value_largest</dt><dd>Plus <code>largest_order_customer_name</code>: "$4,200 from ABC Market".</dd>
+      </dl>
+    </div>
+    <div class="tcard">
+      <div class="tn">mart_rep_period_item_mix <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_reporting</b> · rep × period · clock: <code>nav_posted_today()</code> · from <b>posted invoice lines</b></div>
+      <p>What a rep's sales were <b>made of</b>: categories, promoted, new and popular stock, and returns. It joins to the table on the left on <code>(sales_code, period_type, period_start)</code>, and the two will not agree, by design (rule 4).</p>
+      <dl class="cols">
+        <dt>promo_line_share</dt><dd>A share of <b>lines</b>, not revenue. <code>promo_value_share</code> is the dollar version, and only covers dates since 2026-09-20.</dd>
+        <dt>new_item_line_share</dt><dd>Lines on items flagged new. These are current-state flags, applied to past lines.</dd>
+        <dt>return_line_rate</dt><dd>returned / invoiced lines. <code>return_value_rate</code> is the money version.</dd>
+        <dt>value_coverage</dt><dd>valued / total source lines. 1.0 means the value columns cover the whole period.</dd>
+      </dl>
+    </div>
+    <div class="tcard">
+      <div class="tn">mart_account_period_status <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_reporting</b> · account × period · clock: <code>nav_posted_today()</code></div>
+      <p>"Last month ABC bought $1k and returned $200. Any return over 2–3% should alert." What one customer bought, what came back, and whether the returns are out of line. No zero-fill: a customer-period with no invoices has no row.</p>
+      <dl class="cols">
+        <dt>invoice_value</dt><dd>Gross invoiced value. Null before 2026-09-20, never zero-filled.</dd>
+        <dt>return_rate_value</dt><dd>returned_value / invoice_value, the rate the business asked for.</dd>
+        <dt>returns_over_threshold</dt><dd>Above <code>account_return_rate_alert_pct</code> (0.03). False when the rate can't be measured.</dd>
+        <dt>return_rate_is_measurable</dt><dd><b>The honesty flag.</b> False means "we can't see it", not "returns are fine".</dd>
+        <dt>selling_rep</dt><dd>Who was credited, which is not necessarily <code>owner_rep</code>.</dd>
+      </dl>
+    </div>
+    <div class="tcard" style="--tc:var(--l-fact)">
+      <div class="tn">fct_invoices <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_facts</b> · one row per posted sales invoice, net of credits</div>
+      <p>What actually landed in the ledger, every channel, across the whole ERP export. It <b>does not replace</b> <code>fct_orders</code>, it sits beside it.</p>
+      <dl class="cols">
+        <dt>invoice_value</dt><dd>Sum of line amounts. Null before 2026-09-20.</dd>
+        <dt>has_value</dt><dd><b>The filter</b> for any revenue sum over this table.</dd>
+        <dt>net_value</dt><dd>invoice_value minus returned_value. Null wherever invoice_value is.</dd>
+        <dt>order_channel</dt><dd>PDA / WEB / null. Null means it was keyed straight into NAV.</dd>
+        <dt>due_date</dt><dd>Null before 2026-09-20. <code>has_due_date</code> separates "not past terms" from "can't tell".</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="q"><h3>Am I going to make my number?</h3><span class="qs">"Where will I land? How much do I still need? Am I ahead of last year?"</span></div>
+  <div class="tcards">
+    <div class="tcard">
+      <div class="tn">mart_rep_period_sales <span class="tag voice">VOICE</span> <span class="pill new">new</span></div>
+      <div class="tm"><b>ust_reporting</b> · rep × period · clock: the margin history's newest posting date · from 2025-01-02</div>
+      <p>Posted sales dollars, the rep's target, and last year. This is <b>the third rep-period mart</b>, and the three disagree about a period on purpose: orders submitted (status), lines invoiced (item mix), dollars posted (this one). Join them on <code>(sales_code, period_type, period_start)</code> and read each one's own <code>as_of_date</code>.</p>
+      <dl class="cols">
+        <dt>pct_of_target_to_date</dt><dd>Sold ÷ target for the days elapsed. <b>The one to read out</b>: 1.0 is exactly on pace.</dd>
+        <dt>pct_of_period_target</dt><dd>Sold ÷ the whole period's target, i.e. how much of the number is done. Not a verdict early in a period.</dd>
+        <dt>sales_still_needed</dt><dd>"You still need $25k". Negative once the rep is past their number.</dd>
+        <dt>target_days_remaining</dt><dd>"With 9 days left", counted in target days, not calendar days.</dd>
+        <dt>sales_projected</dt><dd>Where the rep lands at the current rate, with <code>pct_of_target_projected</code>. Null for a closed period.</dd>
+        <dt>brand_pct_of_sales</dt><dd>Own-brand ÷ total sales, against the 60% threshold (<code>brand_below_target</code>).</dd>
+        <dt>margin_pct</dt><dd>(sales − cost) ÷ sales, against the 13% threshold (<code>margin_below_target</code>).</dd>
+        <dt>sales_change_pct_vs_prev_year</dt><dd>Against the <b>same elapsed window</b> last year. Null before 2026, never zero.</dd>
+      </dl>
+      <div class="builds">Built from <code>int_rep_period_sales</code> ← <code>stg_nav__salesperson_targets</code> (summed from <code>daily_target</code>, never <code>monthly_target</code>, which is 0 on all but the 1st) + <code>stg_nav__sales_person_margin_history</code> (credit memos signed negative, percentages 0–1).</div>
+    </div>
+  </div>
+
+  <div class="q"><h3>Who should I call?</h3><span class="qs">"Who's gone quiet? I'm at ABC Market. Who else round here needs a visit?"</span></div>
+  <div class="tcards">
+    <div class="tcard">
+      <div class="tn">mart_rep_account_status <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_reporting</b> · rep × account · clocks: <code>as_of_date</code> (orders) + <code>invoice_as_of_date</code> (NAV)</div>
+      <p>The call list. The spine unions two senses of "my account": accounts NAV says the rep <b>owns</b>, and accounts the rep has actually <b>sold to</b>. An owned account that has never ordered is exactly what a to-do list exists to surface. Silence is measured on <b>posted invoices</b>, so an account that buys by phone no longer reads as "no order on record".</p>
+      <dl class="cols">
+        <dt>attention_reason</dt><dd>One cause, in precedence order: <code>no order on record</code> · <code>order overdue</code> · <code>ok</code> · <code>owned by another rep</code> · <code>inactive account</code>.</dd>
+        <dt>attention_priority</dt><dd>1 / 2 / 5 / 8 / 9, mirroring the reason. <code>order by</code> it gives the list.</dd>
+        <dt>needs_attention</dt><dd>priority ≤ 2: the two reasons that are genuinely the rep's to-do.</dd>
+        <dt>last_invoiced_date</dt><dd>Latest posted invoice for this rep-account. Every channel, full history.</dd>
+        <dt>delivery_days</dt><dd>"Tue, Thu", so the call lands before the cut-off. A count of 0 means unknown.</dd>
+      </dl>
+      <dl class="cols">
+        <dt>rhythm_status <span class="tag wip">WIP</span></dt><dd><b>The store's</b> own buying rhythm, across every rep: <code>on rhythm</code> / <code>due</code> / <code>lapsing</code> / former regular. Only a regular (6+ invoice days a year) gets one.</dd>
+        <dt>days_past_usual</dt><dd>Days quiet ÷ the store's median gap. 1.0 is exactly its usual wait, so one sort serves weekly and quarterly buyers alike.</dd>
+        <dt>rhythm_priority</dt><dd>1 lapsing · 2 due · 3 on rhythm · 4 former regular · 5 other. Independent of <code>attention_priority</code>.</dd>
+      </dl>
+      <div class="builds">The rhythm columns come from <code>int_customer_invoice_rhythm</code>, <b>uncommitted on <code>feat/account_buying_rhythm</code></b>. It exists because a rep's own invoice columns measure the relationship, not the shop: PYONE CHO ASIA MARKET has 32 invoices under code 028 and none under 032, and 17 of one rep's 129 owned accounts look like they've never bought anything.</div>
+    </div>
+    <div class="tcard">
+      <div class="tn">mart_rep_nearby_accounts <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_reporting</b> · rep × anchor account × nearby account needing attention</div>
+      <p>A "while you're there" list, not a neighbour list. It carries only accounts the call list has already flagged (never ordered, or overdue) within 5 km straight-line, ranked by <b>urgency, then distance</b>. Both sides stay inside the same rep's book. Every account can be an anchor, because the assistant doesn't know today's route.</p>
+      <dl class="cols">
+        <dt>nearby_rank</dt><dd>1 = suggest first. Urgency before proximity.</dd>
+        <dt>distance_km</dt><dd>Great-circle distance, 2 dp, for a spoken answer.</dd>
+        <dt>attention_reason</dt><dd>Carried through from <code>mart_rep_account_status</code>.</dd>
+        <dt>delivery_days</dt><dd>A Thursday-only store isn't worth a Friday detour.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="q"><h3>What should I sell them?</h3><span class="qs">"What do they buy? What have they stopped buying? What should I talk about when I walk in?"</span></div>
+  <div class="tcards">
+    <div class="tcard">
+      <div class="tn">mart_account_item_history <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_reporting</b> · account × item they have bought · clocks: NAV + stock snapshot</div>
+      <p>What this account buys, what it has stopped buying, and what it's due to reorder <b>on its own rhythm</b>. A restaurant buying fish sauce every 3 weeks and a grocery buying it every 3 months are both healthy, and a fixed "overdue after N days" rule slanders one of them. This also answers the business's "quarterly vs monthly customer" note.</p>
+      <dl class="cols">
+        <dt>reorder_status</dt><dd><code>lapsed</code> / <code>overdue</code> / <code>due</code> / <code>not due</code> / <code>rhythm unknown</code>. 'lapsed' is the answer to "what have they stopped buying".</dd>
+        <dt>median_days_between_purchases</dt><dd>The account's own rhythm for the item. Null below 3 purchases: an honest "unknown" beats a fabricated rhythm.</dd>
+        <dt>days_overdue</dt><dd>Signed. A negative value means due in that many days, which is itself a reason to call.</dd>
+        <dt>avg_quantity_per_purchase</dt><dd>A typical reorder, in the account's own UOM (UOM is part of the grain: 6 CASE ≠ 6 EA).</dd>
+        <dt>is_in_stock</dt><dd>Three-valued. Null means the WMS (CABOT only) doesn't cover the item.</dd>
+      </dl>
+      <div class="builds">Built from <code>int_customer_item_purchases</code> (posted invoice lines netted against credit memos, customer × item × day × UOM) → <code>int_customer_item_cadence</code> (the per-pair rhythm).</div>
+    </div>
+    <div class="tcard">
+      <div class="tn">mart_account_item_opportunities <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_reporting</b> · account × candidate item, ranked, capped at <code>account_item_opportunity_top_n</code></div>
+      <p>The pitch list: "the 5–10 items I should walk in and talk about". <b>Every row carries its own reason and the evidence for it</b>, because a voice agent reading a bare ranked list will invent a justification. Discontinued items stay on the list but are flagged. Blocked or out-of-stock items are excluded.</p>
+      <dl class="cols">
+        <dt>opportunity_reason</dt><dd>In precedence order: <code>reorder due</code> · <code>stopped buying</code> · <code>on promotion</code> · <code>peers buy it</code> · <code>new or featured</code>.</dd>
+        <dt>is_evidence_based</dt><dd>True means this account's own purchases justify it ("you're due for this"). False means it rests on others ("you might try this"), so say it differently.</dd>
+        <dt>opportunity_evidence</dt><dd>Already phrased for a person: "bought 7 times, last 68 days ago, usually every 31".</dd>
+        <dt>has_promo_offer</dt><dd>Buy-X-get-Y is set: "buy 6 get 1 free until the 30th" (<code>promo_end_date</code>).</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="q"><h3>Supporting dimensions</h3><span class="qs">join on these instead of carrying bare codes</span></div>
+  <div class="tcards">
+    <div class="tcard" style="--tc:var(--l-dim)">
+      <div class="tn">dim_rep_logins <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_dims</b> · one row per login (<code>username</code>)</div>
+      <p>The table an authenticated app hits <b>first</b>: whose data is this person's? It resolves to a <code>sales_code</code> and carries <code>interface_locale</code> for choosing a reply language. <b>Never join it to a metric on <code>sales_code</code></b>: that's one-to-many and multiplies the metric by the rep's login count. Use <code>dim_reps</code>.</p>
+    </div>
+    <div class="tcard" style="--tc:var(--l-dim)">
+      <div class="tn">dim_reps <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_dims</b> · one row per sales territory code</div>
+      <p>The rep as an analytical entity, and safe to join to any rep mart without fan-out. The spine is the union of admin logins and NAV account owners, because a new code can own accounts before its login exists. <code>has_login</code> / <code>owns_accounts</code> say which case a row is.</p>
+    </div>
+    <div class="tcard" style="--tc:var(--l-dim)">
+      <div class="tn">dim_customers <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_dims</b> · one row per <code>customer_key</code>, every account</div>
+      <p>The name to say out loud, the owner rep, whether the account is live, delivery days, store type and coordinates. It includes inactive and un-geocoded accounts: 12% have no resolvable address, and for those <code>has_coordinates</code> = false means a visit is <b>not knowable</b>, not that it didn't happen. ZZZ*/office rows are flagged <code>is_test_account</code>.</p>
+    </div>
+    <div class="tcard" style="--tc:var(--l-dim)">
+      <div class="tn">dim_items <span class="tag voice">VOICE</span></div>
+      <div class="tm"><b>ust_dims</b> · one row per <code>item_no</code> (= WMS prtnum = web sku)</div>
+      <p>The NAV catalog joined to the WMS warehouse view for the first time. <code>item_label</code> is the name to read out. It also carries category, list price, live promotion and offer, lifecycle flags, and stock. The spine is NAV: an item shipping from an unmirrored site is real and sellable with no WMS row (<code>has_wms_item</code>). <code>is_new_now</code> and <code>is_focus_now</code> are false for every item until NAV maintains those windows.</p>
+    </div>
+  </div>
+
+  <div class="sub-head">What it can't answer yet</div>
+  <div class="gaps-wrap">
+    <table class="gaps">
+      <thead><tr><th>Question</th><th>Why not</th><th>Unlocks with</th></tr></thead>
+      <tbody>
+        <tr><td>Past-terms accounts, average AR days</td><td>NAV <code>Customer Outstanding Balance</code> isn't ingested, and payment terms before 2026-09-20 have no mapping</td><td>ADF export → <code>fct_open_receivables</code>, <code>mart_rep_ar_status</code> (both unbuilt)</td></tr>
+        <tr><td>Credit warning</td><td><code>Credit Limit (LCY)</code> was scoped out of the ADF request</td><td>Add the column to the export</td></tr>
+        <tr><td>"Currently new" items</td><td><code>New End date</code> is blank on all 357 flagged items, so nothing can read as new <i>now</i></td><td><code>Item.Marked New Date</code> / <code>Removed New Date</code> from ADF</td></tr>
+        <tr><td>Focus items</td><td>Only 5 items carry the flag, and four have a window from July 2017</td><td>Confirmation that NAV maintains it</td></tr>
+        <tr><td>Why an item counts as "Brand"</td><td>Branded % is <i>calculated</i> from NAV's own Brand Sales Amount, but no brand field or master explains the rule</td><td>A person who knows the rule</td></tr>
+        <tr><td>Individual store target · bounced check · "check invoice and GL"</td><td>No source: <code>Budgeted Amount</code> is zero on all 7,242 customers in NAV itself, nothing covers NSF payments, and the last request is too vague to source</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note"><b>One business decision is outstanding.</b> The pitch list is ~94% <code>new or featured</code> rows, because an account with no purchase history receives ten flagged items. The ranking works as designed, and evidence-based reasons rank first. Whether a never-bought account should get a full list, a shorter one, or none is a business call.</p>
+
+  <!-- ================================================================ DQ -->
+  <div class="sec-head" id="dq"><h2>Data quality: dq_* models</h2><span class="rule"></span></div>
+  <p class="sec-sub">These are distinct from the YAML and singular <b>gate tests</b> that block a build (PK, not-null, accepted-values, relationships). The <code>dq_*</code> models run on every build but <b>never block it</b>: they are queryable bad-row and drift tables. The decision rule: if it should block the pipeline, it's a test; if it's ongoing drift to monitor or quarantine, it's a <code>dq_</code> model.</p>
 
   <div class="dq-grid">
     <div class="dqc">
-      <div class="type">audit · view</div>
+      <div class="type">review queue · view</div>
+      <h4>dq_social_unpromoted_matches</h4>
+      <div class="taps">stg_mentionlytics__concept_resolution · int_jdawms_items_active</div>
+      <p>Concepts the resolver did <b>not</b> call carried, even though one of its own recommendations is named after the concept. One row per (concept, SKU). It catches the failure fixed by prompt v10, where the board told sales to offer an alternative to a SKU we stock. <b>Non-empty by design:</b> name containment can't tell a finished good from an input to it (DF SUSHI GINGER for 'sushi' is correctly a basket). Read it, don't alert on it.</p>
+      <div class="sev"><span class="info">review</span></div>
+    </div>
+
+    <div class="dqc">
+      <div class="type">audit · view · tag:social</div>
       <h4>dq_social_generic_term_hits</h4>
       <div class="taps">fct_social_mentions · seed_social_generic_terms</div>
-      <p>What the generic-commodity stoplist <b>suppressed</b>, per week. <code>int_social_concept_trends</code> anti-joins the stoplist BEFORE ranking — it has to, or the suppressed rows dilute <code>mention_share</code> and inflate the shared-post divisor — which means a stoplist quietly eating a real signal leaves no trace in the trends table. This is that trace. A term with a large and RISING hit count is the one to re-check; a term with zero hits ever is misspelled or no longer needed. One row per week × class × term that actually matched.</p>
+      <p>What the generic-commodity stoplist <b>suppressed</b>, per week. The stoplist is applied before ranking, which it has to be, or suppressed rows would dilute <code>mention_share</code>. That means a stoplist quietly eating a real signal leaves no trace in the trends. This table is that trace. A term with a large and rising hit count is the one to re-check. A term with zero hits ever is misspelled or no longer needed.</p>
       <div class="sev"><span class="quar">drift table</span></div>
+    </div>
+
+    <div class="dqc">
+      <div class="type">scorecard · view · tag:social</div>
+      <h4>dq_social_mentions</h4>
+      <div class="taps">stg_mentionlytics__mentions · raw source</div>
+      <p>One row per named check, with count, % and severity: <code>null_mention_id</code>, <code>future_posted_at</code>, <code>implausible_old_posted_at</code>, <code>sentiment_skew_positive</code> (warns above 90%), <code>negative_metric</code> (with a Reddit net-score exception), <code>duplicate_mention_id_collapsed</code>. These are structural checks only.</p>
+      <div class="sev"><span class="warn">warn</span><span class="info">info</span><span class="ok">ok</span></div>
     </div>
 
     <div class="dqc">
       <div class="type">quarantine · view</div>
       <h4>dq_quarantine_invalid_source</h4>
       <div class="taps">stg_mysql__system_event_log · seed_app_sources</div>
-      <p>Events whose <code>source</code> isn't a known app code. In live data these are <b>scanner / bot payloads</b> — SQLi, XSS, path-traversal, SSRF probes logged into the source column. Excluded from <code>int_events_decoded</code>; captured here for security review. One row per quarantined event.</p>
+      <p>Events whose <code>source</code> isn't a known app code. In live data these are <b>scanner and bot payloads</b>: SQLi, XSS, path-traversal and SSRF probes logged into the source column. They're excluded from <code>int_events_decoded</code> and captured here for security review.</p>
       <div class="sev"><span class="quar">bad-row table</span></div>
     </div>
 
@@ -436,7 +917,7 @@
       <div class="type">audit · view</div>
       <h4>dq_unmapped_event_codes</h4>
       <div class="taps">int_events_decoded · seed_event_codes</div>
-      <p>Event codes present in the data but <b>absent from the dictionary</b> → null <code>function_name</code> / category downstream. Flags <code>is_well_formed_code</code> (real 8-digit gap vs junk) and <code>is_known_legacy</code> (obsolete codes intentionally excluded). One row per code, most frequent first.</p>
+      <p>Event codes present in the data but <b>missing from the dictionary</b>, which means a null <code>function_name</code> and category downstream. It flags <code>is_well_formed_code</code> (a real 8-digit gap vs junk) and <code>is_known_legacy</code> (obsolete codes excluded on purpose).</p>
       <div class="sev"><span class="quar">bad-row table</span></div>
     </div>
 
@@ -444,235 +925,405 @@
       <div class="type">audit · view</div>
       <h4>dq_unmatched_demand_skus</h4>
       <div class="taps">int_item_demand_daily · int_jdawms_items</div>
-      <p>Demand-payload SKUs matching <b>no WMS item</b> (discontinued, unmirrored warehouse, master-data gaps). Keeps the <b>~11% payload loss</b> (measured 2026-07-13) visible instead of silently shrinking demand in <code>mart_item_demand_supply</code>. One row per SKU, most demand first.</p>
+      <p>Demand-payload SKUs that match <b>no WMS item</b> (discontinued, an unmirrored warehouse, master-data gaps). This keeps the <b>~11% payload loss</b> (measured 2026-07-13) visible, instead of letting it silently shrink demand in <code>mart_item_demand_supply</code>.</p>
       <div class="sev"><span class="quar">bad-row table</span></div>
-    </div>
-
-    <div class="dqc">
-      <div class="type">scorecard · view · tag:social</div>
-      <h4>dq_social_mentions</h4>
-      <div class="taps">stg_mentionlytics__mentions · raw source</div>
-      <p>One row per named check with count, %, severity: <code>null_mention_id</code>, <code>future_posted_at</code>, <code>implausible_old_posted_at</code>, <code>sentiment_skew_positive</code> (&gt; 90% ⇒ warn), <code>negative_metric</code> (Reddit net-score exception), <code>duplicate_mention_id_collapsed</code>. Phase 1 = structural only; spam / food-relevance / coverage checks land in Phase 2.</p>
-      <div class="sev"><span class="warn">warn</span><span class="info">info</span><span class="ok">ok</span></div>
     </div>
   </div>
 
-  <div class="sec-head"><h2>Run cadence</h2><span class="rule"></span></div>
+  <!-- ================================================================ CADENCE -->
+  <div class="sec-head" id="cadence"><h2>Run cadence</h2><span class="rule"></span></div>
   <div class="cadence">
     <div class="cad daily">
-      <div class="when">every day</div>
-      <div class="cmd">dbt build <span class="flag">--exclude tag:social</span></div>
-      <div class="desc">App-activity + WMS pipelines end to end — staging → intermediate → facts → demand-vs-supply marts — with all gate tests and DQ tables.</div>
+      <div class="when">every day · 04:00 PT · scripts/databricks/job.yml</div>
+      <div class="cmd">dbt build <span class="flag">--exclude tag:social tag:promo</span></div>
+      <div class="desc">App activity, WMS, NAV and the sales-agent tables, plus search demand, end to end, with all gate tests and DQ tables. Both exclusions are required, not an optimisation: those models read tables only their own jobs' scripts write.</div>
     </div>
-    <div class="cad weekly">
-      <div class="when">weekly · before the daily build</div>
+    <div class="cad geo">
+      <div class="when">weekly · Sunday 03:00 PT, before the daily build</div>
       <div class="cmd">scripts/geocode_customers.py</div>
-      <div class="desc">Resolves any NEW customer address to a coordinate via the Google API and appends to <code>ust_external.nav_customer_geocode</code>. Runs outside dbt (own Databricks job, <code>geocode_weekly_job.yml</code>); a failure here cannot block the dbt build. Without it a new customer has no geofence, so their store visits read as <b>unknown</b> — never as "did not visit".</div>
+      <div class="desc">Resolves any NEW customer address to a coordinate via the Google API and appends it to <code>ust_external.nav_customer_geocode</code>. It runs outside dbt, so a failure here can't block the build. Without it, a new customer has no geofence and their visits read as <b>unknown</b>, never as "did not visit".</div>
     </div>
     <div class="cad weekly">
-      <div class="when">weekly · after parse + enrich</div>
-      <div class="cmd">dbt build <span class="flag">--select tag:social</span></div>
-      <div class="desc">Social branch only, once the offline scripts have populated <code>social.*</code>: dedupe mentions, join enrichment, rank the weekly dish and item boards, resolve SKUs, refresh the trending board.</div>
+      <div class="when">weekly · by hand after each Mentionlytics drop · social_weekly_job.yml</div>
+      <div class="cmd">dbt build <span class="flag">--select tag:social</span> <span style="color:var(--faint)">(last of 12 tasks)</span></div>
+      <div class="desc">Every LLM step writes a table that the next dbt step reads, and each one skips work already done, so a normal week only pays for what is new:</div>
+      <code class="codeblock pre">parse → dbt stg → <span class="ai">enrich</span> → dbt names
+→ <span class="ai">canonicalize</span> → dbt products → <span class="ai">--consolidate</span> → dbt products
+→ <span class="ai">--profile-products</span> → dbt board → <span class="ai">resolve</span> → dbt tag:social</code>
+    </div>
+    <div class="cad monthly">
+      <div class="when">monthly · by hand after uploading the workbook · promo_social_job.yml</div>
+      <div class="cmd">dbt build <span class="flag">--select tag:promo</span></div>
+      <div class="desc">Run from the Databricks job <code>ust-promo-social-match</code>, which the upload does not trigger:</div>
+      <code class="codeblock pre">load → dbt → <span class="ai">draft terms</span> → dbt → <span class="ai">match social</span> → dbt
+→ <span class="ai">youtube</span> → dbt tag:promo → export → TikTok by hand</code>
     </div>
   </div>
 
   <footer>
-    <span>HAND-MAINTAINED from the ref() / source() graph · models/ — update it when you add a model</span>
-    <span>staging = view · intermediate / facts / marts = table · dq = view</span>
+    <span>Edges generated from ref() / source() in models/ on 2026-10-15 · update this map when you add a model</span>
+    <span>staging = view · intermediate / dims / facts / marts = table unless tagged · dq = view</span>
   </footer>
 </div>
 
 <script>
 const LAYERS = {
-  source: { c: 'var(--l-source)', label: 'Sources', gloss: 'raw feeds (read-only)' },
-  staging: { c: 'var(--l-staging)', label: 'Staging', gloss: '1:1 cleaned views' },
-  seed: { c: 'var(--l-seed)', label: 'Seeds', gloss: 'reference CSVs' },
-  int: { c: 'var(--l-int)', label: 'Intermediate', gloss: 'prepared tables' },
-  fact: { c: 'var(--l-fact)', label: 'Facts', gloss: 'event / order grain' },
-  mart: { c: 'var(--l-mart)', label: 'Marts', gloss: 'reporting tables' },
+  source:  { c: 'var(--l-source)',  label: 'Sources' },
+  staging: { c: 'var(--l-staging)', label: 'Staging' },
+  seed:    { c: 'var(--l-seed)',    label: 'Seeds' },
+  int:     { c: 'var(--l-int)',     label: 'Intermediate' },
+  dim:     { c: 'var(--l-dim)',     label: 'Dimensions' },
+  fact:    { c: 'var(--l-fact)',    label: 'Facts' },
+  mart:    { c: 'var(--l-mart)',    label: 'Marts' },
 };
-const COLS = ['Sources', 'Staging', 'Intermediate', 'Intermediate + Facts', 'Facts + Intermediate', 'Marts'];
-const PIPE = {
-  'event-log': 'app-log', 'wms': 'wms', 'social': 'social',
-  'cross-pipeline': 'cross', 'reference': 'ref', 'nav': 'nav',
-};
+
+// area = which band of a column the node sits in (keeps each subject together)
+const AREA_ORDER = { app: 0, agent: 1, wms: 2, ref: 3, social: 4, promo: 5 };
+
+// N(id, layer, area, mat, desc, extra) — extra: label, ai, script, sub, color, voice, wip
+function N(id, layer, area, mat, desc, extra = {}) { return { id, layer, area, mat, desc, ...extra }; }
 
 const NODES = [
-  { id:'src_mysql', label:'mysql', desc:'App system-event log (MySQL)', col:0, layer:'source', pipe:'event-log', mat:'src', sub:'3 tbl', color:'#2563eb' },
-  { id:'src_jdawms', label:'jdawms (WMS)', desc:'Blue Yonder WMS (SQL Server)', col:0, layer:'source', pipe:'wms', mat:'src', sub:'16 tbl', color:'#dc2626' },
-  { id:'src_mnt', label:'Social Listening (mentionlytics)', desc:'Weekly raw export — 1 row = 1 post', col:0, layer:'source', pipe:'social', mat:'src', sub:'3 tbl', color:'#9333ea' },
-  { id:'src_nav', label:'nav (ERP)', desc:'NAV ERP. 16 tables replicated; only the customer master is modelled so far — one address per customer, which doubles as the delivery point', col:0, layer:'source', pipe:'nav', mat:'src', sub:'16 tbl · 1 used', color:'#0891b2' },
-  { id:'seeds', label:'seeds', desc:'Dictionaries & code maps', col:0, layer:'seed', pipe:'reference', mat:'csv', color:'#d97706' },
+  // ── sources & seeds ───────────────────────────────────────────────────
+  N('src_mysql',  'source', 'app',    'src', 'App system-event log (MySQL)', { label:'mysql', sub:'3 tbl', color:'#2563eb' }),
+  N('src_nav',    'source', 'agent',  'src', 'NAV ERP: customers, items, posted invoices, targets, margin history', { label:'nav (ERP)', sub:'22 tbl · 9 used', color:'#0891b2' }),
+  N('src_ext',    'source', 'agent',  'src', 'Customer geocodes, resolved via the Google API, not from NAV', { label:'ust_external', sub:'1 tbl', color:'#64748b', script:'scripts/geocode_customers.py' }),
+  N('src_jdawms', 'source', 'wms',    'src', 'Blue Yonder WMS replica (SQL Server)', { label:'jdawms (WMS)', sub:'16 tbl', color:'#dc2626' }),
+  N('seeds',      'seed',   'ref',    'csv', 'Event dictionary, app registry, WMS codes, social stoplist & overrides, reviewed promo terms', { sub:'21 csv', color:'#d97706' }),
+  N('src_mnt',    'source', 'social', 'src', 'Weekly social export + the 4 tables the offline AI scripts write back', { label:'mentionlytics (social)', sub:'5 tbl', color:'#9333ea' }),
+  N('src_promo',  'source', 'promo',  'src', 'Monthly promo workbook + term drafts, judge rulings, YouTube results', { label:'promo', sub:'4 tbl', color:'#db2777' }),
 
-  { id:'stg_sel', label:'stg_mysql__system_event_log', desc:'Cleaned app events', col:1, layer:'staging', pipe:'event-log', mat:'view' },
-  { id:'stg_admin', label:'stg_mysql__admin_users', desc:'Sales reps / users', col:1, layer:'staging', pipe:'event-log', mat:'view' },
-  { id:'stg_jdawms', label:'stg_jdawms__*', desc:'16 WMS tables, cleaned 1:1', col:1, layer:'staging', pipe:'wms', mat:'view', sub:'16' },
-  // leaf: cleaned and available, but nothing refs it yet — drawn so the map does
-  // not imply it is missing. seed_categories is the decode most consumers reach for.
-  { id:'stg_cat', label:'stg_mysql__category', desc:'Product category master — cleaned, no consumers yet', col:1, layer:'staging', pipe:'event-log', mat:'view' },
-  { id:'stg_mnt_m', label:'stg_mentionlytics__mentions', desc:'Posts, deduped — still 1 row = 1 post', col:1, layer:'staging', pipe:'social', mat:'view' },
-  { id:'stg_mnt_e', label:'stg_mentionlytics__mention_enrichment', desc:"AI's read on each post: spam? dishes? products?", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/enrich_mentions.py' },
-  // col 1, same as the other staging views: in dbt's actual graph this model
-  // ONLY reads source('mentionlytics','concept_resolution') — cast + dedupe,
-  // zero ref()s. Its real-world tie to int_trend/fct_soc/int_items happens a
-  // run earlier, inside the offline Python script — not a dbt dependency, so
-  // it does not belong in this acyclic graph. See the walkthrough below.
-  { id:'stg_mnt_r', label:'stg_mentionlytics__concept_resolution', desc:"AI's dish→product match — 1 row = 1 dish", col:1, layer:'staging', pipe:'social', mat:'view', ai:'scripts/resolve_trending_concepts.py' },
+  // ── staging ───────────────────────────────────────────────────────────
+  N('stg_mysql__system_event_log', 'staging', 'app', 'view', 'Cleaned app events, ~600k / month'),
+  N('stg_mysql__admin_users',      'staging', 'app', 'view', 'App logins: reps and admins'),
+  N('stg_mysql__category',         'staging', 'app', 'view', 'Product category master, cleaned; no consumers yet'),
+  N('stg_nav__customers',          'staging', 'agent', 'view', 'NAV customer master: owner rep, delivery days, store type'),
+  N('stg_nav__customer_locations', 'staging', 'agent', 'view', 'Customer address + coordinate: the geofence a visit is measured against', { script:'scripts/geocode_customers.py' }),
+  N('stg_nav__items',              'staging', 'agent', 'view', 'NAV item catalog: what the company sells'),
+  N('stg_nav__promotion_lines',    'staging', 'agent', 'view', 'Live promotions & buy-X-get-Y offers (promotions have no name)'),
+  N('stg_nav__sales_invoice_headers', 'staging', 'agent', 'view', 'Posted invoice headers: dates, due date, channel'),
+  N('stg_nav__sales_invoice_lines',   'staging', 'agent', 'view', 'Posted invoice lines; amounts only from 2026-09-20'),
+  N('stg_nav__sales_cr_memo_lines',   'staging', 'agent', 'view', 'Posted credit-memo lines: what came back'),
+  N('stg_nav__sales_person_margin_history', 'staging', 'agent', 'view', 'Posted documents with dollars, 2025-01-02 on; the only long $ history'),
+  N('stg_nav__salesperson_targets',  'staging', 'agent', 'view', "Each rep's daily target, 2019–2026"),
+  N('stg_jdawms__*',               'staging', 'wms', 'view', '16 WMS tables, cleaned 1:1', { sub:'16' }),
+  N('stg_mentionlytics__mentions',           'staging', 'social', 'view', 'Posts, deduped on mention_id; still 1 row = 1 post', { script:'parse_mentions.py' }),
+  N('stg_mentionlytics__mention_enrichment', 'staging', 'social', 'view', "AI's read per post: food? spam? dishes, products, their role", { ai:'scripts/enrich_mentions.py' }),
+  N('stg_mentionlytics__concept_canon',      'staging', 'social', 'view', 'AI map: every extracted name → one product', { ai:'scripts/canonicalize_concepts.py' }),
+  N('stg_mentionlytics__product_profile',    'staging', 'social', 'view', 'AI label per product: branded / shelf / generic + brand', { ai:'canonicalize_concepts.py --profile-products' }),
+  N('stg_mentionlytics__concept_resolution', 'staging', 'social', 'view', "AI's answer per board product: do we carry it? which SKUs?", { ai:'scripts/resolve_trending_concepts.py' }),
+  N('stg_promo__items',            'staging', 'promo', 'view', "The month's promo workbook, typed, in workbook order", { script:'scripts/load_promo_list.py' }),
+  N('stg_promo__item_terms_draft', 'staging', 'promo', 'view', 'AI-drafted search terms for items the seed lacks', { ai:'scripts/draft_promo_terms.py' }),
+  N('stg_promo__social_judgments', 'staging', 'promo', 'view', 'AI judge: exact / close / reject per (item, post)', { ai:'scripts/match_promo_social.py' }),
+  N('stg_promo__youtube_videos',   'staging', 'promo', 'view', "YouTube hits + judge verdicts for items social didn't match", { ai:'scripts/youtube_search.py' }),
 
-  // The coordinate is NOT in NAV. geocode_customers.py resolves each address via
-  // the Google API out-of-band and writes ust_external.nav_customer_geocode, which
-  // this view joins to the customer master. Same shape as the social scripts: a
-  // dbt model reads a table a script wrote, so the script is annotated, not drawn.
-  { id:'stg_nav_loc', label:'stg_nav__customer_locations', desc:'Customer address + its coordinate — the geofence every store visit is measured against', col:1, layer:'staging', pipe:'nav', mat:'view', script:'scripts/geocode_customers.py' },
+  // ── intermediate ──────────────────────────────────────────────────────
+  N('int_events_decoded',        'int', 'app', 'table', '8-digit event code + UTC decoded'),
+  N('int_events_enriched',       'int', 'app', 'table', 'Feature / outcome enrichment, one rep-day clock, BLE-repaired customer'),
+  N('int_rep_order_cycle',       'int', 'app', 'table', 'Rep order cycles, rebuilt from event bursts'),
+  N('int_rep_customer_activity', 'int', 'app', 'table', 'What a rep did per customer per day: sessions, devices'),
+  N('int_rep_customer_presence', 'int', 'app', 'table', 'Where the rep physically WAS, from GPS: one row per visit'),
+  N('int_item_demand_daily',     'int', 'app', 'view',  'App demand per SKU × day, from view / cart events'),
+  N('int_search_queries',        'int', 'social', 'view',  'One row per search typed: customers and reps'),
+  N('int_search_terms_weekly',   'int', 'social', 'table', 'Search term × week, ranked on accounts, not searches'),
+  N('int_search_product_weekly', 'int', 'social', 'table', "Searches rolled up to the board's product; read by the board export"),
+  N('int_customer_item_purchases', 'int', 'agent', 'table', 'What each account bought: customer × item × day × UOM, net of credits', { voice:true }),
+  N('int_customer_item_cadence',   'int', 'agent', 'table', "Each account-item's own reorder rhythm", { voice:true }),
+  N('int_customer_invoice_rhythm', 'int', 'agent', 'table', 'How often a STORE buys, across every rep, and whether it is late', { wip:true }),
+  N('int_rep_period_sales',        'int', 'agent', 'table', 'Rep × period: posted dollars + target, raw measures'),
+  N('int_jdawms_items',           'int', 'wms', 'view',  'WMS item master + names / ABC / velocity'),
+  N('int_jdawms_items_active',    'int', 'wms', 'view',  'Active WMS items: the SKU whitelist for social matching'),
+  N('int_jdawms_inventory_daily', 'int', 'wms', 'view',  'Daily on-hand / shippable per item × warehouse'),
+  N('int_jdawms_stock_weekly',    'int', 'wms', 'table', 'Weekly stock levels'),
+  N('int_social_concept_mentions', 'int', 'social', 'table', 'Every name a post mentions, cleaned, across all history'),
+  N('int_social_concept_canon',    'int', 'social', 'table', 'Name → product: one key, one display name, one board'),
+  N('int_social_product_labels',   'int', 'social', 'table', 'Branded / shelf / generic + one spelling per brand'),
+  N('int_social_concept_trends',   'int', 'social', 'table', 'Weekly ranking per board (dish / item), by product'),
+  N('int_social_trend_board',      'int', 'social', 'table', 'THE board: faded score, stay-on rule, status, Rising list'),
+  N('int_social_product_variants', 'int', 'social', 'table', '"Which Pepsi?": related products per board row'),
+  N('int_promo_items_enriched',  'int', 'promo', 'table', 'Promo rows + NAV item + WMS item + match terms'),
+  N('int_promo_social_matches',  'int', 'promo', 'table', 'Posts the AI judge kept, per promo item'),
+  N('int_promo_scraped_matches', 'int', 'promo', 'table', 'Top 1–3 judged-exact YouTube videos per item'),
 
-  { id:'int_dec', label:'int_events_decoded', desc:'8-digit code + UTC decoded', col:2, layer:'int', pipe:'event-log', mat:'table' },
-  { id:'int_items', label:'int_jdawms_items', desc:'WMS item master + names', col:2, layer:'int', pipe:'wms', mat:'table' },
-  { id:'int_inv', label:'int_jdawms_inventory_daily', desc:'Daily on-hand / shippable', col:2, layer:'int', pipe:'wms', mat:'table' },
-  { id:'int_picks', label:'int_jdawms_sale_picks_daily', desc:'Daily picks / sales', col:2, layer:'int', pipe:'wms', mat:'table' },
+  // ── dims ──────────────────────────────────────────────────────────────
+  N('dim_rep_logins', 'dim', 'agent', 'table', "One row per login → sales_code; the agent's first lookup", { voice:true }),
+  N('dim_reps',       'dim', 'agent', 'table', 'One row per sales territory code: join metrics here', { voice:true }),
+  N('dim_customers',  'dim', 'agent', 'table', 'One row per account: name, owner, delivery days, geofence', { voice:true }),
+  N('dim_items',      'dim', 'agent', 'table', 'One row per item: NAV catalog × WMS stock, promo, lifecycle', { voice:true }),
 
-  { id:'int_enr', label:'int_events_enriched', desc:'Feature / outcome enrichment', col:3, layer:'int', pipe:'event-log', mat:'table' },
-  { id:'int_stock', label:'int_jdawms_stock_weekly', desc:'Weekly stock levels', col:3, layer:'int', pipe:'wms', mat:'table' },
-  { id:'fct_soc', label:'fct_social_mentions', desc:'Only genuine, non-spam posts', col:3, layer:'fact', pipe:'social', mat:'table' },
+  // ── facts ─────────────────────────────────────────────────────────────
+  N('fct_events',          'fact', 'app',    'incremental', 'One row per decoded event'),
+  N('fct_orders',          'fact', 'app',    'incremental', 'One row per submitted app order', { voice:true }),
+  N('fct_order_cycles',    'fact', 'app',    'table', 'One row per rep order cycle'),
+  N('fct_invoices',        'fact', 'agent',  'table', 'One row per posted invoice, net of credits, every channel', { voice:true }),
+  N('fct_social_mentions', 'fact', 'social', 'table', 'Only genuine, non-spam food posts'),
 
-  { id:'int_cycle', label:'int_rep_order_cycle', desc:'Rep order cycles from bursts', col:4, layer:'int', pipe:'event-log', mat:'table' },
-  { id:'int_dem', label:'int_item_demand_daily', desc:'Demand per SKU × day', col:4, layer:'int', pipe:'event-log', mat:'table' },
-  { id:'fct_events', label:'fct_events', desc:'One row per decoded event', col:4, layer:'fact', pipe:'event-log', mat:'table' },
-  { id:'fct_orders', label:'fct_orders', desc:'One row per submitted order', col:4, layer:'fact', pipe:'event-log', mat:'table' },
-  { id:'fct_cycles', label:'fct_order_cycles', desc:'One row per order cycle', col:4, layer:'fact', pipe:'event-log', mat:'table' },
-  { id:'int_trend', label:'int_social_concept_trends', desc:'Weekly ranked boards — dishes and stockable items, ranked separately', col:4, layer:'int', pipe:'social', mat:'table' },
-  { id:'int_act', label:'int_rep_customer_activity', desc:'What a rep did per customer per day — sessions, devices, and which customer each tap belongs to', col:4, layer:'int', pipe:'event-log', mat:'table' },
-  { id:'int_pres', label:'int_rep_customer_presence', desc:'Where the rep physically WAS, from GPS — one row per store visit', col:4, layer:'int', pipe:'nav', mat:'table' },
-  { id:'mart_feat', label:'mart_feature_pairing', desc:'Weekly feature co-occurrence', col:4, layer:'mart', pipe:'event-log', mat:'table' },
-
-  { id:'mart_rep', label:'mart_rep_weekly', desc:'Weekly sales-rep scorecard', col:5, layer:'mart', pipe:'event-log', mat:'table' },
-  { id:'mart_cust', label:'mart_customer_weekly', desc:'Customer activity + churn', col:5, layer:'mart', pipe:'event-log', mat:'table' },
-  { id:'mart_journey', label:'mart_rep_order_journey', desc:'Rep order-journey detail', col:5, layer:'mart', pipe:'event-log', mat:'table' },
-  { id:'mart_act', label:'mart_rep_customer_activity', desc:'Was the rep in the store, and what did they do there? One row per rep × customer × day × scenario', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
-  { id:'mart_act_ev', label:'mart_rep_customer_activity_events', desc:'The same work event by event — replay a visit tap by tap', col:5, layer:'mart', pipe:'event-log', mat:'table' },
-  { id:'mart_ds', label:'mart_item_demand_supply', desc:'Weekly demand × WMS supply', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
-  { id:'mart_soc', label:'mart_social_trending_items', desc:'Weekly trending board: do we stock it? is it climbing?', col:5, layer:'mart', pipe:'cross-pipeline', mat:'table' },
+  // ── marts ─────────────────────────────────────────────────────────────
+  N('mart_rep_weekly',            'mart', 'app', 'table', 'Weekly sales-rep scorecard'),
+  N('mart_customer_weekly',       'mart', 'app', 'table', 'Customer activity + churn signal'),
+  N('mart_feature_pairing',       'mart', 'app', 'table', 'Weekly app-feature co-occurrence'),
+  N('mart_rep_order_journey',     'mart', 'app', 'table', 'Rep order-journey detail'),
+  N('mart_rep_customer_activity', 'mart', 'app', 'table', 'Was the rep in the store, and what did they do there?'),
+  N('mart_rep_customer_activity_events', 'mart', 'app', 'table', 'The same work event by event: replay a visit'),
+  N('mart_rep_period_status',     'mart', 'agent', 'table', '"How am I doing?": app orders, rep × period', { voice:true }),
+  N('mart_rep_period_sales',      'mart', 'agent', 'table', '"Will I make my number?": posted $ vs target vs last year', { voice:true }),
+  N('mart_rep_period_item_mix',   'mart', 'agent', 'table', "What a rep's sales were made of: categories, promo, returns", { voice:true }),
+  N('mart_account_period_status', 'mart', 'agent', 'table', 'Account × period: bought, returned, 2–3% alert', { voice:true }),
+  N('mart_rep_account_status',    'mart', 'agent', 'table', '"Who should I call?": rep × account, ranked', { voice:true }),
+  N('mart_rep_nearby_accounts',   'mart', 'agent', 'table', '"Who else near here has gone quiet?"', { voice:true }),
+  N('mart_account_item_history',  'mart', 'agent', 'table', 'Account × item: what they buy, stopped buying, are due', { voice:true }),
+  N('mart_account_item_opportunities', 'mart', 'agent', 'table', 'The pitch list: 5–10 items, each with its reason', { voice:true }),
+  N('mart_item_demand_supply',    'mart', 'wms', 'table', 'Weekly app demand × WMS supply per item'),
+  N('mart_social_trending_items', 'mart', 'social', 'table', 'Weekly trending board: why it ranks, do we stock it, what to do'),
+  N('mart_promo_social_match',    'mart', 'promo', 'table', 'Promo vs Social Listening sheet, one row per match'),
 ];
 
+// Generated from every ref() / source() in models/*.sql (dq_* excluded; seed_* folded
+// into 'seeds', stg_jdawms__* into one box). Regenerate rather than hand-edit.
 const EDGES = [
-  ['src_mysql','stg_sel'],['src_mysql','stg_admin'],['src_mysql','stg_cat'],
-  ['src_jdawms','stg_jdawms'],
-  ['src_mnt','stg_mnt_m'],['src_mnt','stg_mnt_e'],['src_mnt','stg_mnt_r'],
-  ['stg_sel','int_dec'],['seeds','int_dec'],
-  ['stg_jdawms','int_items'],['stg_jdawms','int_inv'],['stg_jdawms','int_picks'],['seeds','int_items'],
-  ['int_dec','int_enr'],['seeds','int_enr'],
-  ['int_inv','int_stock'],
-  ['stg_mnt_m','fct_soc'],['stg_mnt_e','fct_soc'],
-  ['int_enr','int_cycle'],['int_enr','int_dem'],['int_enr','fct_events'],['int_enr','fct_orders'],
-  ['int_enr','fct_cycles'],['int_enr','mart_cust'],['int_enr','mart_feat'],
-  ['fct_soc','int_trend'],
-  ['fct_cycles','mart_rep'],['fct_orders','mart_rep'],['stg_admin','mart_rep'],
-  ['fct_cycles','mart_cust'],['fct_orders','mart_cust'],
-  ['int_cycle','mart_journey'],['fct_events','mart_journey'],
-  ['src_nav','stg_nav_loc'],
-  ['int_enr','int_act'],
-  ['int_enr','int_pres'],['stg_nav_loc','int_pres'],
-  ['int_act','mart_act'],['int_pres','mart_act'],['fct_orders','mart_act'],['stg_admin','mart_act'],
-  ['int_act','mart_act_ev'],['fct_orders','mart_act_ev'],
-  ['int_dem','mart_ds'],['int_inv','mart_ds'],['int_items','mart_ds'],
-  ['int_items','mart_soc'],['int_trend','mart_soc'],['stg_mnt_r','mart_soc'],['int_stock','mart_soc'],
+  ['dim_reps','dim_customers'],['stg_nav__customer_locations','dim_customers'],['stg_nav__customers','dim_customers'],
+  ['int_jdawms_inventory_daily','dim_items'],['int_jdawms_items','dim_items'],['src_nav','dim_items'],['stg_nav__items','dim_items'],['stg_nav__promotion_lines','dim_items'],
+  ['stg_mysql__admin_users','dim_rep_logins'],
+  ['dim_rep_logins','dim_reps'],['stg_nav__customers','dim_reps'],
+  ['int_events_enriched','fct_events'],
+  ['dim_customers','fct_invoices'],['dim_reps','fct_invoices'],['stg_nav__sales_cr_memo_lines','fct_invoices'],['stg_nav__sales_invoice_headers','fct_invoices'],['stg_nav__sales_invoice_lines','fct_invoices'],
+  ['int_events_enriched','fct_order_cycles'],
+  ['dim_customers','fct_orders'],['dim_reps','fct_orders'],['int_events_enriched','fct_orders'],
+  ['stg_mentionlytics__mention_enrichment','fct_social_mentions'],['stg_mentionlytics__mentions','fct_social_mentions'],
+  ['fct_invoices','int_customer_invoice_rhythm'],
+  ['int_customer_item_purchases','int_customer_item_cadence'],
+  ['stg_nav__sales_cr_memo_lines','int_customer_item_purchases'],['stg_nav__sales_invoice_lines','int_customer_item_purchases'],
+  ['seeds','int_events_decoded'],['stg_mysql__system_event_log','int_events_decoded'],
+  ['int_events_decoded','int_events_enriched'],['seeds','int_events_enriched'],
+  ['int_events_enriched','int_item_demand_daily'],
+  ['stg_jdawms__*','int_jdawms_inventory_daily'],
+  ['seeds','int_jdawms_items'],['stg_jdawms__*','int_jdawms_items'],
+  ['int_jdawms_items','int_jdawms_items_active'],['stg_jdawms__*','int_jdawms_items_active'],
+  ['int_jdawms_inventory_daily','int_jdawms_stock_weekly'],
+  ['int_jdawms_items','int_promo_items_enriched'],['seeds','int_promo_items_enriched'],['stg_nav__items','int_promo_items_enriched'],['stg_promo__item_terms_draft','int_promo_items_enriched'],['stg_promo__items','int_promo_items_enriched'],
+  ['int_promo_items_enriched','int_promo_scraped_matches'],['stg_promo__youtube_videos','int_promo_scraped_matches'],
+  ['int_promo_items_enriched','int_promo_social_matches'],['stg_mentionlytics__mentions','int_promo_social_matches'],['stg_promo__social_judgments','int_promo_social_matches'],
+  ['int_events_enriched','int_rep_customer_activity'],
+  ['int_events_enriched','int_rep_customer_presence'],['stg_nav__customer_locations','int_rep_customer_presence'],
+  ['int_events_enriched','int_rep_order_cycle'],
+  ['stg_nav__sales_person_margin_history','int_rep_period_sales'],['stg_nav__salesperson_targets','int_rep_period_sales'],
+  ['int_search_queries','int_search_product_weekly'],['int_social_concept_canon','int_search_product_weekly'],
+  ['int_events_decoded','int_search_queries'],['seeds','int_search_queries'],
+  ['int_search_queries','int_search_terms_weekly'],['int_social_concept_canon','int_search_terms_weekly'],
+  ['int_social_concept_mentions','int_social_concept_canon'],['stg_mentionlytics__concept_canon','int_social_concept_canon'],
+  ['fct_social_mentions','int_social_concept_mentions'],['seeds','int_social_concept_mentions'],
+  ['fct_social_mentions','int_social_concept_trends'],['int_social_concept_canon','int_social_concept_trends'],['int_social_concept_mentions','int_social_concept_trends'],['stg_mentionlytics__concept_resolution','int_social_concept_trends'],
+  ['int_social_concept_canon','int_social_product_labels'],['seeds','int_social_product_labels'],['stg_mentionlytics__product_profile','int_social_product_labels'],
+  ['fct_social_mentions','int_social_product_variants'],['int_social_concept_canon','int_social_product_variants'],['int_social_concept_mentions','int_social_product_variants'],['int_social_product_labels','int_social_product_variants'],['int_social_trend_board','int_social_product_variants'],
+  ['fct_social_mentions','int_social_trend_board'],['int_social_concept_canon','int_social_trend_board'],['int_social_concept_trends','int_social_trend_board'],['int_social_product_labels','int_social_trend_board'],
+  ['dim_customers','mart_account_item_history'],['dim_items','mart_account_item_history'],['dim_reps','mart_account_item_history'],['int_customer_item_cadence','mart_account_item_history'],['int_customer_item_purchases','mart_account_item_history'],
+  ['dim_customers','mart_account_item_opportunities'],['dim_items','mart_account_item_opportunities'],['mart_account_item_history','mart_account_item_opportunities'],
+  ['dim_customers','mart_account_period_status'],['dim_reps','mart_account_period_status'],['fct_invoices','mart_account_period_status'],['int_customer_item_purchases','mart_account_period_status'],
+  ['fct_order_cycles','mart_customer_weekly'],['fct_orders','mart_customer_weekly'],['int_events_enriched','mart_customer_weekly'],['stg_nav__customer_locations','mart_customer_weekly'],
+  ['int_events_enriched','mart_feature_pairing'],
+  ['int_item_demand_daily','mart_item_demand_supply'],['int_jdawms_inventory_daily','mart_item_demand_supply'],['int_jdawms_items','mart_item_demand_supply'],
+  ['int_promo_items_enriched','mart_promo_social_match'],['int_promo_scraped_matches','mart_promo_social_match'],['int_promo_social_matches','mart_promo_social_match'],
+  ['dim_customers','mart_rep_account_status'],['dim_reps','mart_rep_account_status'],['fct_invoices','mart_rep_account_status'],['fct_orders','mart_rep_account_status'],['int_customer_invoice_rhythm','mart_rep_account_status'],
+  ['fct_orders','mart_rep_customer_activity'],['int_events_enriched','mart_rep_customer_activity'],['int_rep_customer_activity','mart_rep_customer_activity'],['int_rep_customer_presence','mart_rep_customer_activity'],['stg_mysql__admin_users','mart_rep_customer_activity'],['stg_nav__customer_locations','mart_rep_customer_activity'],
+  ['fct_orders','mart_rep_customer_activity_events'],['int_rep_customer_activity','mart_rep_customer_activity_events'],
+  ['dim_customers','mart_rep_nearby_accounts'],['mart_rep_account_status','mart_rep_nearby_accounts'],
+  ['fct_events','mart_rep_order_journey'],['int_rep_order_cycle','mart_rep_order_journey'],
+  ['dim_items','mart_rep_period_item_mix'],['dim_reps','mart_rep_period_item_mix'],['int_customer_item_purchases','mart_rep_period_item_mix'],
+  ['dim_reps','mart_rep_period_sales'],['int_rep_period_sales','mart_rep_period_sales'],
+  ['dim_customers','mart_rep_period_status'],['dim_reps','mart_rep_period_status'],['fct_orders','mart_rep_period_status'],['int_events_enriched','mart_rep_period_status'],
+  ['fct_order_cycles','mart_rep_weekly'],['fct_orders','mart_rep_weekly'],['stg_mysql__admin_users','mart_rep_weekly'],
+  ['int_jdawms_items_active','mart_social_trending_items'],['int_jdawms_stock_weekly','mart_social_trending_items'],['int_social_concept_trends','mart_social_trending_items'],['int_social_product_variants','mart_social_trending_items'],['int_social_trend_board','mart_social_trending_items'],['seeds','mart_social_trending_items'],['stg_mentionlytics__concept_resolution','mart_social_trending_items'],
+  ['src_jdawms','stg_jdawms__*'],
+  ['src_mnt','stg_mentionlytics__concept_canon'],
+  ['src_mnt','stg_mentionlytics__concept_resolution'],
+  ['src_mnt','stg_mentionlytics__mention_enrichment'],
+  ['src_mnt','stg_mentionlytics__mentions'],
+  ['src_mnt','stg_mentionlytics__product_profile'],
+  ['src_mysql','stg_mysql__admin_users'],
+  ['src_mysql','stg_mysql__category'],
+  ['src_mysql','stg_mysql__system_event_log'],
+  ['src_ext','stg_nav__customer_locations'],['stg_nav__customers','stg_nav__customer_locations'],
+  ['src_nav','stg_nav__customers'],
+  ['src_nav','stg_nav__items'],
+  ['src_nav','stg_nav__promotion_lines'],
+  ['src_nav','stg_nav__sales_cr_memo_lines'],
+  ['src_nav','stg_nav__sales_invoice_headers'],
+  ['src_nav','stg_nav__sales_invoice_lines'],
+  ['src_nav','stg_nav__sales_person_margin_history'],
+  ['src_nav','stg_nav__salesperson_targets'],
+  ['src_promo','stg_promo__item_terms_draft'],
+  ['src_promo','stg_promo__items'],
+  ['src_promo','stg_promo__social_judgments'],
+  ['src_promo','stg_promo__youtube_videos'],
 ];
 
-// NOTE: resolve_trending_concepts.py (offline LLM) reads int_social_concept_trends
-// + fct_social_mentions + int_jdawms_items and writes social.concept_resolution —
-// but that happens a dbt run EARLIER, outside dbt entirely. It is not a ref()/
-// source() edge, so it is intentionally left out of this graph (a cycle drawn
-// into an acyclic dbt DAG misrepresents the architecture more than it clarifies
-// it). That out-of-band hop is walked through step-by-step in the section below.
-const ALL_EDGES = EDGES;
+// NOTE: the offline scripts read dbt tables and write the sources dbt reads next —
+// canonicalize_concepts.py reads int_social_concept_mentions, resolve_trending_concepts.py
+// reads the board + fct_social_mentions + int_jdawms_items_active. Those hops happen
+// between dbt steps, outside dbt, so they are not ref()/source() edges and are left out
+// of this acyclic graph; the social walkthrough covers them step by step.
 
-// legend
-const legend = document.getElementById('legend');
+// A subject area is its outputs plus everything upstream of them.
+const AREAS = [
+  { key:'all',    label:'Everything' },
+  { key:'agent',  label:'Rep Voice AI', roots:['dim_rep_logins','dim_items','mart_rep_period_status','mart_rep_period_sales','mart_rep_period_item_mix','mart_account_period_status','mart_rep_account_status','mart_rep_nearby_accounts','mart_account_item_history','mart_account_item_opportunities'] },
+  { key:'social', label:'Social listening & search', roots:['mart_social_trending_items','int_search_terms_weekly','int_search_product_weekly'] },
+  { key:'promo',  label:'Promo × social', roots:['mart_promo_social_match'] },
+  { key:'app',    label:'App activity & store visits', roots:['mart_rep_weekly','mart_customer_weekly','mart_feature_pairing','mart_rep_order_journey','mart_rep_customer_activity','mart_rep_customer_activity_events','stg_mysql__category'] },
+  { key:'supply', label:'Demand × supply', roots:['mart_item_demand_supply'] },
+];
+
+const SOURCES = {
+  src_mysql:  { c:'#2563eb', abbr:'MySQL', title:'MySQL logs' },
+  src_jdawms: { c:'#dc2626', abbr:'WMS',   title:'WMS · SQL Server' },
+  src_nav:    { c:'#0891b2', abbr:'NAV',   title:'NAV ERP' },
+  src_ext:    { c:'#64748b', abbr:'GEO',   title:'ust_external geocodes' },
+  src_mnt:    { c:'#9333ea', abbr:'SL',    title:'Social Listening (mentionlytics)' },
+  src_promo:  { c:'#db2777', abbr:'PROMO', title:'Promo workbook' },
+  seeds:      { c:'#d97706', abbr:'Seed',  title:'Seeds' },
+};
+const SRC_IDS = Object.keys(SOURCES);
+
+// ---- graph indexes (full graph) ----
+const byId = Object.fromEntries(NODES.map((n, i) => [n.id, { ...n, idx: i }]));
+EDGES.forEach(([a, b]) => { if (!byId[a] || !byId[b]) console.warn('repo_map: edge to unknown node', a, '→', b); });
+const radjAll = {};
+EDGES.forEach(([a, b]) => { (radjAll[b] = radjAll[b] || []).push(a); });
+
+const depthMemo = {};
+function depth(id) {
+  if (depthMemo[id] != null) return depthMemo[id];
+  const ps = radjAll[id] || [];
+  return (depthMemo[id] = ps.length ? 1 + Math.max(...ps.map(depth)) : 0);
+}
+function ancestors(ids) {
+  const seen = new Set(ids), stack = [...ids];
+  while (stack.length) (radjAll[stack.pop()] || []).forEach(p => { if (!seen.has(p)) { seen.add(p); stack.push(p); } });
+  return seen;
+}
+function sourcesOf(id) {
+  const hit = ancestors([id]);
+  return SRC_IDS.filter(s => s !== id && hit.has(s));
+}
+const colLabel = d => d === 0 ? 'Sources & seeds' : d === 1 ? 'Staging' : `${d} steps from source`;
+
+// ---- legend ----
 const LEGEND = [
   { c:'#2563eb', label:'MySQL logs', gloss:'source' },
-  { c:'#dc2626', label:'WMS · SQL Server', gloss:'source' },
-  { c:'#9333ea', label:'Social Listening (mentionlytics)', gloss:'source' },
-  { c:'#0891b2', label:'NAV ERP', gloss:'source · customer master' },
-  { c:'#d97706', label:'Seeds', gloss:'source · reference CSVs' },
+  { c:'#dc2626', label:'WMS', gloss:'source' },
+  { c:'#0891b2', label:'NAV ERP', gloss:'source' },
+  { c:'#9333ea', label:'Social Listening', gloss:'source' },
+  { c:'#db2777', label:'Promo workbook', gloss:'source' },
+  { c:'#d97706', label:'Seeds', gloss:'reference CSVs' },
   { c:'var(--l-staging)', label:'Staging', gloss:'1:1 cleaned views' },
   { c:'var(--l-int)', label:'Intermediate', gloss:'prepared tables' },
-  { c:'var(--l-fact)', label:'Facts', gloss:'event / order grain' },
+  { c:'var(--l-dim)', label:'Dimensions', gloss:'conformed rep / customer / item' },
+  { c:'var(--l-fact)', label:'Facts', gloss:'event / order / invoice grain' },
   { c:'var(--l-mart)', label:'Marts', gloss:'reporting tables' },
+  { c:'var(--l-voice)', label:'VOICE', gloss:'read by the Rep Voice AI' },
+  { c:'var(--l-llm)', label:'AI', gloss:'source written by an offline LLM script' },
 ];
+const legend = document.getElementById('legend');
 LEGEND.forEach(l => {
   const d = document.createElement('div'); d.className = 'item';
   d.innerHTML = `<span class="sw" style="--c:${l.c}"></span><b>${l.label}</b> — ${l.gloss}`;
   legend.appendChild(d);
 });
 
-// build columns
-const colsEl = document.getElementById('cols');
-const byCol = {};
-NODES.forEach(n => { (byCol[n.col] = byCol[n.col] || []).push(n); });
-const nodeEls = {};
-const adj = {}, radj = {};
-ALL_EDGES.forEach(([a,b]) => { (adj[a]=adj[a]||[]).push(b); (radj[b]=radj[b]||[]).push(a); });
-
-// the 4 sources, and the transitive source(s) each downstream model derives from
-const SOURCES = {
-  src_mysql:  { c:'#2563eb', abbr:'MySQL', title:'MySQL logs' },
-  src_jdawms: { c:'#dc2626', abbr:'WMS',   title:'WMS · SQL Server' },
-  src_mnt:    { c:'#9333ea', abbr:'SL',    title:'Social Listening (mentionlytics)' },
-  src_nav:    { c:'#0891b2', abbr:'NAV',   title:'NAV ERP' },
-  seeds:      { c:'#d97706', abbr:'Seed',  title:'Seeds' },
-};
-const SRC_IDS = Object.keys(SOURCES);
-function sourcesOf(id) {
-  const seen = new Set(), hit = new Set(), stack = [...(radj[id] || [])];
-  while (stack.length) {
-    const n = stack.pop();
-    if (seen.has(n)) continue; seen.add(n);
-    if (SRC_IDS.includes(n)) hit.add(n);
-    (radj[n] || []).forEach(m => stack.push(m));
-  }
-  return SRC_IDS.filter(s => hit.has(s));   // stable source order
-}
-
-Object.keys(byCol).sort((a,b)=>a-b).forEach(ci => {
-  const col = document.createElement('div'); col.className = 'col';
-  const lab = document.createElement('div'); lab.className = 'col-label'; lab.textContent = COLS[ci];
-  col.appendChild(lab);
-  byCol[ci].forEach((n,i) => {
-    const el = document.createElement('div');
-    el.className = 'node'; el.dataset.id = n.id;
-    el.style.setProperty('--nc', n.color || LAYERS[n.layer].c);
-    if (window.matchMedia('(prefers-reduced-motion: no-preference)').matches)
-      el.style.animationDelay = (ci*0.05 + i*0.03) + 's';
-    const anc = sourcesOf(n.id);
-    const flags = anc.length
-      ? `<div class="srcflags">` + anc.map(s =>
-          `<span class="sflag" title="from ${SOURCES[s].title}"><i style="background:${SOURCES[s].c}"></i>${SOURCES[s].abbr}</span>`
-        ).join('') + `</div>`
-      : '';
-    el.innerHTML = `<div class="nm">${n.label}</div>
-      <div class="desc">${n.desc}</div>
-      <div class="mt"><span class="tag ${n.mat}">${n.mat}</span>
-      ${n.ai ? `<span class="tag ai" title="Built offline by an LLM script, not dbt">AI</span>` : ''}
-      ${n.script ? `<span class="tag ext" title="Built offline by a script, not dbt — no LLM">SCRIPT</span>` : ''}
-      ${n.sub ? `<span class="badge">${n.sub}</span>` : ''}</div>
-      ${n.ai ? `<div class="aisrc">via ${n.ai}</div>` : ''}
-      ${n.script ? `<div class="aisrc">via ${n.script}</div>` : ''}
-      ${flags}`;
-    col.appendChild(el);
-    nodeEls[n.id] = el;
-  });
-  colsEl.appendChild(col);
+// ---- filters ----
+const filtersEl = document.getElementById('filters');
+const countEl = document.createElement('span'); countEl.className = 'count';
+const chips = {};
+AREAS.forEach(a => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'chip'; b.textContent = a.label;
+  b.addEventListener('click', () => render(a.key));
+  filtersEl.appendChild(b); chips[a.key] = b;
 });
+filtersEl.appendChild(countEl);
 
-// edges
+// ---- render ----
+const colsEl = document.getElementById('cols');
 const svg = document.getElementById('edges');
 const inner = document.getElementById('dag');
-const paths = [];
-ALL_EDGES.forEach(([a,b]) => {
-  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
-  p.setAttribute('marker-end','url(#arrow)');
-  p.dataset.from = a; p.dataset.to = b;
-  svg.appendChild(p); paths.push(p);
-});
+const hint = document.getElementById('hint');
+const reduceMotion = !window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
+let nodeEls = {}, paths = [], adj = {}, radj = {};
+
+function visibleSet(key) {
+  const a = AREAS.find(x => x.key === key);
+  return a.roots ? ancestors(a.roots) : new Set(NODES.map(n => n.id));
+}
+
+function nodeHtml(n) {
+  const anc = sourcesOf(n.id);
+  const flags = anc.length
+    ? `<div class="srcflags">` + anc.map(s =>
+        `<span class="sflag" title="from ${SOURCES[s].title}"><i style="background:${SOURCES[s].c}"></i>${SOURCES[s].abbr}</span>`
+      ).join('') + `</div>` : '';
+  // soft break points after underscores, so long model names wrap at a word, not mid-word
+  const name = (n.label || n.id).replace(/_+/g, m => m + '<wbr>');
+  return `<div class="nm">${name}</div>
+    <div class="desc">${n.desc}</div>
+    <div class="mt"><span class="tag ${n.mat}">${n.mat}</span>
+      ${n.voice ? `<span class="tag voice" title="Read by the Rep Voice AI">VOICE</span>` : ''}
+      ${n.ai ? `<span class="tag ai" title="Its source is written by an offline LLM script, not dbt">AI</span>` : ''}
+      ${n.script ? `<span class="tag ext" title="Its source is written by an offline script, not dbt — no LLM">SCRIPT</span>` : ''}
+      ${n.wip ? `<span class="tag wip" title="Uncommitted on feat/account_buying_rhythm">WIP</span>` : ''}
+      ${n.sub ? `<span class="badge">${n.sub}</span>` : ''}</div>
+    ${n.ai ? `<div class="aisrc">via ${n.ai}</div>` : ''}
+    ${n.script ? `<div class="aisrc plain">via ${n.script}</div>` : ''}
+    ${flags}`;
+}
+
+function render(key) {
+  const vis = visibleSet(key);
+  const compact = key === 'all';
+  inner.classList.toggle('compact', compact);
+  inner.classList.remove('hovering');
+  Object.entries(chips).forEach(([k, b]) => b.setAttribute('aria-pressed', String(k === key)));
+  const nModels = [...vis].filter(id => !SRC_IDS.includes(id)).length;
+  countEl.textContent = `${nModels} model boxes`;
+  hint.textContent = compact
+    ? 'Overview: names only (hover for the description) · pick a subject area to read the boxes · scroll sideways to follow the graph'
+    : 'Scroll sideways to follow the graph · hover any model to trace its lineage both ways';
+
+  colsEl.innerHTML = ''; paths.forEach(p => p.remove()); paths = []; nodeEls = {};
+  const byCol = {};
+  NODES.filter(n => vis.has(n.id)).forEach(n => { (byCol[depth(n.id)] = byCol[depth(n.id)] || []).push(byId[n.id]); });
+
+  Object.keys(byCol).map(Number).sort((a, b) => a - b).forEach((ci, cpos) => {
+    const col = document.createElement('div'); col.className = 'col';
+    const lab = document.createElement('div'); lab.className = 'col-label'; lab.textContent = colLabel(ci);
+    col.appendChild(lab);
+    byCol[ci].sort((a, b) => (AREA_ORDER[a.area] - AREA_ORDER[b.area]) || (a.idx - b.idx)).forEach((n, i) => {
+      const el = document.createElement('div');
+      el.className = 'node'; el.dataset.id = n.id;
+      el.style.setProperty('--nc', n.color || LAYERS[n.layer].c);
+      if (compact) el.title = n.desc;
+      if (!reduceMotion) el.style.animationDelay = (cpos * 0.04 + i * 0.02) + 's';
+      el.innerHTML = nodeHtml(n);
+      col.appendChild(el); nodeEls[n.id] = el;
+    });
+    colsEl.appendChild(col);
+  });
+
+  const visEdges = EDGES.filter(([a, b]) => vis.has(a) && vis.has(b));
+  adj = {}; radj = {};
+  visEdges.forEach(([a, b]) => { (adj[a] = adj[a] || []).push(b); (radj[b] = radj[b] || []).push(a); });
+  visEdges.forEach(([a, b]) => {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('marker-end', 'url(#arrow)');
+    p.dataset.from = a; p.dataset.to = b;
+    svg.appendChild(p); paths.push(p);
+  });
+
+  Object.entries(nodeEls).forEach(([id, el]) => {
+    el.addEventListener('mouseenter', () => hoverOn(id));
+    el.addEventListener('mouseleave', hoverOff);
+  });
+  requestAnimationFrame(draw);
+}
 
 function draw() {
   const base = inner.getBoundingClientRect();
@@ -682,47 +1333,42 @@ function draw() {
   paths.forEach(p => {
     const s = nodeEls[p.dataset.from].getBoundingClientRect();
     const t = nodeEls[p.dataset.to].getBoundingClientRect();
-    const x1 = s.right - base.left, y1 = s.top - base.top + s.height/2;
-    const x2 = t.left - base.left,  y2 = t.top - base.top + t.height/2;
+    const x1 = s.right - base.left, y1 = s.top - base.top + s.height / 2;
+    const x2 = t.left - base.left,  y2 = t.top - base.top + t.height / 2;
     const dx = Math.max(28, (x2 - x1) * 0.45);
-    p.setAttribute('d', `M ${x1},${y1} C ${x1+dx},${y1} ${x2-dx},${y2} ${x2-4},${y2}`);
+    p.setAttribute('d', `M ${x1},${y1} C ${x1 + dx},${y1} ${x2 - dx},${y2} ${x2 - 4},${y2}`);
   });
 }
 
-// hover isolate
-function related(id) {
+// ---- hover isolate ----
+function hoverOn(id) {
   const up = new Set(), down = new Set();
-  (function goUp(n){ (radj[n]||[]).forEach(m=>{ if(!up.has(m)){up.add(m); goUp(m);} }); })(id);
-  (function goDn(n){ (adj[n]||[]).forEach(m=>{ if(!down.has(m)){down.add(m); goDn(m);} }); })(id);
-  return { all: new Set([...up, ...down, id]) };
+  (function goUp(n) { (radj[n] || []).forEach(m => { if (!up.has(m)) { up.add(m); goUp(m); } }); })(id);
+  (function goDn(n) { (adj[n] || []).forEach(m => { if (!down.has(m)) { down.add(m); goDn(m); } }); })(id);
+  const all = new Set([...up, ...down, id]);
+  inner.classList.add('hovering');
+  Object.entries(nodeEls).forEach(([k, e]) => { e.classList.toggle('lit', all.has(k)); e.classList.toggle('root', k === id); });
+  paths.forEach(p => {
+    const hot = all.has(p.dataset.from) && all.has(p.dataset.to);
+    p.classList.toggle('hot', hot);
+    if (hot) { const fn = byId[p.dataset.from]; p.style.stroke = fn.color || LAYERS[fn.layer].c; }
+    else p.style.stroke = '';
+  });
 }
-NODES.forEach(n => {
-  const el = nodeEls[n.id];
-  el.addEventListener('mouseenter', () => {
-    const r = related(n.id);
-    inner.classList.add('hovering');
-    Object.entries(nodeEls).forEach(([id,e]) => {
-      e.classList.toggle('lit', r.all.has(id));
-      e.classList.toggle('root', id === n.id);
-    });
-    paths.forEach(p => {
-      const hot = r.all.has(p.dataset.from) && r.all.has(p.dataset.to);
-      p.classList.toggle('hot', hot);
-      if (hot) { const fn = NODES.find(x=>x.id===p.dataset.from); p.style.stroke = fn.color || LAYERS[fn.layer].c; }
-      else p.style.stroke = '';
-    });
-  });
-  el.addEventListener('mouseleave', () => {
-    inner.classList.remove('hovering');
-    Object.values(nodeEls).forEach(e => e.classList.remove('lit','root'));
-    paths.forEach(p => { p.classList.remove('hot'); p.style.stroke=''; });
-  });
-});
+function hoverOff() {
+  inner.classList.remove('hovering');
+  Object.values(nodeEls).forEach(e => e.classList.remove('lit', 'root'));
+  paths.forEach(p => { p.classList.remove('hot'); p.style.stroke = ''; });
+}
 
-const ro = new ResizeObserver(() => requestAnimationFrame(draw));
-ro.observe(inner);
+// redraw once the rise-in animation settles, and whenever the layout changes size
+let settle;
+colsEl.addEventListener('animationend', () => { clearTimeout(settle); settle = setTimeout(draw, 30); });
+new ResizeObserver(() => requestAnimationFrame(draw)).observe(inner);
 window.addEventListener('resize', () => requestAnimationFrame(draw));
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
-requestAnimationFrame(draw);
-setTimeout(draw, 250);
+
+render('all');
 </script>
+</body>
+</html>
