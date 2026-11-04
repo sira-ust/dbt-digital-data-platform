@@ -47,7 +47,7 @@ resources:
             commands:
               - dbt deps
               - dbt build --select stg_mentionlytics__mentions stg_mentionlytics__mention_enrichment --indirect-selection cautious
-            warehouse_id: e165fed86011619a
+            warehouse_id: 1b02e5950a305538
             catalog: ust_databricks
             schema: social
             source: GIT
@@ -69,7 +69,7 @@ resources:
             commands:
               - dbt deps
               - dbt build --select +int_social_concept_mentions --indirect-selection cautious
-            warehouse_id: e165fed86011619a
+            warehouse_id: 1b02e5950a305538
             catalog: ust_databricks
             schema: social
             source: GIT
@@ -90,7 +90,7 @@ resources:
             commands:
               - dbt deps
               - dbt build --select stg_mentionlytics__concept_canon int_social_concept_canon --indirect-selection cautious
-            warehouse_id: e165fed86011619a
+            warehouse_id: 1b02e5950a305538
             catalog: ust_databricks
             schema: social
             source: GIT
@@ -111,7 +111,7 @@ resources:
             commands:
               - dbt deps
               - dbt build --select stg_mentionlytics__concept_canon int_social_concept_canon --indirect-selection cautious
-            warehouse_id: e165fed86011619a
+            warehouse_id: 1b02e5950a305538
             catalog: ust_databricks
             schema: social
             source: GIT
@@ -133,7 +133,7 @@ resources:
             commands:
               - dbt deps
               - dbt build --select stg_mentionlytics__product_profile seed_social_product_overrides int_social_product_labels int_social_concept_trends int_social_trend_board --indirect-selection cautious
-            warehouse_id: e165fed86011619a
+            warehouse_id: 1b02e5950a305538
             catalog: ust_databricks
             schema: social
             source: GIT
@@ -155,7 +155,7 @@ resources:
             commands:
               - dbt deps
               - dbt build --select tag:social
-            warehouse_id: e165fed86011619a
+            warehouse_id: 1b02e5950a305538
             catalog: ust_databricks
             schema: social
             source: GIT
