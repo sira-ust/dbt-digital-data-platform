@@ -194,7 +194,7 @@ Both features merge spellings of one word and words that ride on the same posts
 `seed_social_generic_terms` (`applies_to = words` rows touch no board ranking).
 
 Three models carry them. `int_social_post_words` (a table) builds the word list, takes
-the posts and finds the words in them; `int_social_board_drivers` (ephemeral, compiled
+the posts and finds the words in them; `int_social_board_drivers` (a table, joined
 into `mart_social_trending_items` as `driven_by`) writes the driver lines; and
 `mart_social_rising_words` (a table) ranks the rising words. The map from a post to its
 board row, which both need, is the `social_post_products` macro in

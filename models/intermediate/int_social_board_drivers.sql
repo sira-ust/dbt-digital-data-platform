@@ -1,4 +1,8 @@
-{{ config(materialized='ephemeral', tags=['social']) }}
+{{ config(tags=['social']) }}
+-- A TABLE, not ephemeral. Inlined, this whole word analysis ran inside the
+-- mart_social_trending_items statement, and on Databricks (2026-11-04) that statement
+-- died with "Invalid OperationHandle" after a 31-minute dbt_social step. Built once
+-- here, the mart joins a small finished table. Same rows either way.
 {% set part = ['week_start', 'concept_class', 'concept_norm'] %}
 {% set base_weeks = var('social_words_baseline_weeks') %}
 {% set str = dbt.type_string() %}

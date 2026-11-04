@@ -1275,9 +1275,11 @@ models:
       not the row's own name — merged so one word written several ways is one word and
       words riding on the same posts are one story. No row when nothing stands out. Built
       because in 2026-W43 14 of the 25 "Mama Instant Noodles" posts were the WaiWai Quik
-      tom-klong-with-spring-onion trend, which no label showed. Ephemeral (no table):
-      compiled into mart_social_trending_items, whose (week_start, concept_class,
-      concept_norm) test fails if a driver row ever duplicates a board row.
+      tom-klong-with-spring-onion trend, which no label showed. A table, read by
+      mart_social_trending_items, whose (week_start, concept_class, concept_norm) test
+      fails if a driver row ever duplicates a board row. It was ephemeral until
+      2026-11-04: compiled into the mart, the word analysis made that one statement
+      heavy enough to die on Databricks with "Invalid OperationHandle".
     columns:
       - name: driven_by
         description: >
