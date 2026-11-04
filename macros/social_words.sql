@@ -96,35 +96,125 @@
 
 
 {#
-  social_word_stories — merge candidate words into STORIES, inside each partition
-  (a board row for the driver line, a week for the Rising list).
+  social_driver_rows — the steps every "Driven by" model starts from, emitted as CTEs
+  (no leading `with`, no trailing comma):
+    board          the week's board rows, and each row's name
+    hits           the words found in post text (int_social_post_words)
+    post_products  every post's board product (social_post_products)
+    row_posts      each board row's posts: this week (is_now) and the base_weeks before
+    row_size       how many posts each row has, this week and before
+    row_hits       the words in each row's posts
+  int_social_driver_words, int_social_driver_stories and int_social_board_drivers all
+  need them; written once here.
+#}
+{% macro social_driver_rows(base_weeks) -%}
+board as (
 
-  SPELLINGS. สกุชชี่ / สกุชชี่เค้ก / เค้กสกุชชี่ are one word. A longer word folds into a
-    shorter word it contains when the shorter one is at least half its length (สกุชชี่ ->
-    สกุชชี่เค้ก, but coconut does not swallow "mango coconut sticky rice") and it is the
-    ONLY such word: ต้มโคล้งต้นหอม contains two different words, so it is a combination,
-    not a spelling, and joins neither. Two hops of parents cover real spellings. A group
-    is shown by its most-posted spelling, or by a longer spelling of it that carries 40%+
-    of that one's posts (สกุชชี่เค้ก reads better than สกุชชี่ and is the same thing).
+    select
+        week_start,
+        concept_class,
+        concept_norm,
+        lower(coalesce(product_name, concept_norm))                     as row_name
+    from {{ ref('int_social_trend_board') }}
+    where is_on_board
 
-  STORIES. Different words that ride on the same posts are one story (the Starbucks
-    holiday menu: mocha, reindeer brookie, oat milk ... in the same nine posts). A group
-    joins the BIGGEST group it shares at least `overlap` of the smaller one's posts with,
-    when that group is bigger; two hops. Inside a story, a word that is part of another
-    word is only its general form (มาม่า beside มาม่าเกาหลี) and is not shown.
+),
 
-  Inputs, both CTE names in the caller's chain:
-    cands   partition..., term, n_posts          the candidate words
-    hits    partition..., term, post_key         which posts each candidate is in
-  Emits CTEs named {prefix}_* (no leading `with`, no trailing comma). The caller reads:
-    {prefix}_grp       partition..., term, n_posts, grp      every candidate -> its group
-    {prefix}_grp_hits  partition..., grp, post_key           a group's posts
-    {prefix}_story     partition..., grp, head, grp_posts, also_written, story
-                       one row per group SHOWN in a story (general forms already dropped)
+hits as (
+
+    select mention_id, week_start, owner, term
+    from {{ ref('int_social_post_words') }}
+    where term is not null
+
+),
+
+-- every post's board product, mapped exactly as the board maps it
+post_products as (
+
+    {{ social_post_products() }}
+
+),
+
+-- each board row's posts: this week (is_now) and the baseline weeks before it
+row_posts as (
+
+    select distinct
+        b.week_start,
+        b.concept_class,
+        b.concept_norm,
+        pp.mention_id,
+        pp.week_start = b.week_start                                    as is_now
+    from board as b
+    inner join post_products as pp
+        on  pp.concept_class = b.concept_class
+        and pp.concept_norm  = b.concept_norm
+        and pp.week_start between cast({{ dbt.dateadd('day', -7 * base_weeks, 'b.week_start') }} as date)
+                              and b.week_start
+
+),
+
+row_size as (
+
+    select
+        week_start,
+        concept_class,
+        concept_norm,
+        count(distinct case when is_now then mention_id end)            as row_posts,
+        count(distinct case when not is_now then mention_id end)        as row_before
+    from row_posts
+    group by 1, 2, 3
+
+),
+
+row_hits as (
+
+    select rp.week_start, rp.concept_class, rp.concept_norm, rp.is_now, pw.term, pw.mention_id, pw.owner
+    from row_posts as rp
+    inner join hits as pw
+        on pw.mention_id = rp.mention_id
+
+)
+{%- endmacro %}
+
+
+{#
+  WORDS -> GROUPS -> STORIES, inside each partition (a board row for the driver line, a
+  week for the Rising list). Two macros, because each feature saves the groups as a TABLE
+  between them: as one query, the steps below reuse each other so often that Databricks
+  could not finish compiling it (2026-11-04: the driver query expanded to ~415,000 step
+  evaluations; every model that compiles fine there is under ~500). Split at the groups,
+  each query stays small and the rows are the same.
+
+  SPELLINGS (social_word_groups). สกุชชี่ / สกุชชี่เค้ก / เค้กสกุชชี่ are one word. A longer
+    word folds into a shorter word it contains when the shorter one is at least half its
+    length (สกุชชี่ -> สกุชชี่เค้ก, but coconut does not swallow "mango coconut sticky rice")
+    and it is the ONLY such word: ต้มโคล้งต้นหอม contains two different words, so it is a
+    combination, not a spelling, and joins neither. Two hops of parents cover real
+    spellings.
+
+  STORIES (social_word_stories). A group is shown by its most-posted spelling, or by a
+    longer spelling of it that carries 40%+ of that one's posts (สกุชชี่เค้ก reads better
+    than สกุชชี่ and is the same thing). Different words that ride on the same posts are one
+    story (the Starbucks holiday menu: mocha, reindeer brookie, oat milk ... in the same
+    nine posts). A group joins the BIGGEST group it shares at least `overlap` of the
+    smaller one's posts with, when that group is bigger; two hops. Inside a story, a word
+    that is part of another word is only its general form (มาม่า beside มาม่าเกาหลี) and
+    is not shown.
+
+  Inputs and outputs (CTE or relation names; macros emit CTEs, no leading `with`, no
+  trailing comma):
+    social_word_groups(cands, ...)            cands: partition..., term, n_posts
+      -> {prefix}_grp       partition..., term, n_posts, grp      every candidate -> its group
+    social_word_group_hits(groups, hits, ...) hits: partition..., term, post_key
+      -> {prefix}_grp_hits  partition..., grp, post_key           a group's posts
+    social_word_stories(groups, hits, ...)    groups: partition..., term, n_posts, grp
+      -> {prefix}_grp_hits as above, and
+         {prefix}_story     partition..., grp, head, grp_posts, also_written, story
+                            one row per group SHOWN in a story (general forms already dropped)
   Every "drop X when Y" is a left-join anti-join, not a correlated subquery: databricks
   restricts non-equality predicates in correlated subqueries, a join it never refuses.
 #}
-{% macro social_word_stories(cands, hits, partition, prefix, overlap) -%}
+{% macro social_word_groups(cands, partition, prefix) -%}
 {%- set p = partition -%}
 {{ prefix }}_contains as (
 
@@ -180,16 +270,26 @@
     left join {{ prefix }}_parent as p2
         on {{ _sw_on('p2', 'c', p) }} and p2.term = p1.parent
 
-),
+)
+{%- endmacro %}
 
+
+{% macro social_word_group_hits(groups, hits, partition, prefix) -%}
+{%- set p = partition -%}
 {{ prefix }}_grp_hits as (
 
     select distinct {{ _sw_cols('g', p) }}, g.grp, h.post_key
-    from {{ prefix }}_grp as g
+    from {{ groups }} as g
     inner join {{ hits }} as h
         on {{ _sw_on('h', 'g', p) }} and h.term = g.term
 
-),
+)
+{%- endmacro %}
+
+
+{% macro social_word_stories(groups, hits, partition, prefix, overlap) -%}
+{%- set p = partition -%}
+{{ social_word_group_hits(groups, hits, partition, prefix) }},
 
 {{ prefix }}_grp_posts as (
 
@@ -207,7 +307,7 @@
             partition by {{ _sw_cols('g', p) }}, g.grp
             order by g.n_posts desc, length(g.term), g.term
         )                                                               as rn
-    from {{ prefix }}_grp as g
+    from {{ groups }} as g
 
 ),
 
@@ -263,7 +363,7 @@
             row_number() over (
                 partition by {{ _sw_cols('g', p) }}, g.grp order by g.n_posts desc, g.term
             )                                                           as k
-        from {{ prefix }}_grp as g
+        from {{ groups }} as g
         inner join {{ prefix }}_head as h
             on {{ _sw_on('h', 'g', p) }} and h.grp = g.grp
         where g.term <> h.head

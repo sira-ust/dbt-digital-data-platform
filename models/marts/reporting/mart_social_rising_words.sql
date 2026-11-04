@@ -102,91 +102,21 @@ baseline_size as (
 
 ),
 
--- each word's posts per week; an account counts at most `cap` times
-word_owner_week as (
+-- the week's rising words with their spelling group, and the stories they make: built
+-- in int_social_rising_word_groups and int_social_rising_stories (as one query, the list
+-- was too big for Databricks to compile, 2026-11-04)
+rw_grp as (
 
-    select term, week_start, owner, count(distinct thread_key) as threads
-    from hits
-    group by 1, 2, 3
-
-),
-
-word_week as (
-
-    select
-        term,
-        week_start,
-        sum(least(threads, {{ cap }}))                                  as posts,
-        sum(threads)                                                    as raw_posts,
-        count(*)                                                        as accounts
-    from word_owner_week
-    group by 1, 2
+    select week_start, term, n_posts, grp
+    from {{ ref('int_social_rising_word_groups') }}
 
 ),
 
-word_baseline as (
+rw_story as (
 
-    select wk.week_start, ww.term, sum(ww.posts) as base_posts
-    from weeks as wk
-    inner join word_week as ww
-        on ww.week_start between cast({{ dbt.dateadd('day', -7 * base_weeks, 'wk.week_start') }} as date)
-                             and cast({{ dbt.dateadd('day', -7, 'wk.week_start') }} as date)
-    group by 1, 2
+    select * from {{ ref('int_social_rising_stories') }}
 
 ),
-
-scored as (
-
-    select
-        ww.week_start,
-        ww.term,
-        ww.posts,
-        ww.raw_posts,
-        ww.accounts,
-        1000.0 * ww.posts / wt.week_threads                             as per_k,
-        1000.0 * coalesce(wb.base_posts, 0) / bs.base_threads           as base_per_k
-    from weeks as wk
-    inner join word_week as ww
-        on ww.week_start = wk.week_start
-    inner join week_threads as wt
-        on wt.week_start = wk.week_start
-    inner join baseline_size as bs
-        on bs.week_start = wk.week_start
-    left join word_baseline as wb
-        on wb.week_start = wk.week_start and wb.term = ww.term
-    where bs.base_threads > 0
-
-),
-
-cands as (
-
-    select
-        week_start,
-        term,
-        posts                                                           as n_posts,
-        accounts,
-        per_k,
-        base_per_k,
-        (per_k + 0.5) / (base_per_k + 0.5)                              as growth
-    from scored
-    where posts >= {{ var('social_rising_words_min_posts') }}
-      and accounts >= {{ var('social_rising_words_min_accounts') }}
-      and raw_posts <= {{ var('social_rising_words_max_posts_per_account') }} * accounts
-      and base_per_k <= {{ var('social_rising_words_max_base_per_k') }}
-      and (per_k + 0.5) / (base_per_k + 0.5) >= {{ var('social_rising_words_min_growth') }}
-
-),
-
-cand_hits as (
-
-    select distinct pw.week_start, pw.term, pw.thread_key as post_key
-    from hits as pw
-    inner join cands as c
-        on c.week_start = pw.week_start and c.term = pw.term
-
-),
-
-{{ social_word_stories('cands', 'cand_hits', ['week_start'], 'rw', var('social_rising_words_story_overlap')) }},
 
 -- every post of the story's words, this week and the baseline weeks before it
 story_hits as (

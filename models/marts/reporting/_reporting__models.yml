@@ -788,6 +788,16 @@ models:
           - not_null:
               config:
                 where: "is_top_n"
+      - name: board_section
+        description: >
+          'posted' = the product had posts this week; 'quiet' = it had none and stays on the board only while it fades. board_rank lists every posted product before every quiet one, so the fade keeps a product on the board without holding it at the top. A data-hole week (is_fade_paused) counts as posted. Null off the board. Not board_status 'cooling' (past its peak), which a posted product can have.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['posted', 'quiet']
+          - not_null:
+              config:
+                where: "is_top_n"
       - name: week_end
         description: Last day of the calendar week (week_start + 6).
         tests: [not_null]

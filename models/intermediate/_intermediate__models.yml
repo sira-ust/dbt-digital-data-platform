@@ -1181,6 +1181,9 @@ models:
             expression: "(is_on_board and board_rank is not null and board_status is not null) or (not is_on_board and board_rank is null and board_status is null)"
       - dbt_utils.expression_is_true:
           arguments:
+            expression: "(is_on_board and board_section is not null) or (not is_on_board and board_section is null)"
+      - dbt_utils.expression_is_true:
+          arguments:
             expression: "not is_rising_candidate or rising_rank is not null"
     columns:
       - name: is_on_board
@@ -1190,6 +1193,13 @@ models:
           - accepted_values:
               arguments:
                 values: ['new', 'rising', 'steady', 'cooling']
+      - name: board_section
+        description: >
+          'posted' = the product had posts this week; 'quiet' = it had none and stays on the board only while it fades. board_rank lists every posted product before every quiet one, so the fade keeps a product on the board without holding it at the top. A data-hole week (is_fade_paused) counts as posted. Null off the board. Not board_status 'cooling' (past its peak), which a posted product can have.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['posted', 'quiet']
       - name: is_low_coverage
         description: The feed itself was thin that week (below social_trend_low_coverage_ratio x the median post count of the previous social_trend_coverage_baseline_weeks weeks). Its posts are scaled by the coverage and nothing enters through the fast lane.
         tests: [not_null]
@@ -1275,11 +1285,12 @@ models:
       not the row's own name — merged so one word written several ways is one word and
       words riding on the same posts are one story. No row when nothing stands out. Built
       because in 2026-W43 14 of the 25 "Mama Instant Noodles" posts were the WaiWai Quik
-      tom-klong-with-spring-onion trend, which no label showed. A table, read by
+      tom-klong-with-spring-onion trend, which no label showed. Built in three steps:
+      int_social_driver_words and int_social_driver_stories (tables) do the word
+      analysis, and this model (ephemeral) only writes the line; it is compiled into
       mart_social_trending_items, whose (week_start, concept_class, concept_norm) test
-      fails if a driver row ever duplicates a board row. It was ephemeral until
-      2026-11-04: compiled into the mart, the word analysis made that one statement
-      heavy enough to die on Databricks with "Invalid OperationHandle".
+      fails if a driver row ever duplicates a board row. As one query the analysis was too
+      big for Databricks to compile (2026-11-04: "Invalid OperationHandle").
     columns:
       - name: driven_by
         description: >
@@ -1291,6 +1302,52 @@ models:
         description: >
           Per word: posts this week, posts in the row over the baseline weeks before, and
           the other spellings that were merged into it ("also written").
+
+  - name: int_social_driver_words
+    description: >
+      Step 1 of the "Driven by" line (int_social_board_drivers): each board row's
+      candidate driver words this week, the strongest social_driver_candidates per row
+      by the rules in that model, with the spelling group each one belongs to (grp). A
+      table because the line, built as one query, was too big for Databricks to compile
+      (2026-11-04).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, concept_class, concept_norm, term]
+
+  - name: int_social_driver_stories
+    description: >
+      Step 2 of the "Driven by" line: each board row's driver words merged into stories.
+      Spellings of one word are one group; groups riding on the same posts are one story
+      (macros/social_words.sql). One row per (week, board row, group) shown in a story;
+      int_social_board_drivers writes the line from these rows. A table for the same
+      reason as int_social_driver_words.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, concept_class, concept_norm, grp]
+
+  - name: int_social_rising_word_groups
+    description: >
+      Step 1 of the rising-words list (mart_social_rising_words): each week's candidate
+      rising words, by the rules in that mart, with the spelling group each one belongs
+      to (grp). A table because the list, built as one query, was too big for Databricks
+      to compile (2026-11-04).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, term]
+
+  - name: int_social_rising_stories
+    description: >
+      Step 2 of the rising-words list: each week's rising words merged into stories, the
+      same way as the driver line's (macros/social_words.sql). One row per (week, group)
+      shown in a story; mart_social_rising_words builds the list from these rows. A table
+      for the same reason as int_social_rising_word_groups.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [week_start, grp]
 
   - name: int_rep_period_sales
     description: >

@@ -1,8 +1,4 @@
-{{ config(tags=['social']) }}
--- A TABLE, not ephemeral. Inlined, this whole word analysis ran inside the
--- mart_social_trending_items statement, and on Databricks (2026-11-04) that statement
--- died with "Invalid OperationHandle" after a 31-minute dbt_social step. Built once
--- here, the mart joins a small finished table. Same rows either way.
+{{ config(materialized='ephemeral', tags=['social']) }}
 {% set part = ['week_start', 'concept_class', 'concept_norm'] %}
 {% set base_weeks = var('social_words_baseline_weeks') %}
 {% set str = dbt.type_string() %}
@@ -36,36 +32,15 @@
 -- are merged into stories (macros/social_word_stories: one word written several ways is
 -- one word; words riding on the same posts are one story) and the best
 -- social_driver_story_count stories are shown.
+--
+-- THREE STEPS. int_social_driver_words picks each row's candidate words and their
+-- spelling groups, int_social_driver_stories merges them into stories (both tables),
+-- and this model only writes the line; it is compiled into mart_social_trending_items.
+-- As one query, the whole analysis was too big for Databricks to compile (2026-11-04).
 
-with board as (
+with {{ social_driver_rows(base_weeks) }},
 
-    select
-        week_start,
-        concept_class,
-        concept_norm,
-        lower(coalesce(product_name, concept_norm))                     as row_name
-    from {{ ref('int_social_trend_board') }}
-    where is_on_board
-
-),
-
--- int_social_post_words three ways: the words found in posts, every post (to size the
--- week) and the word list (Latin or not, English name)
-hits as (
-
-    select mention_id, week_start, owner, term
-    from {{ ref('int_social_post_words') }}
-    where term is not null
-
-),
-
-posts as (
-
-    select distinct mention_id, week_start
-    from {{ ref('int_social_post_words') }}
-
-),
-
+-- the word list (Latin or not, English name)
 words as (
 
     select distinct term, is_latin, gloss
@@ -74,166 +49,17 @@ words as (
 
 ),
 
--- every post's board product, mapped exactly as the board maps it (macros/social_words.sql)
-post_products as (
-
-    {{ social_post_products() }}
-
-),
-
--- each board row's posts: this week (is_now) and the baseline weeks before it
-row_posts as (
-
-    select distinct
-        b.week_start,
-        b.concept_class,
-        b.concept_norm,
-        pp.mention_id,
-        pp.week_start = b.week_start                                    as is_now
-    from board as b
-    inner join post_products as pp
-        on  pp.concept_class = b.concept_class
-        and pp.concept_norm  = b.concept_norm
-        and pp.week_start between cast({{ dbt.dateadd('day', -7 * base_weeks, 'b.week_start') }} as date)
-                              and b.week_start
-
-),
-
-row_size as (
-
-    select
-        week_start,
-        concept_class,
-        concept_norm,
-        count(distinct case when is_now then mention_id end)            as row_posts,
-        count(distinct case when not is_now then mention_id end)        as row_before
-    from row_posts
-    group by 1, 2, 3
-
-),
-
-row_hits as (
-
-    select rp.week_start, rp.concept_class, rp.concept_norm, rp.is_now, pw.term, pw.mention_id, pw.owner
-    from row_posts as rp
-    inner join hits as pw
-        on pw.mention_id = rp.mention_id
-
-),
-
--- how big the week is, and how common each word is across all of it
-week_size as (
-
-    select week_start, count(*) as week_posts
-    from posts
-    group by 1
-
-),
-
-word_week as (
-
-    select week_start, term, count(*) as week_word_posts
-    from hits
-    group by 1, 2
-
-),
-
--- the spellings that ARE a product, and its MAIN ones (20%+ of its tags)
-spellings as (
-
-    select concept_norm, term, count(*) as uses
-    from post_products
-    group by 1, 2
-
-),
-
-main_spellings as (
-
-    select s.concept_norm, s.term
-    from spellings as s
-    inner join (select concept_norm, max(uses) as top_uses from spellings group by 1) as m
-        on m.concept_norm = s.concept_norm
-    where s.uses >= 0.2 * m.top_uses
-
-),
-
-cands as (
-
-    select
-        h.week_start,
-        h.concept_class,
-        h.concept_norm,
-        h.term,
-        count(distinct case when h.is_now then h.mention_id end)        as n_posts,
-        count(distinct case when h.is_now then h.owner end)             as n_accounts,
-        count(distinct case when not h.is_now then h.mention_id end)    as n_before
-    from row_hits as h
-    group by 1, 2, 3, 4
-
-),
-
-own_spelling as (
-
-    select distinct c.week_start, c.concept_class, c.concept_norm, c.term
-    from cands as c
-    inner join spellings as s
-        on s.concept_norm = c.concept_norm and s.term = c.term
-
-),
-
-name_piece as (
-
-    select distinct c.week_start, c.concept_class, c.concept_norm, c.term
-    from cands as c
-    inner join main_spellings as ms
-        on ms.concept_norm = c.concept_norm and instr(ms.term, c.term) > 0
-
-),
-
-scored as (
-
-    select
-        c.*,
-        (c.n_posts * 1.0 / rs.row_posts) / (ww.week_word_posts * 1.0 / ws.week_posts) as lift,
-        c.n_posts * ln(ws.week_posts * 1.0 / ww.week_word_posts)        as score
-    from cands as c
-    inner join board as b
-        on {{ _sw_on('b', 'c', part) }}
-    inner join row_size as rs
-        on {{ _sw_on('rs', 'c', part) }}
-    inner join week_size as ws
-        on ws.week_start = c.week_start
-    inner join word_week as ww
-        on ww.week_start = c.week_start and ww.term = c.term
-    inner join words as w
-        on w.term = c.term
-    left join own_spelling as os
-        on {{ _sw_on('os', 'c', part) }} and os.term = c.term
-    left join name_piece as np
-        on {{ _sw_on('np', 'c', part) }} and np.term = c.term
-    where os.term is null
-      and np.term is null
-      and c.n_posts >= {{ var('social_driver_min_posts') }}
-      and c.n_accounts >= {{ var('social_driver_min_accounts') }}
-      and c.n_posts >= {{ var('social_driver_min_row_share') }} * rs.row_posts
-      -- already in the row's name
-      and instr(b.row_name, c.term) = 0
-      and (w.gloss is null or instr(b.row_name, lower(w.gloss)) = 0)
-      -- it must have GROWN inside the row (a new row has nothing to grow from)
-      and (rs.row_before < 5
-           or (c.n_posts * 1.0 / rs.row_posts) / ((c.n_before + 0.5) / (rs.row_before + 0.5))
-              >= {{ var('social_driver_min_row_growth') }})
-
-),
-
 top_cands as (
 
     select week_start, concept_class, concept_norm, term, n_posts, n_before, score
-    from scored
-    where lift >= {{ var('social_driver_min_lift') }}
-    qualify row_number() over (
-        partition by week_start, concept_class, concept_norm order by score desc, term
-    ) <= {{ var('social_driver_candidates') }}
+    from {{ ref('int_social_driver_words') }}
+
+),
+
+drv_grp as (
+
+    select week_start, concept_class, concept_norm, term, n_posts, grp
+    from {{ ref('int_social_driver_words') }}
 
 ),
 
@@ -247,7 +73,13 @@ cand_hits as (
 
 ),
 
-{{ social_word_stories('top_cands', 'cand_hits', part, 'drv', var('social_driver_story_overlap')) }},
+{{ social_word_group_hits('drv_grp', 'cand_hits', part, 'drv') }},
+
+drv_story as (
+
+    select * from {{ ref('int_social_driver_stories') }}
+
+),
 
 story_words as (
 

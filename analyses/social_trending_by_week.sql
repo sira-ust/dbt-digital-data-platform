@@ -27,9 +27,15 @@
 -- but for at most 2 weeks in a row: a drop that lasts is the feed's new size, and a
 -- product nobody posts about then fades like any other.
 --
--- STOCKABLE FIRST, ON THE ITEM BOARD. Branded and shelf products (`type`) rank ahead of
--- generic categories, so `rank` 1-N is the stockable list and the generic rows follow;
--- `stockable_rank` numbers the stockable rows alone. The dish board ranks on buzz alone.
+-- POSTED ABOUT THIS WEEK FIRST (2026-11). `section` = 'posted' rows had posts this week
+-- and come first; 'quiet' rows had none and stay on the board only while they fade.
+-- Show the quiet rows under their own heading at the bottom, not mixed in the list.
+-- (Not the same as `status` 'cooling', which a row with posts can have: past its peak.)
+--
+-- STOCKABLE FIRST, ON THE ITEM BOARD, within each section. Branded and shelf products
+-- (`type`) rank ahead of generic categories, so the stockable list comes first and the
+-- generic rows follow; `stockable_rank` numbers the stockable rows alone. The dish board
+-- ranks on buzz alone.
 --
 -- The two boards are ranked SEPARATELY and both come back, items first: 'item' is things
 -- we could stock, 'dish' is what people are eating.
@@ -203,6 +209,8 @@ select
     b.brand,
     -- new / rising / steady / cooling: where the product is in its run
     b.board_status                                           as status,
+    -- posted = posted about this week; quiet = no posts this week, fading off
+    b.board_section                                          as section,
     b.weeks_on_board,
     b.best_board_rank                                        as best_rank,
 

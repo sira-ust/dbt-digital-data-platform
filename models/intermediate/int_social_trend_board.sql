@@ -49,13 +49,21 @@
 --  STOCK) or generic (a category, commodity or dish; also any product not labelled
 --  yet). On the item board the two scopes are ranked SEPARATELY — fast lane, faded
 --  rank, stay-on rule each within its own scope, with social_trend_top_n / _stay_rank
---  for shelf and the smaller social_trend_generic_top_n / _stay_rank for general — and
---  board_rank then lists every shelf product BEFORE every generic one. A broad staple
---  ("fish sauce") can stay on the board, but never above a stockable product ("lay's
---  ice cream"), and the report can drop generics and sort by scope_rank alone.
+--  for shelf and the smaller social_trend_generic_top_n / _stay_rank for general — and,
+--  within each section of the board (ORDER, below), board_rank lists every shelf
+--  product BEFORE every generic one. A broad staple ("fish sauce") can stay on the
+--  board, but never above a stockable product in its section, and the report can drop
+--  generics and sort by scope_rank alone.
 --  The DISH board is one scope ranked on buzz alone, with social_trend_top_n /
 --  _stay_rank: shelf-first there put cafe cakes with no posts above the dishes people
 --  were actually posting about (2026-10-07).
+--
+--  ORDER (2026-11): board_rank lists the products posted about THIS week first
+--  (board_section 'posted'), then the ones with no posts this week that are still on
+--  the board while they fade (board_section 'quiet'). The fade decides who STAYS on;
+--  it no longer decides who is on TOP: in 2026-W44 Lay's Ice Cream (0 posts) sat at #2
+--  above a cookie with 11 posts. A data-hole week (is_fade_paused) keeps every product
+--  in 'posted', since the fade clock stops then.
 --
 --  RISING LIST (separate): the product's average share over the last
 --  social_trend_rising_recent_weeks normal weeks vs the social_trend_rising_baseline_weeks
@@ -414,11 +422,13 @@ board as (
 
     select
         *,
+        -- posted about this week first (a data-hole week keeps everyone there), then
         -- every shelf product before every generic one, each by faded score
         case when is_on_board then
             row_number() over (
                 partition by week_start, concept_class, is_on_board
-                order by case when scope = 'shelf' then 0 else 1 end,
+                order by case when has_posts or is_fade_paused then 0 else 1 end,
+                         case when scope = 'shelf' then 0 else 1 end,
                          faded_score desc, coalesce(mention_count, 0) desc, concept_norm
             ) end                                                       as board_rank,
         case when is_on_board then
@@ -499,7 +509,10 @@ select
     b.recent_mentions,
     b.week_posts,
     b.is_low_coverage,
-    b.is_fade_paused
+    b.is_fade_paused,
+    case when not b.is_on_board                                then null
+         when b.has_posts or b.is_fade_paused                  then 'posted'
+         else 'quiet' end                                               as board_section
 from board as b
 inner join qualifying as q
     on  q.concept_class = b.concept_class

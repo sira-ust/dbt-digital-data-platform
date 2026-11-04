@@ -193,10 +193,15 @@ Both features merge spellings of one word and words that ride on the same posts
 `social_words_account_cap` times. Category words and staples are kept out by
 `seed_social_generic_terms` (`applies_to = words` rows touch no board ranking).
 
-Three models carry them. `int_social_post_words` (a table) builds the word list, takes
-the posts and finds the words in them; `int_social_board_drivers` (a table, joined
-into `mart_social_trending_items` as `driven_by`) writes the driver lines; and
-`mart_social_rising_words` (a table) ranks the rising words. The map from a post to its
+`int_social_post_words` (a table) builds the word list, takes the posts and finds the
+words in them. Each feature then works in three steps: `int_social_driver_words` and
+`int_social_driver_stories` (tables) pick each board row's driver words and merge them
+into stories, and `int_social_board_drivers` (compiled into `mart_social_trending_items`
+as `driven_by`) writes the line; `int_social_rising_word_groups` and
+`int_social_rising_stories` (tables) do the same for the week, and
+`mart_social_rising_words` (a table) ranks the rising words. As one query each, both
+were too big for Databricks to compile (2026-11-04), so the steps are saved between
+them. The map from a post to its
 board row, which both need, is the `social_post_products` macro in
 `macros/social_words.sql`. Inlining the matching as well was tried: the same results, but
 a build ~10x slower, since the marts read it in many places and an inlined step re-runs

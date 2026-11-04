@@ -85,6 +85,7 @@ board as (
         b.board_rank,
         b.scope_rank,
         b.board_status,
+        b.board_section,
         b.weeks_on_board,
         b.best_board_rank,
         b.faded_score,
@@ -681,6 +682,7 @@ joined as (
         b.board_rank,
         b.scope_rank,
         b.board_status,
+        b.board_section,
         b.weeks_on_board,
         b.best_board_rank,
         b.faded_score,
@@ -750,9 +752,11 @@ select
     -- week also stopped the fade clock: at most social_trend_max_paused_weeks in a row,
     -- after which a lasting drop is the feed's new size and products fade again.
     --
-    -- SHELF FIRST: board_rank lists every branded / shelf product (is_shelf_product)
-    -- before any generic category. For the stockable-products view, filter
-    -- is_shelf_product and sort by scope_rank, its rank among shelf products alone.
+    -- ORDER: board_rank lists the products posted about this week first (board_section
+    -- 'posted'), then the ones with no posts this week that are still fading off the
+    -- board (board_section 'quiet'); within each, every branded / shelf product
+    -- (is_shelf_product) before any generic category. For the stockable-products view,
+    -- filter is_shelf_product and sort by scope_rank, its rank among shelf products alone.
     -- brand is the hook promo matching links a product to a promo item on.
     j.product_type,
     j.brand,
@@ -760,6 +764,7 @@ select
     j.board_rank,
     j.scope_rank,
     j.board_status,
+    j.board_section,
     j.weeks_on_board,
     j.best_board_rank,
     j.faded_score,
