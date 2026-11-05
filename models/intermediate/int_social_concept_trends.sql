@@ -622,29 +622,56 @@ scored as (
 -- neither raw metric survives a corpus that is 65% Instagram. follower_count is not in
 -- the ordering — it is NULL on 100% of Instagram rows, so it never ordered anything.
 -- mention_id last keeps the result deterministic across runs.
-links_ranked as (
+--
+-- DEAD POSTS GO. A post nobody engaged with or viewed (an Instagram post with no likes
+-- recorded, a web page, a video with no stats) shows nobody cared: it is a link only
+-- when the concept has no live post at all, so a thin row shows fewer links rather
+-- than dead ones. 2026-W44: 43 of the board's 267 links were dead.
+links_live as (
 
     select
         cms.week_start,
         cms.concept_class,
         cms.concept_norm,
+        cms.mention_id,
         cms.link,
-        row_number() over (
+        cms.role_rank,
+        cms.reach_ratio,
+        cms.engagement,
+        mcb.n_concepts_all,
+        coalesce(cms.engagement, 0) > 0 or coalesce(cms.views, 0) > 0     as is_live,
+        max(case when coalesce(cms.engagement, 0) > 0 or coalesce(cms.views, 0) > 0
+                 then 1 else 0 end) over (
             partition by cms.week_start, cms.concept_class, cms.concept_norm
-            order by case
-                         when cms.role_rank = 2                              then 0
-                         when cms.role_rank = 0 and mcb.n_concepts_all <= 2  then 1
-                         when cms.role_rank = 0                              then 2
-                         else 3
-                     end,
-                     coalesce(cms.reach_ratio, 0) desc,
-                     coalesce(cms.engagement, 0) desc,
-                     cms.mention_id
-        )                                                              as _rn
+        )                                                              as has_live
     from concept_mentions_shared as cms
     inner join mention_concept_breadth as mcb
         on mcb.mention_id = cms.mention_id
     where cms.link is not null
+
+),
+
+links_ranked as (
+
+    select
+        week_start,
+        concept_class,
+        concept_norm,
+        link,
+        row_number() over (
+            partition by week_start, concept_class, concept_norm
+            order by case
+                         when role_rank = 2                              then 0
+                         when role_rank = 0 and n_concepts_all <= 2      then 1
+                         when role_rank = 0                              then 2
+                         else 3
+                     end,
+                     coalesce(reach_ratio, 0) desc,
+                     coalesce(engagement, 0) desc,
+                     mention_id
+        )                                                              as _rn
+    from links_live
+    where is_live or has_live = 0
 
 ),
 

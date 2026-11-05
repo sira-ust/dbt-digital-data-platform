@@ -569,7 +569,7 @@ models:
               arguments:
                 expression: ">= 0"
       - name: source_links
-        description: Array of the top social_trend_link_count mention URLs behind this concept THAT WEEK (by reach then engagement). Top-N set, order not guaranteed.
+        description: Array of the top social_trend_link_count mention URLs behind this concept THAT WEEK (relevance tier, then reach, then engagement; posts with no engagement and no views only when the concept has no other). Top-N set, order not guaranteed.
       - name: trend_rank
         description: >
           1..N by trend_score desc WITHIN (week_start, concept_class) — each week's
@@ -1281,8 +1281,10 @@ models:
     description: >
       The "Driven by" line: for each board row each week, the words inside the row's own
       posts that are far more common there than in the week overall
-      (social_driver_min_lift), grew within the row (social_driver_min_row_growth) and are
-      not the row's own name — merged so one word written several ways is one word and
+      (social_driver_min_lift), grew within the row (social_driver_min_row_growth, now or
+      in the last social_driver_hold_weeks weeks), are not everyday words
+      (social_rising_words_max_base_per_k) and are not the row's own name — merged so
+      one word written several ways is one word and
       words riding on the same posts are one story. No row when nothing stands out. Built
       because in 2026-W43 14 of the 25 "Mama Instant Noodles" posts were the WaiWai Quik
       tom-klong-with-spring-onion trend, which no label showed. Built in three steps:

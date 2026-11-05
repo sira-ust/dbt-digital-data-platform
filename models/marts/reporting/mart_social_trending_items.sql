@@ -99,6 +99,7 @@ board as (
         v.related_products,
         d.driven_by,
         d.driven_by_detail,
+        d.driver_links,
         t.trend_rank,
         t.rank_change,
         t.mention_count,
@@ -696,6 +697,7 @@ joined as (
         b.related_products,
         b.driven_by,
         b.driven_by_detail,
+        b.driver_links,
         b.trend_rank,
         b.rank_change,
         b.mention_count,
@@ -785,6 +787,9 @@ select
     -- 25 posts". Null when nothing stands out. See int_social_board_drivers.
     j.driven_by,
     j.driven_by_detail,
+    -- the posts behind driven_by (up to social_trend_link_count, an unordered set like
+    -- source_links): show these first, so a row's links match its line
+    j.driver_links,
 
     -- social trend signal for THIS WEEK alone (null on a week with no posts)
     j.trend_rank,

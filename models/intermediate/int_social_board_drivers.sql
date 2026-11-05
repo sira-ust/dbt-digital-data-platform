@@ -21,9 +21,15 @@
 --   * social_driver_min_lift times more common in the row than in the week overall
 --     (otherwise it is just a common word);
 --   * social_driver_min_row_growth times more common than in the row's own posts over
---     the social_words_baseline_weeks before — a word that was always there (chili in
---     fish-sauce recipes) describes the row, it does not explain this week. A row with
---     fewer than 5 earlier posts is new, so this test is skipped;
+--     the social_words_baseline_weeks before — a word that was always there describes
+--     the row, it does not explain this week. A row with fewer than 5 earlier posts is
+--     new, so this test is skipped. A word that passed it in the last
+--     social_driver_hold_weeks weeks still counts while it passes the rest: the trend
+--     stopped growing, it did not stop (Mama's spring onion in 2026-W44: in 7 of 14
+--     posts, the same half as the weeks before);
+--   * not an everyday word: a usual share above social_rising_words_max_base_per_k per
+--     1,000 of ALL posts over the baseline weeks, the Rising list's cut-off. Chili,
+--     sauce and broth ride along with any dish (chili in fish-sauce recipes);
 --   * not the row itself: not one of its spellings, not a piece of its MAIN spellings
 --     (ส้ม is in ส้มตำ, มาม่า in มาม่าเกาหลี) and not already in its name. Minor spellings
 --     do not count: the name step files variants under the parent (มาม่าต้นหอม is filed
@@ -35,7 +41,8 @@
 --
 -- THREE STEPS. int_social_driver_words picks each row's candidate words and their
 -- spelling groups, int_social_driver_stories merges them into stories (both tables),
--- and this model only writes the line; it is compiled into mart_social_trending_items.
+-- and this model only writes the line and picks the posts behind it (driver_links); it
+-- is compiled into mart_social_trending_items.
 -- As one query, the whole analysis was too big for Databricks to compile (2026-11-04).
 
 with {{ social_driver_rows(base_weeks) }},
@@ -219,31 +226,143 @@ word_detail as (
         )                                                               as detail_rank
     from shown
 
+),
+
+lines as (
+
+    select
+        st.week_start,
+        st.concept_class,
+        st.concept_norm,
+        concat_ws(' · ',
+            max(case when st.story_rank = 1 then st.story_text end),
+            max(case when st.story_rank = 2 then st.story_text end))   as driven_by,
+        max(wd.detail_text)                                             as driven_by_detail
+    from story_text as st
+    left join (
+        select
+            week_start,
+            concept_class,
+            concept_norm,
+            concat_ws('; ',
+                max(case when detail_rank = 1 then detail end),
+                max(case when detail_rank = 2 then detail end),
+                max(case when detail_rank = 3 then detail end),
+                max(case when detail_rank = 4 then detail end),
+                max(case when detail_rank = 5 then detail end),
+                max(case when detail_rank = 6 then detail end))        as detail_text
+        from word_detail
+        group by 1, 2, 3
+    ) as wd
+        on {{ _sw_on('wd', 'st', part) }}
+    group by 1, 2, 3
+
+),
+
+-- THE POSTS BEHIND THE LINE, as links a reader can open: the row's posts this week that
+-- carry a shown word. Those carrying more of the shown words first, then the best
+-- performers for their platform: engagement and views over that channel's typical
+-- post that week, as the row's own links are ranked (int_social_concept_trends), so a
+-- liked Instagram post is not sorted under a TikTok with a few views. A post nobody
+-- engaged with or viewed is a link only when the row has nothing else. A YouTube
+-- video's comments are one post, linked to the video. Without these the row's links are
+-- its biggest posts on ANY subject: Mama's in 2026-W44 led with a pad kee mao video
+-- while the line said spring onion.
+post_links as (
+
+    select
+        pw.mention_id,
+        max(pw.thread_key)                                              as thread_key,
+        max(pw.link)                                                    as link
+    from {{ ref('int_social_post_words') }} as pw
+    where pw.link is not null
+    group by 1
+
+),
+
+channel_week as (
+
+    select
+        cast(posted_week as date)                                       as week_start,
+        channel,
+        median(coalesce(likes, 0) + coalesce(comments, 0) + coalesce(shares, 0)) as median_engagement,
+        median(coalesce(views, 0))                                      as median_views
+    from {{ ref('fct_social_mentions') }}
+    group by 1, 2
+
+),
+
+driver_posts as (
+
+    select
+        s.week_start,
+        s.concept_class,
+        s.concept_norm,
+        p.thread_key,
+        max(p.link)                                                     as link,
+        count(distinct s.grp)                                           as words_in_post,
+        max(coalesce(f.likes, 0) + coalesce(f.comments, 0) + coalesce(f.shares, 0)) as engagement,
+        max(coalesce(f.views, 0))                                       as views,
+        max((case when cw.median_engagement > 0
+                  then (coalesce(f.likes, 0) + coalesce(f.comments, 0) + coalesce(f.shares, 0)) * 1.0
+                       / cw.median_engagement
+                  else 0 end)
+          + (case when cw.median_views > 0 then coalesce(f.views, 0) * 1.0 / cw.median_views
+                  else 0 end))                                          as reach
+    from drv_story as s
+    inner join story_ranked as sr
+        on {{ _sw_on('sr', 's', part) }} and sr.story = s.story
+    inner join drv_grp_hits as gh
+        on {{ _sw_on('gh', 's', part) }} and gh.grp = s.grp
+    inner join post_links as p
+        on p.mention_id = gh.post_key
+    inner join {{ ref('fct_social_mentions') }} as f
+        on f.mention_id = gh.post_key
+    left join channel_week as cw
+        on cw.week_start = s.week_start and cw.channel = f.channel
+    where sr.story_rank <= {{ var('social_driver_story_count') }}
+    group by 1, 2, 3, 4
+
+),
+
+driver_links_ranked as (
+
+    select
+        d.*,
+        row_number() over (
+            partition by d.week_start, d.concept_class, d.concept_norm
+            order by d.words_in_post desc, d.reach desc, d.engagement desc, d.link
+        )                                                               as link_rank
+    from (
+        select
+            *,
+            max(case when engagement > 0 or views > 0 then 1 else 0 end) over (
+                partition by week_start, concept_class, concept_norm
+            )                                                           as has_live
+        from driver_posts
+    ) as d
+    where d.engagement > 0 or d.views > 0 or d.has_live = 0
+
+),
+
+-- no `order by` inside array_agg (Databricks' collect_list has none): a top-N SET, as
+-- int_social_concept_trends' source_links
+driver_links as (
+
+    select week_start, concept_class, concept_norm, array_agg(link) as driver_links
+    from driver_links_ranked
+    where link_rank <= {{ var('social_trend_link_count') }}
+    group by 1, 2, 3
+
 )
 
 select
-    st.week_start,
-    st.concept_class,
-    st.concept_norm,
-    concat_ws(' · ',
-        max(case when st.story_rank = 1 then st.story_text end),
-        max(case when st.story_rank = 2 then st.story_text end))       as driven_by,
-    max(wd.detail_text)                                                 as driven_by_detail
-from story_text as st
-left join (
-    select
-        week_start,
-        concept_class,
-        concept_norm,
-        concat_ws('; ',
-            max(case when detail_rank = 1 then detail end),
-            max(case when detail_rank = 2 then detail end),
-            max(case when detail_rank = 3 then detail end),
-            max(case when detail_rank = 4 then detail end),
-            max(case when detail_rank = 5 then detail end),
-            max(case when detail_rank = 6 then detail end))            as detail_text
-    from word_detail
-    group by 1, 2, 3
-) as wd
-    on {{ _sw_on('wd', 'st', part) }}
-group by 1, 2, 3
+    l.week_start,
+    l.concept_class,
+    l.concept_norm,
+    l.driven_by,
+    l.driven_by_detail,
+    dl.driver_links
+from lines as l
+left join driver_links as dl
+    on {{ _sw_on('dl', 'l', part) }}

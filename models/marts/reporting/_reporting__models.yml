@@ -779,6 +779,14 @@ models:
           Null when nothing stands out or the row had too few posts.
       - name: driven_by_detail
         description: Per word behind driven_by — posts this week, posts in the weeks before, other spellings merged into it.
+      - name: driver_links
+        description: >
+          The posts behind driven_by, as links (up to social_trend_link_count; an unordered
+          set like source_links): this week's posts carrying the most shown words, then
+          the best performers for their platform, as source_links are ranked; a post with
+          no engagement and no views only when nothing else carries the words.
+          analyses/social_trending_by_week.sql lists them before source_links, so a row's
+          links match its line. Null with driven_by.
       - name: board_status
         description: new / rising / steady / cooling while on the board; null off it.
         tests:
@@ -893,7 +901,11 @@ models:
           week-over-week rise (redefined from the old half-window version, which was
           volume-driven). Null on a concept's first week. Not the rank.
       - name: source_links
-        description: Array of the top mention URLs behind the trend THAT WEEK (by reach then engagement).
+        description: >
+          Array of the top mention URLs behind the trend THAT WEEK: posts about it first,
+          then by reach (engagement and views against the channel's typical post) and
+          engagement. A post with no engagement and no views is left out unless the row
+          has nothing else, so a thin row shows fewer links rather than dead ones.
       - name: distinct_authors
         description: >
           Distinct authors behind the trend (channel-scoped; anonymised Instagram rows each

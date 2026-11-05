@@ -46,6 +46,31 @@ word_week as (
 
 ),
 
+-- how common each word USUALLY is across all posts, over the baseline weeks before. An
+-- everyday word (chili, sauce, broth) rides along with any dish, so it never drives a
+-- row: the same cut-off as the Rising list.
+base_size as (
+
+    select wk.week_start, sum(ws.week_posts) as base_posts
+    from week_size as wk
+    inner join week_size as ws
+        on ws.week_start between cast({{ dbt.dateadd('day', -7 * base_weeks, 'wk.week_start') }} as date)
+                             and cast({{ dbt.dateadd('day', -7, 'wk.week_start') }} as date)
+    group by 1
+
+),
+
+word_base as (
+
+    select wk.week_start, ww.term, sum(ww.week_word_posts) as base_word_posts
+    from week_size as wk
+    inner join word_week as ww
+        on ww.week_start between cast({{ dbt.dateadd('day', -7 * base_weeks, 'wk.week_start') }} as date)
+                             and cast({{ dbt.dateadd('day', -7, 'wk.week_start') }} as date)
+    group by 1, 2
+
+),
+
 -- the spellings that ARE a product, and its MAIN ones (20%+ of its tags)
 spellings as (
 
@@ -103,7 +128,11 @@ scored as (
     select
         c.*,
         (c.n_posts * 1.0 / rs.row_posts) / (ww.week_word_posts * 1.0 / ws.week_posts) as lift,
-        c.n_posts * ln(ws.week_posts * 1.0 / ww.week_word_posts)        as score
+        c.n_posts * ln(ws.week_posts * 1.0 / ww.week_word_posts)        as score,
+        -- it GREW inside the row (a new row has nothing to grow from)
+        (rs.row_before < 5
+         or (c.n_posts * 1.0 / rs.row_posts) / ((c.n_before + 0.5) / (rs.row_before + 0.5))
+            >= {{ var('social_driver_min_row_growth') }})                as has_grown
     from cands as c
     inner join board as b
         on {{ _sw_on('b', 'c', part) }}
@@ -119,6 +148,10 @@ scored as (
         on {{ _sw_on('os', 'c', part) }} and os.term = c.term
     left join name_piece as np
         on {{ _sw_on('np', 'c', part) }} and np.term = c.term
+    left join base_size as bs
+        on bs.week_start = c.week_start
+    left join word_base as wb
+        on wb.week_start = c.week_start and wb.term = c.term
     where os.term is null
       and np.term is null
       and c.n_posts >= {{ var('social_driver_min_posts') }}
@@ -127,18 +160,38 @@ scored as (
       -- already in the row's name
       and instr(b.row_name, c.term) = 0
       and (w.gloss is null or instr(b.row_name, lower(w.gloss)) = 0)
-      -- it must have GROWN inside the row (a new row has nothing to grow from)
-      and (rs.row_before < 5
-           or (c.n_posts * 1.0 / rs.row_posts) / ((c.n_before + 0.5) / (rs.row_before + 0.5))
-              >= {{ var('social_driver_min_row_growth') }})
+      -- not an everyday word
+      and coalesce(1000.0 * wb.base_word_posts / nullif(bs.base_posts, 0), 0)
+          <= {{ var('social_rising_words_max_base_per_k') }}
+
+),
+
+-- a word that grew inside the row in the last social_driver_hold_weeks weeks keeps
+-- driving it while it still passes every other test: the trend stopped growing, it did
+-- not stop. 2026-W44: Mama's spring onion was in 7 of 14 posts, the same half as the
+-- weeks before, so the growth test alone hid why the row was #1.
+held as (
+
+    select
+        *,
+        -- the last earlier week the word grew inside this row (a window, not a self-join:
+        -- a second read of `scored` would double what Databricks has to compile)
+        max(case when has_grown and lift >= {{ var('social_driver_min_lift') }} then week_start end) over (
+            partition by concept_class, concept_norm, term
+            order by week_start
+            rows between unbounded preceding and 1 preceding
+        )                                                               as last_grown_week
+    from scored
 
 ),
 
 top_cands as (
 
     select week_start, concept_class, concept_norm, term, n_posts, n_before, score
-    from scored
+    from held
     where lift >= {{ var('social_driver_min_lift') }}
+      and (has_grown
+           or last_grown_week >= cast({{ dbt.dateadd('day', -7 * var('social_driver_hold_weeks'), 'week_start') }} as date))
     qualify row_number() over (
         partition by week_start, concept_class, concept_norm order by score desc, term
     ) <= {{ var('social_driver_candidates') }}

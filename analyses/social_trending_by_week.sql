@@ -264,9 +264,15 @@ select
     concat_ws(', ', b.nearest_items)                         as nearest_items,
     b.action_signal,
 
-    -- EVERY link, as the array itself (up to 5 posts). A CSV/Excel download serialises
-    -- it to ["url", "url", …]; for plain text use concat_ws(', ', b.source_links).
-    b.source_links                                           as example_post
+    -- up to 5 links, as the array itself. A row with a driven_by line lists the posts
+    -- behind it FIRST, so its links match its line (Mama in 2026-W44: the spring onion
+    -- posts, not a pad kee mao video), then its biggest other posts; any other row keeps
+    -- its biggest posts. A CSV/Excel download serialises it to ["url", "url", …]; for
+    -- plain text wrap it in concat_ws(', ', …).
+    case when b.driver_links is null then b.source_links
+         else slice(array_distinct(concat(b.driver_links,
+                                          coalesce(b.source_links, cast(array() as array<string>)))), 1, 5)
+    end                                                      as example_post
 
 from board as b
 left join prev_week as p

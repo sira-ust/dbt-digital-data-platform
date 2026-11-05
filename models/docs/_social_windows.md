@@ -181,6 +181,12 @@ post was tagged:
   row's own posts that are much more common there than in the week overall and grew
   within the row over the `social_words_baseline_weeks` (4) before. Mama in 2026-W43:
   "spring onion ต้นหอม + mama tom klong noodles (มาม่าต้มโคล้ง) — together in 12 of 25 posts".
+  A word that grew in the last `social_driver_hold_weeks` (3) keeps the line while it
+  still passes the rest, so a trend that stops growing does not vanish: Mama in 2026-W44,
+  spring onion in 7 of 14 posts. Everyday words (a usual share above
+  `social_rising_words_max_base_per_k` per 1,000 posts: chili, sauce, broth) never count.
+  The posts behind the line are `driver_links`, and the report lists them before the
+  row's other links, so the links show what the line says.
 - **Rising words** (`mart_social_rising_words`): words whose share of the week's posts
   jumped against the same 4 weeks, board row or not. Tom klong was the top riser of
   2026-W42, a week before it filled the Mama row.
