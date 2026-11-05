@@ -27,9 +27,15 @@
 -- but for at most 2 weeks in a row: a drop that lasts is the feed's new size, and a
 -- product nobody posts about then fades like any other.
 --
--- STOCKABLE FIRST, ON THE ITEM BOARD. Branded and shelf products (`type`) rank ahead of
--- generic categories, so `rank` 1-N is the stockable list and the generic rows follow;
--- `stockable_rank` numbers the stockable rows alone. The dish board ranks on buzz alone.
+-- POSTED ABOUT THIS WEEK FIRST (2026-11). `section` = 'posted' rows had posts this week
+-- and come first; 'quiet' rows had none and stay on the board only while they fade.
+-- Show the quiet rows under their own heading at the bottom, not mixed in the list.
+-- (Not the same as `status` 'cooling', which a row with posts can have: past its peak.)
+--
+-- STOCKABLE FIRST, ON THE ITEM BOARD, within each section. Branded and shelf products
+-- (`type`) rank ahead of generic categories, so the stockable list comes first and the
+-- generic rows follow; `stockable_rank` numbers the stockable rows alone. The dish board
+-- ranks on buzz alone.
 --
 -- The two boards are ranked SEPARATELY and both come back, items first: 'item' is things
 -- we could stock, 'dish' is what people are eating.
@@ -73,6 +79,14 @@
 -- 2,050 anonymous searches on the website. Read that row as "somebody looked, we cannot
 -- say which account", NOT as "no demand". It is also why ust_accounts is a floor on
 -- every row, never an exact headcount.
+--
+-- WHAT IS DRIVING THE ROW (2026-10). `driven_by` reads the words inside the row's own
+-- posts, not the product list, so it can say what the row's name hides — in 2026-W43
+-- "Mama Instant Noodles" read "spring onion ต้นหอม + mama tom klong noodles (มาม่าต้มโคล้ง)
+-- — together in 12 of 25 posts": the WaiWai Quik tom klong trend. Show it under the
+-- row's name. Blank = nothing stood out. `driven_by_detail` is the per-word evidence.
+-- Words rising this week WITHOUT a row of their own are in a separate query,
+-- analyses/social_rising_by_week.sql — one row per word, not per board row.
 --
 -- DO NOT SUM THESE DOWN THE PAGE. They are attributed to the PRODUCT, and the board can
 -- carry one product under two names (an English and a Thai spelling, before concept
@@ -188,10 +202,15 @@ select
         else 'same'
     end                                                      as movement,
     b.concept_label                                          as trending,
+    -- what the row's own posts are about this week; shown under the name. See header.
+    b.driven_by,
+    b.driven_by_detail,
     b.product_type                                           as type,
     b.brand,
     -- new / rising / steady / cooling: where the product is in its run
     b.board_status                                           as status,
+    -- posted = posted about this week; quiet = no posts this week, fading off
+    b.board_section                                          as section,
     b.weeks_on_board,
     b.best_board_rank                                        as best_rank,
 
@@ -245,9 +264,15 @@ select
     concat_ws(', ', b.nearest_items)                         as nearest_items,
     b.action_signal,
 
-    -- EVERY link, as the array itself (up to 5 posts). A CSV/Excel download serialises
-    -- it to ["url", "url", …]; for plain text use concat_ws(', ', b.source_links).
-    b.source_links                                           as example_post
+    -- up to 5 links, as the array itself. A row with a driven_by line lists the posts
+    -- behind it FIRST, so its links match its line (Mama in 2026-W44: the spring onion
+    -- posts, not a pad kee mao video), then its biggest other posts; any other row keeps
+    -- its biggest posts. A CSV/Excel download serialises it to ["url", "url", …]; for
+    -- plain text wrap it in concat_ws(', ', …).
+    case when b.driver_links is null then b.source_links
+         else slice(array_distinct(concat(b.driver_links,
+                                          coalesce(b.source_links, cast(array() as array<string>)))), 1, 5)
+    end                                                      as example_post
 
 from board as b
 left join prev_week as p

@@ -115,6 +115,8 @@ CONSOLIDATE_INSTRUCTIONS = """You merge duplicate product names from a food soci
 
 Different flavours, different variants, different sizes of a different product, a brand vs one of its products, or a dish vs a packaged product are NOT the same. When in doubt, do not merge.
 
+A name may be followed by how the posts actually wrote it, often in Thai or Vietnamese. Two names that the posts wrote the same way are the same product, however differently they were translated ("chewy strawberry cookie" and "chuvy strawberry cookie" both written ชูวี่คุกกี้สตรอเบอร์รี่).
+
 Reply with one line per set of duplicates and nothing else, TAB-separated:
 <group number>\t<comma-separated item numbers that are the same product>
 A name with no duplicate gets no line. A group with no duplicates gets no line."""
@@ -379,35 +381,97 @@ def _words(key: str) -> frozenset:
     return frozenset(w for w in (key or "").split() if w not in STOPWORDS and len(w) > 1)
 
 
+def _near(a: str, b: str) -> bool:
+    """The same word, or two transliterations of one: "chewy" / "chuvy" (ชูวี่) and
+    "frutti" / "fruity" (ฟรุตตี้) kept the Chuvy cookie and the warabi mochi apart
+    (2026-W44). Long words only, same first two letters: a short word has too many
+    neighbours. A false pair only costs the AI one more look; it still decides."""
+    return a == b or (len(a) >= 5 and len(b) >= 5 and a[:2] == b[:2]
+                      and difflib.SequenceMatcher(None, a, b).ratio() >= 0.6)
+
+
+def _shared(a: frozenset, b: frozenset) -> int:
+    return sum(1 for w in a if any(_near(w, v) for v in b))
+
+
 def consolidation_clusters(products: list) -> list:
     """Groups of products whose names share most of their words: overlap coefficient
-    |A & B| / min(|A|, |B|) >= 2/3 with at least two shared words. STAR-shaped, not
+    |A & B| / min(|A|, |B|) >= 2/3 with at least two shared words, where a word also
+    matches a near-identical spelling of itself (_near). STAR-shaped, not
     chained: going most-posted first, a product groups only with names that overlap IT
     directly. Chaining (union-find) linked "banh mi" to "fish sauce" through a dozen
-    intermediate names and produced one meaningless 15-name group (2026-10-06)."""
+    intermediate names and produced one meaningless 15-name group (2026-10-06).
+    Then two narrow additions, each product still in at most one group: a product left
+    in no group joins the group of a look-alike (one hop), and products the posts wrote
+    identically are compared whatever their English names. The AI decides every merge."""
     words = [_words(p["product_key"]) for p in products]
     index = {}
     for i, ws in enumerate(words):
         for w in ws:
             index.setdefault(w, []).append(i)
+            if len(w) >= 5:                       # near spellings share their first two letters
+                index.setdefault("~" + w[:2], []).append(i)
+    def candidates(w):
+        return index[w] + (index.get("~" + w[:2], []) if len(w) >= 5 else [])
+
+    def look_alike(i, j):
+        shared = _shared(words[i], words[j])
+        return shared >= 2 and shared / min(len(words[i]), len(words[j])) >= 2 / 3
+
     order = sorted(range(len(products)), key=lambda i: -products[i]["posts"])
-    taken, clusters = set(), []
+    groups, home = [], {}                  # home: product -> its group; one group each
     for i in order:
-        if i in taken or len(words[i]) < 2:
+        if i in home or len(words[i]) < 2:
             continue
         near = set()
         for w in words[i]:
-            for j in index[w]:
-                if j == i or j in taken:
-                    continue
-                shared = len(words[i] & words[j])
-                if shared >= 2 and shared / min(len(words[i]), len(words[j])) >= 2 / 3:
+            for j in candidates(w):
+                if j != i and j not in home and j not in near and look_alike(i, j):
                     near.add(j)
         if near:
             members = [i] + sorted(near, key=lambda j: -products[j]["posts"])[:CONSOLIDATE_CLUSTER_MAX - 1]
-            taken.update(members)
-            clusters.append([products[m] for m in members])
-    return clusters
+            for m in members:
+                home[m] = len(groups)
+            groups.append(members)
+
+    def join(k, g):
+        if len(groups[g]) < CONSOLIDATE_CLUSTER_MAX:
+            groups[g].append(k)
+            home[k] = g
+
+    # LEFTOVERS: a product in no group joins the group of a look-alike that is in one. One
+    # hop, so no chain: "warabi frutti" looks like "warabi mochi fruity", which sits in
+    # warabi mochi's group, and was never compared with any of them (2026-W44).
+    for i in order:
+        if i in home or len(words[i]) < 2:
+            continue
+        hit = next((j for w in words[i] for j in candidates(w) if j in home and look_alike(i, j)), None)
+        if hit is not None:
+            join(i, home[hit])
+    # SAME SPELLING: products the posts wrote identically are compared, whatever their
+    # English names. The name step runs per (board, spelling), so one Thai name tagged as
+    # a dish in one post and an item in another can get two names: ชูวี่คุกกี้สตรอเบอร์รี่
+    # became both "chewy strawberry cookie" and "chuvy strawberry cookie" (2026-W44).
+    owners = {}
+    for i, p in enumerate(products):
+        for n in p["names"]:
+            text = (n.get("concept_text") or "").strip().casefold()
+            if text:
+                owners.setdefault(text, set()).add(i)
+    for ks in owners.values():
+        loose = sorted((k for k in ks if k not in home), key=lambda k: -products[k]["posts"])
+        if len(ks) < 2 or not loose:
+            continue
+        homes = sorted({home[k] for k in ks if k in home})
+        if homes:
+            for k in loose:
+                join(k, homes[0])
+        elif len(loose) >= 2:
+            members = loose[:CONSOLIDATE_CLUSTER_MAX]
+            for k in members:
+                home[k] = len(groups)
+            groups.append(members)
+    return [[products[m] for m in g] for g in groups]
 
 
 def read_first_seen(backend: str) -> dict:
@@ -455,7 +519,7 @@ def read_product_names(backend: str) -> list:
     rel = DBX_CANON_REL if backend == "databricks" else DUCKDB_CANON_REL
     rows = _query(backend, f"""
         select c.product_key, c.product_name, c.product_class, c.product_mentions,
-               c.concept_class, c.concept_norm, s.concept_text, s.canonical_class
+               c.concept_class, c.concept_norm, c.name_mentions, s.concept_text, s.canonical_class
         from {rel} as c
         left join {('ust_databricks.ust_staging' if backend == 'databricks' else 'ust_staging')}.stg_mentionlytics__concept_canon as s
             on s.concept_class = c.concept_class and s.concept_norm = c.concept_norm
@@ -481,11 +545,29 @@ def _product_types(backend: str) -> dict:
         return {}
 
 
+def _written(p: dict, k: int = 2) -> list:
+    """How the posts wrote a product most often (its top spellings, often Thai), leaving
+    out the ones that only repeat its English name."""
+    seen, out = {(p["product_name"] or "").casefold()}, []
+    for n in sorted(p["names"], key=lambda n: -int(n.get("name_mentions") or 0)):
+        text = (n.get("concept_text") or n.get("concept_norm") or "").strip()
+        if text and text.casefold() not in seen:
+            seen.add(text.casefold())
+            out.append(text)
+        if len(out) == k:
+            break
+    return out
+
+
+def _product_line(i: int, p: dict) -> str:
+    w = _written(p)
+    return f"  {i}. [{p['product_class']}] {p['product_name']}" + (f"  (written: {', '.join(w)})" if w else "")
+
+
 def consolidate_call(client, model: str, clusters: list) -> list:
     """-> list of (cluster_index, [product indexes that are one product])."""
     text = "\n\n".join(
-        f"GROUP {g}\n" + "\n".join(f"  {i}. [{p['product_class']}] {p['product_name']}"
-                                     for i, p in enumerate(c))
+        f"GROUP {g}\n" + "\n".join(_product_line(i, p) for i, p in enumerate(c))
         for g, c in enumerate(clusters))
     resp = client.messages.create(model=model, max_tokens=MAX_TOKENS, system=CONSOLIDATE_INSTRUCTIONS,
                                   messages=[{"role": "user", "content": text}])

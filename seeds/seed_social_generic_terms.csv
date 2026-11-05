@@ -66,3 +66,46 @@ jelly,item,en,too_broad — a category,true
 green tea,item,en,borderline — arguably a tea SKU but as broad as coffee; may also be swallowing the matcha signal. Left OFF pending a buyer's call,false
 yogurt,item,en,borderline — a category (greek yogurt / oat milk are the specific forms) but a yogurt SKU is orderable. Left OFF pending a buyer's call,false
 fresh milk,item,en,borderline — milk cartons ARE orderable so kept ON the board; listed only to record the decision,false
+ขนม,words,th,category word (snack / dessert of any kind) — rises and falls with the feed's mix and is never something to act on,true
+ขนมหวาน,words,th,category word (sweets),true
+ขนมไทย,words,th,category word (Thai dessert of any kind),true
+ขนมญี่ปุ่น,words,th,category word (Japanese snack of any kind),true
+ขนมขบเคี้ยว,words,th,category word (snack food),true
+เครื่องดื่ม,words,th,category word (drinks) — 508 posts in 2026-W43 and 2.5x usual purely from the feed's mix,true
+เครื่องปรุงรส,words,th,category word (seasoning) — mostly shop listing pages,true
+อาหาร,words,th,category word (food),true
+อาหารไทย,words,th,category word (Thai food),true
+อาหารพร้อมทาน,words,th,category word (ready meal),true
+ของหวาน,words,th,category word (dessert),true
+ของกิน,words,th,category word (things to eat),true
+ธัญพืช,words,th,category word (grains / cereal),true
+โปรตีน,words,th,category word (protein) — a nutrient not an item,true
+ข้าวสาร,words,th,commodity (milled rice) — the board already stoplists ข้าว,true
+น้ำหวาน,words,th,category word (sweet syrup drink of any kind),true
+บะหมี่กึ่งสำเร็จรูป,words,th,category word (instant noodles) — the brand rows carry the signal,true
+ปลา,words,th,staple (fish) — Thai form of a commodity the board stoplists in English,true
+กุ้ง,words,th,staple (shrimp),true
+หอย,words,th,staple (shellfish),true
+ครีม,words,th,staple (cream),true
+ซอส,words,th,staple (sauce),true
+มัน,words,th,too ambiguous to read (fat / potato / the pronoun it),true
+น้ำซุป,words,th,staple (broth),true
+น้ำจิ้ม,words,th,staple (dipping sauce),true
+ขนมปัง,words,th,staple (bread) — Thai form of a word the board stoplists in English,true
+กาแฟ,words,th,category word (coffee) — Thai form of a word the board stoplists in English,true
+น้ำตาลทราย,words,th,commodity (granulated sugar),true
+หอมแดง,words,th,commodity (shallot),true
+ก๋วยเตี๋ยว,words,th,category word (noodle soup),true
+cơm,words,vi,commodity (rice) — Vietnamese form of a word the board stoplists in English,true
+dessert,words,en,category word,true
+desserts,words,en,category word,true
+drink,words,en,category word,true
+drinks,words,en,category word,true
+snack,words,en,category word,true
+snacks,words,en,category word,true
+food,words,en,category word,true
+thai food,words,en,category word,true
+street food,words,en,category word,true
+protein,words,en,category word (a nutrient not an item),true
+fat,words,en,category word (a nutrient not an item),true
+tea,words,en,category word — too short and too common to read as a trend,true
